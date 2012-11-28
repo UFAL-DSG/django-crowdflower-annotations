@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style type="text/css">
+td, th {
+ border: 1px solid black;
+padding: 2px;
+}
+table {
+ border-collapse:collapse;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<table>
+<tr>
+<th>User</th>
+<th># of ratings</th>
+</tr>
+{% for user, count in counts.items %}
+<tr>
+<td>{{ user.username }}</td>
+<td>{{ count|length }}</td>
+</tr>
+{% endfor %}
+</table>
+
+{% endblock %}

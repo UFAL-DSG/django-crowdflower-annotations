@@ -1,0 +1,468 @@
+{% extends "base.html" %}
+
+{% block head %}
+<link href="/media/css/jquery-ui.css" rel="stylesheet" type="text/css"/>
+<style type="text/css">
+hr {
+  margin: 20px;
+}
+
+form label {
+    vertical-align: top;
+    display: block;
+}
+
+div#ins {
+	display: inline-block;
+	margin: 1em 2ex;
+}
+
+div#dg {
+	display: inline-block;
+	width: 60em;
+	max-width: 60em;
+}
+
+ul.errorlist {
+    color: red;
+    display:block;
+}
+
+div#task {
+  xborder: 1px solid red;
+  xbackground-color: #FFCCCC;
+  margin-top: 20px;
+  margin: 5px;
+  padding: 5px;
+}
+
+div#goal {
+  border: 1px solid yellow;
+  background-color: #FFFFCC;
+  margin-top: 20px;
+  margin: 5px;
+  padding: 5px;
+}
+
+p.tasktext {
+  font-weight: bold;
+  color: red;
+  padding-top: 5px !important;
+}
+
+p.goaltext, #task p {
+  padding: 0px;
+  margin: 0px;
+}
+
+.speaker {
+	position: relative;
+	left: -1em;
+	font-weight: bold;
+}
+
+
+/* Tables */
+table	{
+	margin-top: 1em;
+	margin-bottom: 2em;
+	border-bottom: 1.5pt solid;
+	border-top: 1.5pt solid;
+	border-spacing: 1em;
+	border-collapse: collapse;
+}
+
+td, th {
+	padding: 5px;
+}
+
+td + td, th + th {
+	padding-left: 2em;
+}
+
+table tr:first-child {
+	border-bottom: 1pt solid;
+}
+
+form li {
+  list-style-type: none;
+  padding-top: 10px;
+}
+
+p.system { color: blue; }
+p.user { color: orange; }
+xp.system { background-color: #EBEDFF; }
+xp.user { background-color: #FAFFC9; }
+
+.errors {
+    background-color: red;
+    color: white;
+}
+
+#submit {
+  width: 120px;
+  height: 50px;
+  font-weight: bold;
+}
+
+/* #sticky { */
+/*   background-color: white; */
+/*   z-index: 100; */
+/* } */
+/*  */
+/* #sticky.clone { */
+/*     border-bottom: 1px solid #666; */
+/* } */
+
+div.answer {
+    margin-top: 10px;
+}
+
+div.hradio label {
+    display: inline;
+    margin-bottom: 20px;
+    margin-left: 20px;
+}
+
+div.answer {
+    border-top: 1px solid black;
+    margin-top: 15px;
+    padding: 5px;
+}
+
+div.hradio {
+    margin-top: 10px;
+
+    xborder-bottom: 1px solid black;
+    margin-bottom: 5px;
+}
+
+.scale0 {
+    color: green;
+    font-weight: bold;
+}
+.scale1 {
+    color: #33CC66;
+}
+.scale2 {
+    color: #666;
+}
+.scale3 {
+    color: #FF6600;
+}
+.scale4 {
+    color: red;
+    font-weight: bold;
+}
+
+</style>
+<script src="/media/js/jquery.js"></script>
+<script src="/media/js/jquery.multi-open-accordion.js"></script>
+<script src="/media/js/jquery-ui.min.js"></script>
+<script src="/media/js/jquery.jplayer.min.js"></script>
+<script type="text/javascript">
+    String.prototype.endsWith = function(suffix) {
+        return this.indexOf(suffix, this.length - suffix.length) !== -1;
+    };
+    var curr_btnid = "";
+
+    var beenPlaying = false;
+
+  function getPlayer(pid) {
+      var obj = document.getElementById(pid);
+      if (obj.doPlay) return obj;
+      for(i=0; i<obj.childNodes.length; i++) {
+          var child = obj.childNodes[i];
+          if (child.tagName == "EMBED") return child;
+      }
+  }
+
+  function NextPhase() {
+      var PrevIndex = $('div .current');
+      var NextIndex = PrevIndex.next().next();
+      PrevIndex.removeClass("current");
+      NextIndex.addClass("current");
+      //NextIndex.click();
+
+      NextIndex.removeClass("ui-state-disabled");
+      if(!NextIndex.hasClass("ui-state-active"))
+          NextIndex.click();
+  }
+
+  function PlayerStopped() {
+      if(beenPlaying) {
+          beenPlaying = false;
+          $('#' + curr_btnid).text("Play");
+
+          NextPhase();
+      }
+  }
+
+  function PlayerPlaying() {
+      beenPlaying = true;
+  }
+
+  function init_player(name) {
+      var player = getPlayer(name);
+      var init = function() { init_player(name); }
+      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+      else {
+          player.attachHandler("PLAYER_PLAYING", "PlayerPlaying", "STOPPED");
+          player.attachHandler("PLAYER_STOPPED", "PlayerStopped", "STOPPED");
+          //window.TinyWav = new TinyWav('TinyWavBlock', 0.01);
+      }
+  }
+
+  function deinit_player(name) {
+      var player = getPlayer(name);
+      var init = function() { init_player(name); }
+      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+      else {
+          player.removeHandler(PlayerStopped);
+      }
+  }
+
+  var accordion;
+  $(document).ready(function() {
+      accordion = $("#phases").multiAccordion({active: 0});
+
+      $("#player").jPlayer( {
+          swfPath: "/media/flash/",
+          supplied: "wav",
+          ended: function() {
+              PlayerStopped();
+          }
+      });
+
+      $("#turn_1").removeClass("ui-state-disabled");
+
+      //$("#turn_1").click();
+//       {% for i in rating_form.fields %}
+//       {% if "comment_" in i %}
+//       $("#id_{{ i }}").parent().hide();
+//       {% endif %}
+//       {% endfor %}
+
+
+      $(".answer").find("input").click(function() {
+          if($(this).parent().index() != 0) {
+              $(this).parents('.answer').next("div").show();
+          } else {
+              $(this).parents('.answer').next("div").hide();
+          }
+      });
+
+      $(".answer").find("label").each(function() {
+          if($(this).parents('.answer').next('div').length > 0)
+              $(this).addClass("scale" + $(this).index());
+      });
+      /*
+      {% for i in rating_form.fields %}
+      {% if "custom_" in i %}
+      {% if not "comment_" in i %}
+      $("#id_{{ i }}_1").click(
+          function() {
+              $("#id_comment_{{ i }}").parent().show();
+          }
+      );
+      $("#id_{{ i }}_2").click(
+          function() {
+              $("#id_comment_{{ i }}").parent().show();
+          }
+      );
+      $("#id_{{ i }}_3").click(
+          function() {
+              $("#id_comment_{{ i }}").parent().show();
+          }
+      );
+      $("#id_{{ i }}_4").click(
+          function() {
+              $("#id_comment_{{ i }}").parent().show();
+          }
+      );
+      {% endif %}
+      {% endif %}
+      {% endfor %}
+      */
+
+      $('body').keydown(function(e) {
+          var code = e.keyCode || e.which;
+          if (code == '9') {
+              var curid =$("*:focus").attr("id");
+              var buttons = $(".btnnext");
+              for(var i = 0; i < buttons.length; i++) {
+                  if(buttons[i].id == curid) {
+                      $("#" + buttons[i + 1].id)[0].focus();
+                      return false;
+                  }
+              }
+          }
+      });
+
+//       $("#submit").click(function() {
+      $("[type=submit]").click(function() {
+					// Check that all fields (text areas) are filled in.
+					var res = 1;
+					var fields = document.getElementsByTagName("textarea");
+					for(var fldIdx = 0; fldIdx < fields.length; fldIdx++)
+					{
+						if(fields[fldIdx].value.search(/\w/) === -1)
+						{
+							res = 0;
+							break;
+						}
+					}
+
+					if(res !== 1) {
+						msg = "Please fill in all the input fields.\n";
+						msg += "In case you heard just silence, type \"(sil)\" ";
+						msg += "into the corresponding field.\n";
+						msg += "See Instructions for transcription of other ";
+						msg += "non-speech sounds.";
+						alert(msg);
+						return false;
+          }
+          return true;
+      });
+  });
+
+  function play_now(btnid, phase, f) {
+      curr_btnid = btnid;
+      $(".current").removeClass("current");
+      $("#" + phase).addClass("current");
+      try{
+          PlayerPlaying();
+          $('#' + btnid).text("Playing...");
+          $("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
+      } catch(E){
+          alert(E);
+      }
+  }
+</script>
+
+{% endblock head %}
+
+
+{% block content %}
+
+
+<span>
+	<div id="ins">
+		<h2>Instructions</h2>
+		
+		<p>
+		Please, write down what is said in the provided recordings. The recordings 
+		capture a dialogue between a human and a computer. The computer utterances 
+		are known, so only the human's utterances need to be transcribed.
+		</p>
+		<p>
+		The recordings and input fields will be enabled gradually, each time you 
+		finish listening to the previous recording. You can replay each sound any 
+		time later.
+		For non-speech sounds, you can transcribe them using the following symbols:
+		</p>
+
+		<table>
+			<tr>
+				<th>symbol</th>
+				<th>meaning</th>
+			</tr>
+			<tr>
+				<td>(breath)</td>
+				<td>the sound of breathing</td>
+			</tr>
+			<tr>
+				<td>(hum)</td>
+				<td>humming (all of <em>hum</em>, <em>erm</em>, <em>ehm hmm</em> 
+						etc.)</td>
+			</tr>
+			<tr>
+				<td>(laugh)</td>
+				<td>laughter</td>
+			</tr>
+			<tr>
+				<td>(noise)</td>
+				<td>noise on the background</td>
+			</tr>
+			<tr>
+				<td>(sil)</td>
+				<td>silence if it is prominent or if there is nothing else to transcribe</td>
+			</tr>
+			<tr>
+				<td>(unint)</td>
+				<td>unintelligible speech</td>
+			</tr>
+		</table>
+		<p>
+		Please, DO NOT SPAM. We will check the responses, and reject all responses 
+		from spammers.
+	</div>
+	
+	<div id="dg">
+			<h2>The dialogue</h2>
+			<div>
+			<form action="" method="POST" id="phases" class="accordion">
+				{{ form.non_field_errors }}
+				{% csrf_token %}
+				{{ form.cid }}
+			{% for turn in dialogue.turns %}
+				<h3 id="turn_{{ turn.id }}" class="head ui-state-disabled">
+					<a href="#">Turn {{ turn.id }}</a>
+					<input id="submit_{{ turn.id }}" type="submit" name="send"
+					value="Submit" />
+				</h3>
+				<div>
+					<div class="speaker">
+						Computer:
+					</div>
+					<p class="system">{{ turn.prompt }}</p>
+				{% if turn.has_rec %}
+					<div class="speaker">
+						Human:
+					</div>
+					<div>
+						<button type="button" id="btnnext{{ turn.id }}" class="btnnext"
+							tabindex="{{ turn.dbl_rec_num }}"
+							onclick="play_now('btnnext{{ turn.id }}', 'turn_{{ turn.id }}','{{ dialogue.path }}/{{ turn.rec }}')">Play</button>
+					</div>
+					<div>
+						<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
+							id="id_trs_{{ turn.id }}" name="trs_{{ turn.id }}"
+							tabindex="{{ turn.dbl_rec_num|add:1 }}"></textarea>
+					</div>
+				{% else %}
+					<div>
+						<button type="button" class="btnnext" onclick="NextPhase()" class="btnnext">Next</button>
+					</div>
+				{% endif %}
+				
+				</div>
+			{% endfor %}
+		
+				<h3 id="phase_answer" class="head ui-state-disabled">
+					<a href="#">Submit</a>
+				</h3>
+				<div>
+					<input id="submit" type="submit" name="send" value="Submit"
+								 tabindex="{{ dialogue.dbl_num_recs }}">
+				</div>
+			</form>
+			</div>
+	</div>	<!-- end div id="rg" -->
+</span>
+
+{% if form.errors %}
+<script>
+$(document).ready(function() {
+$(".ui-state-disabled").removeClass("ui-state-disabled");
+$("#phase_answer").click();
+});
+</script>
+{% endif %}
+
+<div id="player">
+</div>
+{% endblock content %}
+
+
+

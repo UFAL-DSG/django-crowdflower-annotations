@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block head %}
+<style type="text/css">
+td, th {
+ border: 1px solid black;
+padding: 2px;
+}
+table {
+ border-collapse:collapse;
+}
+
+td.ratingone {
+    background-color: green;
+}
+
+td.ratingzero {
+    background-color: red;
+}
+
+</style>
+{% endblock %}
+
+{% block content %}
+<table>
+<tr>
+<th>dialog <br> (<a href="{% url rating_overview_dialog %}?sort=fname&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=fname&sorder=-1">v</a>)</th>
+<th># of ratings <br> (<a href="{% url rating_overview_dialog %}?sort=count&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=count&sorder=-1">v</a>)</th>
+<th>avg rating <br>
+(<a href="{% url rating_overview_dialog %}?sort=avg_rating_0&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_0&sorder=-1">v</a>)
+(<a href="{% url rating_overview_dialog %}?sort=avg_rating_1&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_1&sorder=-1">v</a>)
+(<a href="{% url rating_overview_dialog %}?sort=avg_rating_2&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_2&sorder=-1">v</a>)
+</th>
+{% for u in users %}
+<th>{{ u.username }}</th>
+{% endfor %}
+</tr>
+{% for fname, item in rows %}
+<tr>
+<td>{{ fname }}</td>
+<td>{{ item.count }}</td>
+<td>{% for i,val in item.avg_ratings.items %}{{ val|floatformat:2 }} {% endfor %}</td>
+{% for ur in item.ratings %}
+<td class="{% if item.colorval >= trsh_green %}ratingone{% endif %}{% if item.colorval <= trsh_red %}ratingzero{% endif %}">
+{% if ur != None %}
+  {% for r in ur %}
+    <span class="rating" title="{% for c in r.ratingcomment_set.all %}{{ c.comment }}{% endfor %}">{{ r.answer.weight|floatformat:1 }}</span>
+  {% endfor %}
+{% endif %}
+</td>
+{% endfor %}
+</tr>
+{% endfor %}
+</table>
+
+<form method="GET" action="?">
+Set the row color
+<label for="trsh_red">red if avg rating is bellow</label>
+	<input type="text" name="trsh_red" value="{{ trsh_red }}">
+<label for="trsh_green">and green above</label>
+	<input type="text" name="trsh_green" value="{{ trsh_green }}">
+of the following expression
+	<input type="text" name="expression" value="{{ expression }}">
+	<input type="submit" value="Set">
+
+</form>
+
+{% endblock %}
