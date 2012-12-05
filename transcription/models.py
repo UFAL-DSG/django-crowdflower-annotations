@@ -15,7 +15,7 @@ class Dialogue(models.Model):
                                    recursive=True,
                                    unique=True)
     """ the original name of the dialogue directory """
-    cid = models.CharField(max_length=40, unique=True)
+    cid = models.CharField(max_length=40, unique=True, db_index=True)
     code = models.CharField(max_length=CODE_LENGTH)
     code_corr = models.CharField(max_length=CODE_LENGTH_EXT)
     code_incorr = models.CharField(max_length=CODE_LENGTH_EXT)

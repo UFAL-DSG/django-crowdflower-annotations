@@ -109,7 +109,7 @@ def transcribe(request):
                 trss[turn.id] = trs
                 trs.text = form.cleaned_data['trs_{0}'.format(turn.id)]
                 trs.turn_id = turn.id
-                trs.object_id = dirname
+                trs.object_id = dg_data
                 trs.program_version = unicode(check_output(
                     ["git", "rev-parse", "HEAD"],
                     cwd=settings.PROJECT_DIR).rstrip('\n'))
@@ -164,12 +164,25 @@ def transcribe(request):
         # Find the dialogue to transcribe.
         # NOTE This might be helpful to be more permissive (i.e. it could serve
         # a dialogue even without having its CID specified).
+        dg_data = None
         try:
             cid = request.GET["cid"]
         except:
-            return HttpResponseRedirect("er/finished.html")
-        # Find the corresponding Dialogue object in the DB.
-        dg_data = Dialogue.objects.get(cid=cid)
+            if request.user.is_anonymous():
+                return HttpResponseRedirect("er/finished.html")
+            trss_done = Transcription.objects.filter(user=request.user)
+            dirnames_done = set(trs.object_id for trs in trss_done)
+            dirnames_todo = set(dg.dirname for dg in Dialogue.objects.all()) - \
+                            dirnames_done
+            try:
+                dirname = dirnames_todo.pop()
+            except KeyError:
+                return HttpResponseRedirect("er/finished.html")
+            dg_data = Dialogue.objects.get(dirname=dirname)
+            cid = dg_data.cid
+        if dg_data is None:
+            # Find the corresponding Dialogue object in the DB.
+            dg_data = Dialogue.objects.get(cid=cid)
         dialogue = _read_dialogue(dg_data.cid)
 
         context = dict()
