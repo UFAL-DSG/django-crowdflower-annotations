@@ -1,7 +1,17 @@
 {% extends "base.html" %}
 
 {% block head %}
-<link href="/media/css/jquery-ui.css" rel="stylesheet" type="text/css"/>
+<script src="http://vystadial.ms.mff.cuni.cz/apps/transcription/media/js/easyXDM.debug.js" type="text/javascript"></script>
+<script type="text/javascript">
+<!--
+	var socket = new easyXDM.Socket({
+			onReady:  function(){
+					socket.postMessage(document.body.scrollHeight);
+		 }
+	});
+//-->
+</script>
+<link href="{{ MEDIA_URL }}css/jquery-ui.css" rel="stylesheet" type="text/css"/>
 <style type="text/css">
 hr {
   margin: 20px;
@@ -12,15 +22,40 @@ form label {
     display: block;
 }
 
-div#ins {
+div#ins, div#dg {
 	display: inline-block;
-	margin: 1em 2ex;
+}
+
+div#ins {
+	margin: 1em 2ex 0ex 2ex;
+	min-width: 45em;
+	max-width: 55em;
 }
 
 div#dg {
-	display: inline-block;
 	width: 60em;
 	max-width: 60em;
+}
+
+input#ins-hide {
+	float: right;
+	margin-right: 1em;
+}
+
+.quote {
+	margin-left: auto;
+	margin-right: auto;
+	width: 80%;
+}
+
+.no {
+	color: red;
+	font-weight: bold;
+}
+
+.yes {
+	color: green;
+	font-weight: bold;
 }
 
 ul.errorlist {
@@ -63,7 +98,7 @@ p.goaltext, #task p {
 
 
 /* Tables */
-table	{
+table.booktabs	{
 	margin-top: 1em;
 	margin-bottom: 2em;
 	border-bottom: 1.5pt solid;
@@ -76,12 +111,17 @@ td, th {
 	padding: 5px;
 }
 
-td + td, th + th {
+table.booktabs td + td, table.booktabs th + th
+{
 	padding-left: 2em;
 }
 
-table tr:first-child {
+table.booktabs tr:first-child {
 	border-bottom: 1pt solid;
+}
+
+table.booktabs.noheader tr:first-child {
+	border-bottom: inherit;
 }
 
 form li {
@@ -91,8 +131,6 @@ form li {
 
 p.system { color: blue; }
 p.user { color: orange; }
-xp.system { background-color: #EBEDFF; }
-xp.user { background-color: #FAFFC9; }
 
 .errors {
     background-color: red;
@@ -105,61 +143,11 @@ xp.user { background-color: #FAFFC9; }
   font-weight: bold;
 }
 
-/* #sticky { */
-/*   background-color: white; */
-/*   z-index: 100; */
-/* } */
-/*  */
-/* #sticky.clone { */
-/*     border-bottom: 1px solid #666; */
-/* } */
-
-div.answer {
-    margin-top: 10px;
-}
-
-div.hradio label {
-    display: inline;
-    margin-bottom: 20px;
-    margin-left: 20px;
-}
-
-div.answer {
-    border-top: 1px solid black;
-    margin-top: 15px;
-    padding: 5px;
-}
-
-div.hradio {
-    margin-top: 10px;
-
-    xborder-bottom: 1px solid black;
-    margin-bottom: 5px;
-}
-
-.scale0 {
-    color: green;
-    font-weight: bold;
-}
-.scale1 {
-    color: #33CC66;
-}
-.scale2 {
-    color: #666;
-}
-.scale3 {
-    color: #FF6600;
-}
-.scale4 {
-    color: red;
-    font-weight: bold;
-}
-
 </style>
-<script src="/media/js/jquery.js"></script>
-<script src="/media/js/jquery.multi-open-accordion.js"></script>
-<script src="/media/js/jquery-ui.min.js"></script>
-<script src="/media/js/jquery.jplayer.min.js"></script>
+<script src="{{ MEDIA_URL }}js/jquery.js"></script>
+<script src="{{ MEDIA_URL }}js/jquery.multi-open-accordion.js"></script>
+<script src="{{ MEDIA_URL }}js/jquery-ui.min.js"></script>
+<script src="{{ MEDIA_URL }}js/jquery.jplayer.min.js"></script>
 <script type="text/javascript">
     String.prototype.endsWith = function(suffix) {
         return this.indexOf(suffix, this.length - suffix.length) !== -1;
@@ -222,12 +210,27 @@ div.hradio {
       }
   }
 
-  var accordion;
+  var accordion, hideButton, insAreShown = true;
+
+	// Callback function called when the instructions have been hidden.
+	function insHidden() {
+		insAreShown = false;
+		hideButton.value = "Show instructions";
+		hideButton.disabled = false;
+	}
+
+	// Callback function called when the instructions have been shown.
+	function insShown() {
+		insAreShown = true;
+		hideButton.value = "Hide instructions";
+		hideButton.disabled = false;
+	}
+
   $(document).ready(function() {
       accordion = $("#phases").multiAccordion({active: 0});
 
       $("#player").jPlayer( {
-          swfPath: "/media/flash/",
+          swfPath: "{{ MEDIA_URL }}flash/",
           supplied: "wav",
           ended: function() {
               PlayerStopped();
@@ -236,56 +239,7 @@ div.hradio {
 
       $("#turn_1").removeClass("ui-state-disabled");
 
-      //$("#turn_1").click();
-//       {% for i in rating_form.fields %}
-//       {% if "comment_" in i %}
-//       $("#id_{{ i }}").parent().hide();
-//       {% endif %}
-//       {% endfor %}
-
-
-      $(".answer").find("input").click(function() {
-          if($(this).parent().index() != 0) {
-              $(this).parents('.answer').next("div").show();
-          } else {
-              $(this).parents('.answer').next("div").hide();
-          }
-      });
-
-      $(".answer").find("label").each(function() {
-          if($(this).parents('.answer').next('div').length > 0)
-              $(this).addClass("scale" + $(this).index());
-      });
-      /*
-      {% for i in rating_form.fields %}
-      {% if "custom_" in i %}
-      {% if not "comment_" in i %}
-      $("#id_{{ i }}_1").click(
-          function() {
-              $("#id_comment_{{ i }}").parent().show();
-          }
-      );
-      $("#id_{{ i }}_2").click(
-          function() {
-              $("#id_comment_{{ i }}").parent().show();
-          }
-      );
-      $("#id_{{ i }}_3").click(
-          function() {
-              $("#id_comment_{{ i }}").parent().show();
-          }
-      );
-      $("#id_{{ i }}_4").click(
-          function() {
-              $("#id_comment_{{ i }}").parent().show();
-          }
-      );
-      {% endif %}
-      {% endif %}
-      {% endfor %}
-      */
-
-      $('body').keydown(function(e) {
+			$('body').keydown(function(e) {
           var code = e.keyCode || e.which;
           if (code == '9') {
               var curid =$("*:focus").attr("id");
@@ -299,8 +253,7 @@ div.hradio {
           }
       });
 
-//       $("#submit").click(function() {
-      $("[type=submit]").click(function() {
+      $("#submit").click(function() {
 					// Check that all fields (text areas) are filled in.
 					var res = 1;
 					var fields = document.getElementsByTagName("textarea");
@@ -324,6 +277,19 @@ div.hradio {
           }
           return true;
       });
+
+			hideButton = document.getElementById("ins-hide");
+			$("input#ins-hide").click(function() {
+				hideButton.disabled = true;
+				if(insAreShown)
+				{
+					$("div#ins-inner").slideUp("fast", "swing", insHidden);
+				}
+				else
+				{
+					$("div#ins-inner").slideDown("fast", "swing", insShown);
+				}
+			});
   });
 
   function play_now(btnid, phase, f) {
@@ -348,106 +314,161 @@ div.hradio {
 
 <span>
 	<div id="ins">
-		<h2>Instructions</h2>
+		<h2>Instructions
+			<input type="button" id="ins-hide" value="Hide instructions"></input>
+		</h2>
 		
-		<p>
-		Please, write down what is said in the provided recordings. The recordings 
-		capture a dialogue between a human and a computer. The computer utterances 
-		are known, so only the human's utterances need to be transcribed.
-		</p>
-		<p>
-		The recordings and input fields will be enabled gradually, each time you 
-		finish listening to the previous recording. You can replay each sound any 
-		time later.
-		For non-speech sounds, you can transcribe them using the following symbols:
-		</p>
+		<div id="ins-inner">
+			<p>
+			The recordings and input fields will be enabled gradually, each time you 
+			finish listening to the previous recording. You can replay each sound any 
+			time later.
+			</p>
 
-		<table>
-			<tr>
-				<th>symbol</th>
-				<th>meaning</th>
-			</tr>
-			<tr>
-				<td>(breath)</td>
-				<td>the sound of breathing</td>
-			</tr>
-			<tr>
-				<td>(hum)</td>
-				<td>humming (all of <em>hum</em>, <em>erm</em>, <em>ehm hmm</em> 
-						etc.)</td>
-			</tr>
-			<tr>
-				<td>(laugh)</td>
-				<td>laughter</td>
-			</tr>
-			<tr>
-				<td>(noise)</td>
-				<td>noise on the background</td>
-			</tr>
-			<tr>
-				<td>(sil)</td>
-				<td>silence if it is prominent or if there is nothing else to transcribe</td>
-			</tr>
-			<tr>
-				<td>(unint)</td>
-				<td>unintelligible speech</td>
-			</tr>
-		</table>
-		<p>
-		Please, DO NOT SPAM. We will check the responses, and reject all responses 
-		from spammers.
+			<h3>Ortography</h3>
+			<p>
+			Please, try to avoid spelling errors. Punctuation and capitalisation 
+			generally do not matter. The exception is with acronyms &ndash; 
+			please transcribe acronyms in uppercase letters.
+			</p>
+
+			<h3>Numerals</h3>
+			<p>
+			Please, do <em>not</em> use numbers to transcribe numerals; 
+			spell them out:
+			<div class="quote">
+				<table>
+					<tr>
+						<td>53</td>
+						<td class="no">NO</td>
+					<tr>
+						<td>fifty three</td>
+						<td class="yes">YES</td>
+					</tr>
+				</table>
+			</div>
+			</p>
+
+			<h3>Incomplete Words</h3>
+			<p>
+			If a word is pronounced incomplete, put &lsquo;-&rsquo; (dash) before 
+			or after the pronounced part of the word.
+			</p>
+			<p>
+			<strong>Examples:</strong> incomp- -eech -crastinat-
+			</p>
+
+			<h3>Non-speech Sounds</h3>
+			<p>
+			For non-speech sounds, you can transcribe them using the following symbols:
+			</p>
+	
+			<table class="booktabs">
+				<tr>
+					<th>symbol</th>
+					<th>meaning</th>
+				</tr>
+				<tr>
+					<td>(breath)</td>
+					<td>the sound of breathing, sniffing etc.</td>
+				</tr>
+				<tr>
+					<td>(cough)</td>
+					<td>the sound of coughing</td>
+				</tr>
+				<tr>
+					<td>(hum)</td>
+					<td>humming (all of <em>hum</em>, <em>erm</em>, <em>ehm hmm</em> 
+							etc.)</td>
+				</tr>
+				<tr>
+					<td>(laugh)</td>
+					<td>laughter</td>
+				</tr>
+				<tr>
+					<td>(noise)</td>
+					<td>noise on the background</td>
+				</tr>
+				<tr>
+					<td>(sil)</td>
+					<td>silence if it is prominent or if there is nothing else to transcribe</td>
+				</tr>
+				<tr>
+					<td>(unint)</td>
+					<td>unintelligible speech</td>
+				</tr>
+			</table>
+
+			<h3>Local Names</h3>
+			<p>
+			The following table lists the correct spelling of some place names 
+			that could otherwise be problematic to transcribe:
+			</p>
+			<div class="quote">
+				<table class="booktabs noheader">
+					<tr><td>Addenbrooke's</td>     <td>Girton</td>      <td>Chesterton</td></tr>
+					<tr><td>Gonville and Caius</td><td>Castlehill</td>  <td>Romsey</td></tr>
+					<tr><td>Barnwell</td>          <td>Huntingdon</td>  <td>Coco</td></tr>
+					<tr><td>Fenditton</td>         <td>Cherryhinton</td><td>Trumpington</td></tr>
+					<tr><td>Brasserie</td>         <td>Newnham</td>     <td></td></tr>
+				</table>
+			</div>
+
+			<p>
+			Please, <strong>DO NOT SPAM</strong>. We will check the responses, 
+			and reject all responses from spammers.
+			</p>
+		</div>
 	</div>
 	
 	<div id="dg">
-			<h2>The dialogue</h2>
+		<h2>The dialogue</h2>
+		<div>
+		<form action="" method="POST" id="phases" class="accordion">
+			{{ form.non_field_errors }}
+			{% csrf_token %}
+			{{ form.cid }}
+		{% for turn in dialogue.turns %}
+			<h3 id="turn_{{ turn.id }}" class="head ui-state-disabled">
+				<a href="#">Turn {{ turn.id }}</a>
+			</h3>
 			<div>
-			<form action="" method="POST" id="phases" class="accordion">
-				{{ form.non_field_errors }}
-				{% csrf_token %}
-				{{ form.cid }}
-			{% for turn in dialogue.turns %}
-				<h3 id="turn_{{ turn.id }}" class="head ui-state-disabled">
-					<a href="#">Turn {{ turn.id }}</a>
-					<input id="submit_{{ turn.id }}" type="submit" name="send"
-					value="Submit" />
-				</h3>
-				<div>
-					<div class="speaker">
-						Computer:
-					</div>
-					<p class="system">{{ turn.prompt }}</p>
-				{% if turn.has_rec %}
-					<div class="speaker">
-						Human:
-					</div>
-					<div>
-						<button type="button" id="btnnext{{ turn.id }}" class="btnnext"
-							tabindex="{{ turn.dbl_rec_num }}"
-							onclick="play_now('btnnext{{ turn.id }}', 'turn_{{ turn.id }}','{{ dialogue.path }}/{{ turn.rec }}')">Play</button>
-					</div>
-					<div>
-						<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
-							id="id_trs_{{ turn.id }}" name="trs_{{ turn.id }}"
-							tabindex="{{ turn.dbl_rec_num|add:1 }}"></textarea>
-					</div>
-				{% else %}
-					<div>
-						<button type="button" class="btnnext" onclick="NextPhase()" class="btnnext">Next</button>
-					</div>
-				{% endif %}
-				
+				<div class="speaker">
+					Computer:
 				</div>
-			{% endfor %}
-		
-				<h3 id="phase_answer" class="head ui-state-disabled">
-					<a href="#">Submit</a>
-				</h3>
-				<div>
-					<input id="submit" type="submit" name="send" value="Submit"
-								 tabindex="{{ dialogue.dbl_num_recs }}">
+				<p class="system">{{ turn.prompt }}</p>
+			{% if turn.has_rec %}
+				<div class="speaker">
+					Human:
 				</div>
-			</form>
+				<div>
+					<button type="button" id="btnnext{{ turn.id }}" class="btnnext"
+						tabindex="{{ turn.dbl_rec_num|add:1 }}"
+						onclick="play_now('btnnext{{ turn.id }}', 'turn_{{ turn.id }}','{{ dialogue.path }}/{{ turn.rec }}')">Play</button>
+				</div>
+				<div>
+					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
+						id="id_trs_{{ turn.id }}" name="trs_{{ turn.id }}"
+						tabindex="{{ turn.dbl_rec_num|add:2 }}"></textarea>
+				</div>
+			{% else %}
+				<div>
+					<button type="button" class="btnnext" onclick="NextPhase()" class="btnnext">Next</button>
+				</div>
+			{% endif %}
+			
 			</div>
+		{% endfor %}
+	
+			<h3 id="phase_answer" class="head ui-state-disabled">
+				<a href="#">Submit</a>
+			</h3>
+			<div>
+				<input id="submit" type="submit" name="send" value="Save transcription"
+								tabindex="{{ dialogue.dbl_num_recs|add:1 }}">
+			</div>
+		</form>
+		</div>
 	</div>	<!-- end div id="rg" -->
 </span>
 

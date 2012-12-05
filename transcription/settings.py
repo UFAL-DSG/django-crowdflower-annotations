@@ -1,16 +1,21 @@
 import os
 import localsettings
 import re
+import sys
+
 # custom variables
 PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
-CONVERSATION_DIR = localsettings.CONVERSATION_DIR
-CONVERSATION_FILE_LIST = localsettings.CONVERSATION_FILE_LIST
+if not PROJECT_DIR in sys.path:
+    sys.path += [PROJECT_DIR]
 
-CONVERSATION_PATTERN = re.compile(localsettings.CONVERSATION_PATTERN)
+CONVERSATION_DIR = localsettings.CONVERSATION_DIR
 
 CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
-CODE_FNAME = localsettings.CODE_FNAME
+
+CF_URL_START = localsettings.CF_URL_START
+CF_KEY = localsettings.CF_KEY
+CF_JOB_ID = localsettings.CF_JOB_ID
 
 # Django settings for the `transcription' project.
 
@@ -26,7 +31,8 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': 'db.db',                      # Or path to database file if using sqlite3.
+        'NAME': os.path.join(PROJECT_DIR, 'db/db.db'),                      # Or path to database file if using sqlite3.
+#         'NAME': '/tmp/db.db',
         'USER': '',                      # Not used with sqlite3.
         'PASSWORD': '',                  # Not used with sqlite3.
         'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
@@ -60,32 +66,35 @@ USE_L10N = True
 # Absolute filesystem path to the directory that will hold user-uploaded files.
 # Example: "/home/media/media.lawrence.com/media/"
 MEDIA_ROOT = os.path.join(PROJECT_DIR, 'media')
+ADMIN_MEDIA_ROOT = '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
 # Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-MEDIA_URL = '/media/'
+MEDIA_URL = '/apps/transcription/media/'
 
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
 # in apps' "static/" subdirectories and in STATICFILES_DIRS.
 # Example: "/home/media/media.lawrence.com/static/"
-STATIC_ROOT = ''
+STATIC_ROOT = os.path.join(PROJECT_DIR, 'static')
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-STATIC_URL = '/static/'
+STATIC_URL = '/apps/transcription/static/'
+# STATIC_ROOT = STATIC_URL = '/cf_transcription/static/'
 
 # URL prefix for admin static files -- CSS, JavaScript and images.
 # Make sure to use a trailing slash.
 # Examples: "http://foo.com/static/admin/", "/static/admin/".
-ADMIN_MEDIA_PREFIX = '/static/admin/'
+ADMIN_MEDIA_PREFIX = '/apps/transcription/static/admin/'
 
 # Additional locations of static files
 STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
+	"/webapps/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
 )
 
 # List of finder classes that know how to find static files in
@@ -114,7 +123,7 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.messages.middleware.MessageMiddleware',
 )
 
-ROOT_URLCONF = 'transcription.urls'
+ROOT_URLCONF = 'urls'
 
 TEMPLATE_DIRS = (
     os.path.join(PROJECT_DIR, "templates"),
@@ -160,3 +169,9 @@ LOGGING = {
     }
 }
 
+WSGI_APPLICATION = "transcription.wsgi.application"
+SUB_SITE="/apps/transcription/"
+#FORCE_SCRIPT_NAME="/er"
+LOGIN_URL="/apps/transcription/accounts/login/"
+# STATICFILES_STORAGE="/apps/transcription"
+LOGIN_REDIRECT_URL=SUB_SITE

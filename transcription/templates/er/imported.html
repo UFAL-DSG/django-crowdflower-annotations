@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Dialogue import report</h1>
+
+<p>
+Total of <strong>{{ count }}</strong> dialogues have been successfully
+imported.
+The CSV file describing the imported dialogues is at <tt>{{ csv_fname }}</tt>.
+</p>
+
+{% if n_failed == 0 and cf_error == None %}
+<p>
+There were no errors.
+</p>
+{% else %}
+<h2>Errors</h2>
+<p>
+<strong>{{ n_failed }}</strong> dialogues have <em>not</em> been imported.
+Below is a breakdown according to the cause.
+</p>
+
+<h3>Failed to be copied</h3>
+{% if not copy_failed %}
+<p>None such.</p>
+{% else %}
+<table>
+	<tr><th>Name of the directory</th></tr>
+	{% for dirname in copy_failed %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+<h3>Failed to be saved in the DB</h3>
+{% if not save_failed %}
+<p>None such.</p>
+{% else %}
+<table>
+	<tr>
+		<th>Name of the directory</th>
+		<th>Conversation ID</th>
+	</tr>
+	{% for dirname, cid in save_failed %}
+	<tr>
+		<td><tt>{{ dirname }}</tt></td>
+		<td><tt>{{ cid }}</tt></td>
+	</tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+<h3>Already existed in the DB</h3>
+{% if not dg_existed %}
+<p>None such.</p>
+{% else %}
+<table>
+	<tr><th>Name of the directory</th></tr>
+	{% for dirname in dg_existed %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+<h3>Failed to upload to CrowdFlower</h3>
+{% if cf_error == None %}
+<p>None such.</p>
+{% else %}
+<p>See the error message from CrowdFlower below. The CrowdFlower URL
+contacted was this: <tt>{{ cf_url }}</tt></p>
+
+<h4>Error message</h4>
+<pre>{{ cf_error }}</pre>
+{% endif %}
+{% endif %}
+
+{% endblock %}

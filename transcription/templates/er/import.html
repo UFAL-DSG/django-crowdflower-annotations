@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Dialogue import</h1>
+
+<form action="#" method="GET">
+	<table>
+		<tr>
+			<td><label for="id_list_fname">Filelist filename</label></td>
+			<td><input type="text" name="list_fname" id="id_list_fname"></input></td>
+		</tr>
+		<tr>
+			<td><label for="id_csv_fname">Output CSV filename (default: <tt>new_tasks.csv</tt>)</label></td>
+			<td><input type="text" name="csv_fname" id="id_csv_fname"></input></td>
+		</tr>
+		<tr>
+			<td colspan="2" style="align: center;">
+				<button type="submit" name="submit" id="id_submit">Import</button>
+			</td>
+		</tr>
+	</table>
+</form>
+
+{% endblock %}

@@ -4,9 +4,7 @@
 <ul>
 <li><a href="{% url transcribe %}">Start/continue transcribing</a></li>
 {% if user.is_superuser %}
-<li><a href="{% url rating_overview %}">Rating overview by user</a></li>
-<li><a href="{% url rating_overview_dialog %}">Rating overview by dialog</a></li>
-<li><a href="{% url rating_export %}">Export results to XML</a></li>
+<li><a href="{% url import_dialogues %}">Import dialogues</a></li>
 <li><a href="{% url admin:index %}">Admin</a></li>
 </ul>
 {% endif %}

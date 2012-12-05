@@ -3,9 +3,28 @@
 import os.path
 from django.db import models
 from django.contrib.auth.models import User
-from .settings import CONVERSATION_DIR
+from settings import CONVERSATION_DIR, CODE_LENGTH, CODE_LENGTH_EXT
 
 # Create your models here.
+
+
+class Dialogue(models.Model):
+    """Provides the mapping between conversation IDs and corresponding
+    dirnames."""
+    dirname = models.FilePathField(path=CONVERSATION_DIR,
+                                   recursive=True,
+                                   unique=True)
+    """ the original name of the dialogue directory """
+    cid = models.CharField(max_length=40, unique=True)
+    code = models.CharField(max_length=CODE_LENGTH)
+    code_corr = models.CharField(max_length=CODE_LENGTH_EXT)
+    code_incorr = models.CharField(max_length=CODE_LENGTH_EXT)
+
+    def __unicode__(self):
+        return u'({c}: {d})'.format(c=self.cid, d=self.dirname)
+
+    def get_codes(self):
+        return self.code, self.code_corr, self.code_incorr
 
 
 class Transcription(models.Model):
@@ -13,7 +32,7 @@ class Transcription(models.Model):
     user = models.ForeignKey(User)
     text = models.TextField()
     turn_id = models.SmallIntegerField()
-    object_id = models.CharField(max_length=1000)
+    object_id = models.ForeignKey(Dialogue, to_field='dirname')
     program_version = models.TextField()
     is_gold = models.BooleanField(default=False)
     breaks_gold = models.BooleanField(default=False)
@@ -30,13 +49,3 @@ class Transcription(models.Model):
                     t=self.turn_id,
                     f=self.object_id,
                     trs=self.text)
-
-
-class Dialogue(models.Model):
-    """Provides the mapping between conversation IDs and corresponding
-    dirnames."""
-    dirname = models.FilePathField(path=CONVERSATION_DIR, recursive=True)
-    cid = models.CharField(max_length=40, unique=True)
-
-    def __unicode__(self):
-        return u'({c}: {d})'.format(c=self.cid, d=self.dirname)

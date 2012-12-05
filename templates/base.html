@@ -9,7 +9,7 @@
     <meta name="Copyright" content="" />
     <meta name="keywords" content="" />
     <meta name="description" content="" />
-    <link href="/media/css/base.css" rel="stylesheet" type="text/css" media="screen" />
+    <link href="{{ MEDIA_URL }}css/base.css" rel="stylesheet" type="text/css" media="screen" />
 
 <style type="text/css">
 
@@ -34,15 +34,16 @@ div#content {
 {% endblock %}
   </head>
 <body>
+
+{% if not user.is_anonymous %}
 <div id="headbar">
 <a href="{% url home %}">Home</a> | 
-{% if not user.is_anonymous %}
 Login: {{ user.username }} | 
 <a href="{% url logout %}">Log Out</a>
-{% endif %}
 {% block heading %}
 {% endblock heading %}
 </div>
+{% endif %}
 
 <div id="content">
 {% block content %}
