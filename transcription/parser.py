@@ -53,8 +53,8 @@ class DialogTurn:
 
 
 class DialogParser:
-    @classmethod
-    def parse(self, fname):
+    @staticmethod
+    def parse(fname):
         doc = etree.parse(fname)
         dialog = Dialog()
 

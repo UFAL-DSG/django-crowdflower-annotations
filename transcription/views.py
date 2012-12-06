@@ -2,7 +2,6 @@
 # -*- coding: UTF-8 -*-
 #
 # TODO: User.objects.get_or_create(dummy_user) where appropriate.
-import datetime
 import hashlib
 import json
 import os
@@ -98,6 +97,14 @@ def transcribe(request):
         form = TranscriptionForm(request.POST, cid=cid, turns=dialogue.turns)
 
         if form.is_valid():
+            # Read the XML session file.
+            dg_dir = os.path.join(settings.CONVERSATION_DIR, cid)
+            sess_fname = os.path.join(dg_dir, settings.SESSION_FNAME)
+            xml_parser = etree.XMLParser(remove_blank_text=True)
+            with open(sess_fname, 'r+') as sess_file:
+                sess_xml = etree.parse(sess_file, xml_parser)
+            user_turns = sess_xml.findall(".//userturn")
+            # Create Transcription objects and save them into DB.
             trss = dict()
             for turn in dialogue.turns:
                 if not turn.has_rec:
@@ -115,7 +122,6 @@ def transcribe(request):
                 trs.program_version = unicode(check_output(
                     ["git", "rev-parse", "HEAD"],
                     cwd=settings.PROJECT_DIR).rstrip('\n'))
-                trs.timestamp = datetime.datetime.now()
 
             # Check the form against any gold items.  If all are OK, return one
             # code; if not, return another.
@@ -138,8 +144,39 @@ def transcribe(request):
             for turn in dialogue.turns:
                 if not turn.has_rec:
                     continue
-                trss[turn.id].some_breaks_gold = mismatch
-                trss[turn.id].save()
+                trs = trss[turn.id]
+                trs.some_breaks_gold = mismatch
+                trs.save()
+                # Reflect the transcription in the XML.
+                turn_xml = filter(lambda turn_xml: \
+                                    int(turn_xml.get("turnnum")) == turn.id,
+                                  user_turns)[0]
+                trss_xml = turn_xml.find("transcriptions")
+                if trss_xml is None:
+                    asr_xml = turn_xml.find("asr")
+                    if asr_xml is None:
+                        insert_idx = len(turn_xml)
+                    else:
+                        insert_idx = turn_xml.index(asr_xml) + 1
+                    trss_xml = etree.Element("transcriptions")
+                    turn_xml.insert(insert_idx, trss_xml)
+                trs_xml = etree.Element("transcription",
+                                        author=trs.user.username,
+                                        is_gold="0",
+                                        breaks_gold="1" if trs.breaks_gold \
+                                            else "0",
+                                        some_breaks_gold="1" if mismatch \
+                                            else "0",
+                                        date_saved=unicode(trs.date_saved),
+                                        program_version=trs.program_version)
+                trs_xml.text = trs.text
+                trss_xml.append(trs_xml)
+            # Write the XML session file.
+            with open(sess_fname, 'w') as sess_file:
+                sess_file.write(etree.tostring(sess_xml,
+                                               pretty_print=True,
+                                               xml_declaration=True,
+                                               encoding='UTF-8'))
 
             context = dict()
             context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
@@ -173,7 +210,7 @@ def transcribe(request):
             trss_done = Transcription.objects.filter(user=request.user)
             cids_done = set(trs.dg_cid.cid for trs in trss_done)
             cids_todo = set(dg.cid for dg in Dialogue.objects.all()) - \
-                            cids_done
+                        cids_done
             try:
                 cid = cids_todo.pop()
             except KeyError:
@@ -307,9 +344,9 @@ def import_dialogues(request):
         #                        cf_url],
         #                       stdout=upload_outfile)
         cf_retcode = call(['curl', '-d', json_str, '-H',
-                        'Content-Type: application/json',
-                        cf_url],
-                        stdout=upload_outfile)
+                           'Content-Type: application/json',
+                           cf_url],
+                          stdout=upload_outfile)
         cf_outobj = None
         if upload_outfile is not None:
             upload_outfile.seek(0)
@@ -320,7 +357,7 @@ def import_dialogues(request):
         else:
             if cf_outobj is not None:
                 cf_error = cf_outobj['error']['message'] \
-                        if 'error' in cf_outobj else '(no message)'
+                    if 'error' in cf_outobj else '(no message)'
     # Render the response.
     context = dict()
     context['copy_failed'] = copy_failed
@@ -338,17 +375,4 @@ def import_dialogues(request):
     return render(request, "er/imported.html", context)
 
 
-def rating_export(request):
-    root = etree.Element('transcription')
-    for user in User.objects.all():
-        uelement = etree.SubElement(root, 'expert')
-        uelement.attrib["login"] = user.username
-        for rating in user.rating_set.all():
-            relement = etree.SubElement(uelement, 'rating')
-            relement.attrib["fname"] = rating.dg_cid
-            relement.attrib["question"] = rating.answer.question.id_text
-            relement.attrib["answer"] = rating.answer.id_text
-            if rating.ratingcomment_set.count() > 0:
-                relement.attrib["comment"] = \
-                    rating.ratingcomment_set.get().comment
-    return HttpResponse(etree.tostring(root), content_type="text/xml")
+

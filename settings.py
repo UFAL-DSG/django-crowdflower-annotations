@@ -9,6 +9,7 @@ if not PROJECT_DIR in sys.path:
     sys.path += [PROJECT_DIR]
 
 CONVERSATION_DIR = localsettings.CONVERSATION_DIR
+SESSION_FNAME = localsettings.SESSION_FNAME
 
 CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT

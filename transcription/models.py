@@ -1,11 +1,12 @@
 #!/usr/bin/env python2
 # -*- coding: UTF-8 -*-
 import os.path
+import lxml.etree as etree
 from django.db import models
+from django.db.models.signals import post_save
 from django.contrib.auth.models import User
-from settings import CONVERSATION_DIR, CODE_LENGTH, CODE_LENGTH_EXT
-
-# Create your models here.
+from settings import CONVERSATION_DIR, CODE_LENGTH, CODE_LENGTH_EXT, \
+    SESSION_FNAME
 
 
 class Dialogue(models.Model):
@@ -32,7 +33,6 @@ class Dialogue(models.Model):
 
 
 class Transcription(models.Model):
-    timestamp = models.DateTimeField()
     user = models.ForeignKey(User)
     text = models.TextField()
     turn_id = models.SmallIntegerField()
@@ -55,3 +55,40 @@ class Transcription(models.Model):
                     t=self.turn_id,
                     d=self.dg_cid.dirname,
                     trs=self.text)
+
+    @staticmethod
+    def after_save(sender, **kwargs):
+        # Only continue if this is an update -- ignore inserts.
+        if kwargs.pop('created'):
+            return
+        trs = kwargs.pop('instance')
+        cid = trs.dg_cid.cid
+        # Read the XML session file.
+        dg_dir = os.path.join(CONVERSATION_DIR, cid)
+        sess_fname = os.path.join(dg_dir, SESSION_FNAME)
+        with open(sess_fname, 'r+') as sess_file:
+            sess_xml = etree.parse(sess_file)
+        # Find the transcription's element.
+        trs_xml = sess_xml.find((".//userturn[@turnnum='{turnid}']" + \
+                                 "/transcriptions/transcription" + \
+                                 "[@author='{author}']" + \
+                                 "[@date_saved='{date}']").\
+                                format(turnid=str(trs.turn_id),
+                                       author=trs.user.username,
+                                       date=unicode(trs.date_saved)))
+        # Update the transcription's element.
+        attribs = trs_xml.attrib
+        attribs['is_gold'] = '1' if trs.is_gold else '0'
+        attribs['breaks_gold'] = '1' if trs.breaks_gold else '0'
+        attribs['some_breaks_gold'] = '1' if trs.some_breaks_gold else '0'
+        attribs['date_updated'] = str(trs.date_updated)
+        trs_xml.text = trs.text
+        # Write the XML session file.
+        with open(sess_fname, 'w') as sess_file:
+            sess_file.write(etree.tostring(sess_xml,
+                                           pretty_print=True,
+                                           xml_declaration=True,
+                                           encoding='UTF-8'))
+
+
+post_save.connect(Transcription.after_save, sender=Transcription)

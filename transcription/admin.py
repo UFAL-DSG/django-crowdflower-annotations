@@ -4,22 +4,6 @@ from django.db import models
 from transcription.models import Dialogue, Transcription
 
 
-# class AnswerInline(admin.TabularInline):
-#     model = Answer
-#     formfield_overrides = {
-#         models.TextField:
-#         {
-#             'widget': TextInput,
-#         }
-#     }
-
-
-# class QuestionAdmin(admin.ModelAdmin):
-#     list_display = ('id', 'id_text', 'text',)
-#     inlines = [
-#         AnswerInline,
-#         ]
-
 class DialogueAdmin(admin.ModelAdmin):
     add_form_template = 'er/import.html'
     list_display = ['dirname', 'cid', 'code', 'code_corr', 'code_incorr']

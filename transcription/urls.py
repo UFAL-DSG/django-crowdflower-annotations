@@ -7,10 +7,6 @@ urlpatterns = patterns('',
                            'transcription.views.transcribe',
                            name='transcribe'),
 
-                       url(r'^static/(?P<path>.*)$',
-                           'django.views.static.serve',
-                           {'document_root': settings.STATIC_ROOT}),
-
                        url(r'^data/recs/(?P<path>.*)$',
                            'django.views.static.serve',
                            {'document_root': settings.CONVERSATION_DIR}),
@@ -22,10 +18,6 @@ urlpatterns = patterns('',
                        url(r'^import$',
                            'transcription.views.import_dialogues',
                            name="import_dialogues"),
-
-                       url(r'^export$',
-                           'transcription.views.rating_export',
-                           name="rating_export"),
 
                        url(r'^',
                            'transcription.views.home',
