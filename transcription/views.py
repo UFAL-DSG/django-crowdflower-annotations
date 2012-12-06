@@ -1,4 +1,7 @@
 #!/usr/bin/python
+# -*- coding: UTF-8 -*-
+#
+# TODO: User.objects.get_or_create(dummy_user) where appropriate.
 import datetime
 import hashlib
 import json
@@ -90,7 +93,6 @@ def transcribe(request):
     if request.method == "POST":
         cid = request.POST['cid']
         dg_data = Dialogue.objects.get(cid=cid)
-        dirname = dg_data.dirname
         dialogue = _read_dialogue(cid)
         dg_codes = dg_data.get_codes()
         form = TranscriptionForm(request.POST, cid=cid, turns=dialogue.turns)
@@ -109,7 +111,7 @@ def transcribe(request):
                 trss[turn.id] = trs
                 trs.text = form.cleaned_data['trs_{0}'.format(turn.id)]
                 trs.turn_id = turn.id
-                trs.object_id = dg_data
+                trs.dg_cid = dg_data
                 trs.program_version = unicode(check_output(
                     ["git", "rev-parse", "HEAD"],
                     cwd=settings.PROJECT_DIR).rstrip('\n'))
@@ -117,9 +119,9 @@ def transcribe(request):
 
             # Check the form against any gold items.  If all are OK, return one
             # code; if not, return another.
-            gold_trss = Transcription.objects.filter(object_id=dirname,
+            gold_trss = Transcription.objects.filter(dg_cid=dg_data,
                                                      is_gold=True)
-            gold_trss = group_by(gold_trss, ('object_id', 'turn_id'))
+            gold_trss = group_by(gold_trss, ('dg_cid', 'turn_id'))
             mismatch = False
             for turn_gold_trss in gold_trss.itervalues():
                 submismatch = True
@@ -162,24 +164,21 @@ def transcribe(request):
     # Else, if a blank form is to be served,
     else:
         # Find the dialogue to transcribe.
-        # NOTE This might be helpful to be more permissive (i.e. it could serve
-        # a dialogue even without having its CID specified).
         dg_data = None
         try:
             cid = request.GET["cid"]
         except:
             if request.user.is_anonymous():
-                return HttpResponseRedirect("er/finished.html")
+                return HttpResponseRedirect("finished")
             trss_done = Transcription.objects.filter(user=request.user)
-            dirnames_done = set(trs.object_id for trs in trss_done)
-            dirnames_todo = set(dg.dirname for dg in Dialogue.objects.all()) - \
-                            dirnames_done
+            cids_done = set(trs.dg_cid.cid for trs in trss_done)
+            cids_todo = set(dg.cid for dg in Dialogue.objects.all()) - \
+                            cids_done
             try:
-                dirname = dirnames_todo.pop()
+                cid = cids_todo.pop()
             except KeyError:
-                return HttpResponseRedirect("er/finished.html")
-            dg_data = Dialogue.objects.get(dirname=dirname)
-            cid = dg_data.cid
+                return HttpResponseRedirect("finished")
+            dg_data = Dialogue.objects.get(cid=cid)
         if dg_data is None:
             # Find the corresponding Dialogue object in the DB.
             dg_data = Dialogue.objects.get(cid=cid)
@@ -223,8 +222,14 @@ def import_dialogues(request):
     csv_fname = request.GET.get('csv_fname', '')
     if not csv_fname:
         csv_fname = os.path.join(settings.CONVERSATION_DIR, 'new_tasks.csv')
-    csv_fname = os.path.abspath(csv_fname)
+    else:
+        if os.path.isabs(csv_fname):
+            csv_fname = os.path.abspath(csv_fname)
+        else:
+            csv_fname = os.path.join(settings.CONVERSATION_DIR, csv_fname)
     dirlist_fname = request.GET['list_fname']
+    ignore_exdirs = request.GET.get('ignore_exdirs', False)
+    upload_to_cf = request.GET.get('upload', True)
     # # DIRTY
     # shutil.copy('/tmp/db.db', '/webapps/cf_transcription/db')
     # import subprocess
@@ -259,8 +264,9 @@ def import_dialogues(request):
                 shutil.copytree(src_fname,
                                 os.path.join(settings.CONVERSATION_DIR, cid))
             except:
-                copy_failed.append(src_fname)
-                continue
+                if not ignore_exdirs:
+                    copy_failed.append(src_fname)
+                    continue
             # Generate codes.
             dg_codes = _gen_codes()
             dg_data = Dialogue(cid=cid,
@@ -285,42 +291,47 @@ def import_dialogues(request):
             json_str += '{{"cid":"{cid}","code":"{code}"}}'.format(\
                 cid=cid, code=dg_codes[0])
             count += 1
-    # Communicate the new data to CrowdFlower via the CF API.
-    cf_url = '{start}jobs/{jobid}/upload.json?key={key}'.format(
-        start=settings.CF_URL_START,
-        jobid=settings.CF_JOB_ID,
-        key=settings.CF_KEY)
-    try:
-        upload_outfile = TemporaryFile()
-    except:
-        cf_error = "Output from `curl' could not be obtained."
-        upload_outfile = None
-    #     cf_retcode = call(['curl', '-T', csv_fname, '-H', 'Content-Type:
-    #     text/csv',
-    #                        cf_url],
-    #                       stdout=upload_outfile)
-    cf_retcode = call(['curl', '-d', json_str, '-H',
-                       'Content-Type: application/json',
-                       cf_url],
-                      stdout=upload_outfile)
-    cf_outobj = None
-    if upload_outfile is not None:
-        upload_outfile.seek(0)
-        cf_outobj = json.load(upload_outfile)
-        upload_outfile.close()
-    if cf_retcode == 0:
-        cf_error = None
-    else:
-        if cf_outobj is not None:
-            cf_error = cf_outobj['error']['message'] \
-                       if 'error' in cf_outobj else '(no message)'
+    if upload_to_cf:
+        # Communicate the new data to CrowdFlower via the CF API.
+        cf_url = '{start}jobs/{jobid}/upload.json?key={key}'.format(
+            start=settings.CF_URL_START,
+            jobid=settings.CF_JOB_ID,
+            key=settings.CF_KEY)
+        try:
+            upload_outfile = TemporaryFile()
+        except:
+            cf_error = "Output from `curl' could not be obtained."
+            upload_outfile = None
+        #     cf_retcode = call(['curl', '-T', csv_fname, '-H', 'Content-Type:
+        #     text/csv',
+        #                        cf_url],
+        #                       stdout=upload_outfile)
+        cf_retcode = call(['curl', '-d', json_str, '-H',
+                        'Content-Type: application/json',
+                        cf_url],
+                        stdout=upload_outfile)
+        cf_outobj = None
+        if upload_outfile is not None:
+            upload_outfile.seek(0)
+            cf_outobj = json.load(upload_outfile)
+            upload_outfile.close()
+        if cf_retcode == 0:
+            cf_error = None
+        else:
+            if cf_outobj is not None:
+                cf_error = cf_outobj['error']['message'] \
+                        if 'error' in cf_outobj else '(no message)'
     # Render the response.
     context = dict()
     context['copy_failed'] = copy_failed
     context['save_failed'] = save_failed
     context['dg_existed'] = dg_existed
-    context['cf_url'] = cf_url
-    context['cf_error'] = cf_error
+    if upload_to_cf:
+        context['cf_upload'] = True
+        context['cf_url'] = cf_url
+        context['cf_error'] = cf_error
+    else:
+        context['cf_upload'] = False
     context['csv_fname'] = csv_fname
     context['count'] = count
     context['n_failed'] = len(copy_failed) + len(save_failed) + len(dg_existed)
@@ -334,7 +345,7 @@ def rating_export(request):
         uelement.attrib["login"] = user.username
         for rating in user.rating_set.all():
             relement = etree.SubElement(uelement, 'rating')
-            relement.attrib["fname"] = rating.object_id
+            relement.attrib["fname"] = rating.dg_cid
             relement.attrib["question"] = rating.answer.question.id_text
             relement.attrib["answer"] = rating.answer.id_text
             if rating.ratingcomment_set.count() > 0:

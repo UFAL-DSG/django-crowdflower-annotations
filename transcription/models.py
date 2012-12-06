@@ -16,9 +16,13 @@ class Dialogue(models.Model):
                                    unique=True)
     """ the original name of the dialogue directory """
     cid = models.CharField(max_length=40, unique=True, db_index=True)
+    """ conversation ID """
     code = models.CharField(max_length=CODE_LENGTH)
+    """ check code -- the base """
     code_corr = models.CharField(max_length=CODE_LENGTH_EXT)
+    """ check code -- the extension in case of no mismatch with gold items """
     code_incorr = models.CharField(max_length=CODE_LENGTH_EXT)
+    """ check code -- the extension in case of a mismatch with gold items """
 
     def __unicode__(self):
         return u'({c}: {d})'.format(c=self.cid, d=self.dirname)
@@ -32,20 +36,22 @@ class Transcription(models.Model):
     user = models.ForeignKey(User)
     text = models.TextField()
     turn_id = models.SmallIntegerField()
-    object_id = models.ForeignKey(Dialogue, to_field='dirname')
-    program_version = models.TextField()
+    dg_cid = models.ForeignKey(Dialogue, to_field='cid')
     is_gold = models.BooleanField(default=False)
     breaks_gold = models.BooleanField(default=False)
-    # `some_breaks_gold' says whether any of all the transcriptions for the
-    # current dialogue from the current user mismatched a gold item
     some_breaks_gold = models.BooleanField(default=False)
+    """ `some_breaks_gold' says whether any of all the transcriptions for the
+     current dialogue from the current user mismatched a gold item """
+    date_saved = models.DateTimeField(auto_now_add=True)
+    date_updated = models.DateTimeField(auto_now=True)
+    program_version = models.TextField()
 
     def __unicode__(self):
-        return u'({g}{b}{B} u:{u}, t:{t}, f:{f}, "{trs}")'\
+        return u'({g}{b}{B} u:{u}, t:{t}, d:{d}, "{trs}")'\
             .format(g=(u"G" if self.is_gold else u"_"),
                     b=(u"b" if self.some_breaks_gold else u"_"),
                     B=(u"B" if self.breaks_gold else u"_"),
                     u=self.user,
                     t=self.turn_id,
-                    f=self.object_id,
+                    d=self.dg_cid.dirname,
                     trs=self.text)

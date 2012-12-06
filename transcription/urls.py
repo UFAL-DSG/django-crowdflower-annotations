@@ -7,6 +7,10 @@ urlpatterns = patterns('',
                            'transcription.views.transcribe',
                            name='transcribe'),
 
+                       url(r'^static/(?P<path>.*)$',
+                           'django.views.static.serve',
+                           {'document_root': settings.STATIC_ROOT}),
+
                        url(r'^data/recs/(?P<path>.*)$',
                            'django.views.static.serve',
                            {'document_root': settings.CONVERSATION_DIR}),

@@ -12,6 +12,10 @@ imported.
 The CSV file describing the imported dialogues is at <tt>{{ csv_fname }}</tt>.
 </p>
 
+<p>
+<a href="{{ SUB_SITE }}admin/transcription/dialogue/">Back</a> to dialogue listing.
+</p>
+
 {% if n_failed == 0 and cf_error == None %}
 <p>
 There were no errors.
@@ -65,15 +69,17 @@ Below is a breakdown according to the cause.
 </table>
 {% endif %}
 
-<h3>Failed to upload to CrowdFlower</h3>
-{% if cf_error == None %}
-<p>None such.</p>
-{% else %}
-<p>See the error message from CrowdFlower below. The CrowdFlower URL
-contacted was this: <tt>{{ cf_url }}</tt></p>
-
-<h4>Error message</h4>
-<pre>{{ cf_error }}</pre>
+{% if cf_upload %}
+	<h3>Failed to upload to CrowdFlower</h3>
+	{% if cf_error == None %}
+	<p>None such.</p>
+	{% else %}
+	<p>See the error message from CrowdFlower below. The CrowdFlower URL
+	contacted was this: <tt>{{ cf_url }}</tt></p>
+	
+	<h4>Error message</h4>
+	<pre>{{ cf_error }}</pre>
+	{% endif %}
 {% endif %}
 {% endif %}
 
