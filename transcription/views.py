@@ -244,7 +244,7 @@ def home(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
+@user_passes_test(lambda u: u.is_staff)
 def import_dialogues(request):
     # Check whether the form is yet to be served.
     if not request.GET:
