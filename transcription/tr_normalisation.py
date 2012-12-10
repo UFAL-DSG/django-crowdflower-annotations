@@ -292,7 +292,7 @@ _subst = [(u'good-bye', u'goodbye'),
           ]
 for idx, tup in enumerate(_subst):
     pat, sub = tup
-    _subst[idx] = (ur'\b{pat}\b'.format(pat=pat), sub)
+    _subst[idx] = (re.compile(ur'\b{pat}\b'.format(pat=pat)), sub)
 
 
 def lowercase(text):

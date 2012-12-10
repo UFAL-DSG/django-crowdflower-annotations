@@ -35,7 +35,7 @@ def group_by(objects, attrs):
     """
     groups = dict()
     for obj in objects:
-        key = tuple(obj.__dict__[attr] for attr in attrs)
+        key = tuple(obj.__getattribute__(attr) for attr in attrs)
         groups.setdefault(key, []).append(obj)
     return groups
 
