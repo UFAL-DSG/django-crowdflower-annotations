@@ -5,8 +5,10 @@ import lxml.etree as etree
 from django.db import models
 from django.db.models.signals import post_save
 from django.contrib.auth.models import User
-from settings import CONVERSATION_DIR, CODE_LENGTH, CODE_LENGTH_EXT, \
-    SESSION_FNAME
+from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
+    SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT, \
+    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, XML_TRANSCRIPTION_PATH, \
+    XML_TURNNUMBER_ATTR, XML_USERTURN_PATH
 
 
 class Dialogue(models.Model):
@@ -40,8 +42,8 @@ class Transcription(models.Model):
     is_gold = models.BooleanField(default=False)
     breaks_gold = models.BooleanField(default=False)
     some_breaks_gold = models.BooleanField(default=False)
-    """ `some_breaks_gold' says whether any of all the transcriptions for the
-     current dialogue from the current user mismatched a gold item """
+    """`some_breaks_gold' says whether any of all the transcriptions for the
+    current dialogue from the current user mismatched a gold item """
     date_saved = models.DateTimeField(auto_now_add=True)
     date_updated = models.DateTimeField(auto_now=True)
     program_version = models.TextField()
@@ -69,19 +71,33 @@ class Transcription(models.Model):
         with open(sess_fname, 'r+') as sess_file:
             sess_xml = etree.parse(sess_file)
         # Find the transcription's element.
-        trs_xml = sess_xml.find((".//userturn[@turnnum='{turnid}']" + \
-                                 "/transcriptions/transcription" + \
-                                 "[@author='{author}']" + \
-                                 "[@date_saved='{date}']").\
-                                format(turnid=str(trs.turn_id),
-                                       author=trs.user.username,
-                                       date=unicode(trs.date_saved)))
+        trs_xml = sess_xml.find(XML_TRANSCRIPTION_PATH\
+                                .format(turnid=str(trs.turn_id),
+                                        author=trs.user.username,
+                                        date=unicode(trs.date_saved)))
+        trs_xml = sess_xml.find(("{uturn}[@{turn_attr}='{turn}']"
+                                 "{trss}/{trs}[@{auth_attr}='{author}']"
+                                 "[@{date_attr}='{date}']").format(
+                      uturn=XML_USERTURN_PATH,
+                      turn_attr=XML_TURNNUMBER_ATTR,
+                      turn=str(trs.turn_id),
+                      trss=(("/" + XML_TRANSCRIPTIONS_ELEM)
+                            if XML_TRANSCRIPTIONS_ELEM else ""),
+                      trs=XML_TRANSCRIPTION_ELEM,
+                      auth_attr=XML_AUTHOR_ATTR,
+                      author=trs.user.username,
+                      date_attr=XML_DATE_ATTR,
+                      date=(trs.date_updated.strptime(XML_DATE_FORMAT).rstrip()
+                            if XML_DATE_FORMAT else
+                            unicode(trs.date_updated))))
         # Update the transcription's element.
         attribs = trs_xml.attrib
         attribs['is_gold'] = '1' if trs.is_gold else '0'
         attribs['breaks_gold'] = '1' if trs.breaks_gold else '0'
         attribs['some_breaks_gold'] = '1' if trs.some_breaks_gold else '0'
-        attribs['date_updated'] = str(trs.date_updated)
+        attribs['date_updated'] = \
+            (trs.date_updated.strptime(XML_DATE_FORMAT) if XML_DATE_FORMAT
+             else unicode(trs.date_updated))
         trs_xml.text = trs.text
         # Write the XML session file.
         with open(sess_fname, 'w') as sess_file:
