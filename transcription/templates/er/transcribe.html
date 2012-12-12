@@ -239,19 +239,19 @@ p.user { color: orange; }
 
       $("#turn_1").removeClass("ui-state-disabled");
 
-			$('body').keydown(function(e) {
-          var code = e.keyCode || e.which;
-          if (code == '9') {
-              var curid =$("*:focus").attr("id");
-              var buttons = $(".btnnext");
-              for(var i = 0; i < buttons.length; i++) {
-                  if(buttons[i].id == curid) {
-                      $("#" + buttons[i + 1].id)[0].focus();
-                      return false;
-                  }
-              }
-          }
-      });
+// 			$('body').keydown(function(e) {
+//           var code = e.keyCode || e.which;
+//           if (code == '9') {
+//               var curid =$("*:focus").attr("id");
+//               var buttons = $(".btnnext");
+//               for(var i = 0; i < buttons.length; i++) {
+//                   if(buttons[i].id == curid) {
+//                       $("#" + buttons[i + 1].id)[0].focus();
+//                       return false;
+//                   }
+//               }
+//           }
+//       });
 
       $("#submit").click(function() {
 					// Check that all fields (text areas) are filled in.
