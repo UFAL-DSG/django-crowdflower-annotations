@@ -16,7 +16,7 @@ from transcription.parser import DialogParser
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
-from django.http import HttpResponse, HttpResponseRedirect
+from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
 from tempfile import TemporaryFile
@@ -103,7 +103,8 @@ def transcribe(request):
             xml_parser = etree.XMLParser(remove_blank_text=True)
             with open(sess_fname, 'r+') as sess_file:
                 sess_xml = etree.parse(sess_file, xml_parser)
-            user_turns = sess_xml.findall(".//userturn")
+            # user_turns = sess_xml.findall(".//userturn")
+            user_turns = sess_xml.findall(settings.XMl_USERTURN_PATH)
             # Create Transcription objects and save them into DB.
             trss = dict()
             for turn in dialogue.turns:
@@ -148,29 +149,43 @@ def transcribe(request):
                 trs.some_breaks_gold = mismatch
                 trs.save()
                 # Reflect the transcription in the XML.
-                turn_xml = filter(lambda turn_xml: \
-                                    int(turn_xml.get("turnnum")) == turn.id,
-                                  user_turns)[0]
-                trss_xml = turn_xml.find("transcriptions")
-                if trss_xml is None:
-                    asr_xml = turn_xml.find("asr")
-                    if asr_xml is None:
-                        insert_idx = len(turn_xml)
-                    else:
-                        insert_idx = turn_xml.index(asr_xml) + 1
-                    trss_xml = etree.Element("transcriptions")
-                    turn_xml.insert(insert_idx, trss_xml)
-                trs_xml = etree.Element("transcription",
-                                        author=trs.user.username,
-                                        is_gold="0",
-                                        breaks_gold="1" if trs.breaks_gold \
-                                            else "0",
-                                        some_breaks_gold="1" if mismatch \
-                                            else "0",
-                                        date_saved=unicode(trs.date_saved),
-                                        program_version=trs.program_version)
+                turn_xml = filter(
+                    lambda turn_xml: \
+                    int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) == turn.id,
+                    user_turns)[0]
+                if settings.XML_TRANSCRIPTIONS_ELEM is not None:
+                    trss_xml = turn_xml.find(settings.XML_TRANSCRIPTIONS_ELEM)
+                    if trss_xml is None:
+                        trss_left_sib = \
+                            turn_xml.find(settings.XML_TRANSCRIPTIONS_BEFORE)
+                        if trss_left_sib is None:
+                            insert_idx = len(turn_xml)
+                        else:
+                            insert_idx = turn_xml.index(trss_left_sib) + 1
+                        trss_xml = \
+                            etree.Element(settings.XML_TRANSCRIPTIONS_ELEM)
+                        turn_xml.insert(insert_idx, trss_xml)
+                else:
+                    trss_xml = turn_xml
+                trs_xml = etree.Element(
+                    settings.XML_TRANSCRIPTION_ELEM,
+                    author=trs.user.username,
+                    is_gold="0",
+                    breaks_gold="1" if trs.breaks_gold else "0",
+                    some_breaks_gold="1" if mismatch else "0",
+                    date_saved=(
+                        trs.date_updated.strptime(settings.XML_DATE_FORMAT)\
+                            .rstrip() if settings.XML_DATE_FORMAT else
+                        unicode(trs.date_updated)),
+                    program_version=trs.program_version)
                 trs_xml.text = trs.text
-                trss_xml.append(trs_xml)
+                trs_left_sib = \
+                    trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
+                if trs_left_sib is None:
+                    insert_idx = len(trss_xml)
+                else:
+                    insert_idx = trss_xml.index(trs_left_sib) + 1
+                trss_xml.insert(insert_idx, trs_xml)
             # Write the XML session file.
             with open(sess_fname, 'w') as sess_file:
                 sess_file.write(etree.tostring(sess_xml,
@@ -373,6 +388,3 @@ def import_dialogues(request):
     context['count'] = count
     context['n_failed'] = len(copy_failed) + len(save_failed) + len(dg_existed)
     return render(request, "er/imported.html", context)
-
-
-
