@@ -7,7 +7,7 @@ from django.db.models.signals import post_save
 from django.contrib.auth.models import User
 from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
     SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT, \
-    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, XML_TRANSCRIPTION_PATH, \
+    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, \
     XML_TURNNUMBER_ATTR, XML_USERTURN_PATH
 
 
@@ -71,10 +71,6 @@ class Transcription(models.Model):
         with open(sess_fname, 'r+') as sess_file:
             sess_xml = etree.parse(sess_file)
         # Find the transcription's element.
-        trs_xml = sess_xml.find(XML_TRANSCRIPTION_PATH\
-                                .format(turnid=str(trs.turn_id),
-                                        author=trs.user.username,
-                                        date=unicode(trs.date_saved)))
         trs_xml = sess_xml.find(("{uturn}[@{turn_attr}='{turn}']"
                                  "{trss}/{trs}[@{auth_attr}='{author}']"
                                  "[@{date_attr}='{date}']").format(

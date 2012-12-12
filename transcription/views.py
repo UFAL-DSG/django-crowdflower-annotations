@@ -104,7 +104,7 @@ def transcribe(request):
             with open(sess_fname, 'r+') as sess_file:
                 sess_xml = etree.parse(sess_file, xml_parser)
             # user_turns = sess_xml.findall(".//userturn")
-            user_turns = sess_xml.findall(settings.XMl_USERTURN_PATH)
+            user_turns = sess_xml.findall(settings.XML_USERTURN_PATH)
             # Create Transcription objects and save them into DB.
             trss = dict()
             for turn in dialogue.turns:
@@ -179,8 +179,11 @@ def transcribe(request):
                         unicode(trs.date_updated)),
                     program_version=trs.program_version)
                 trs_xml.text = trs.text
-                trs_left_sib = \
-                    trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
+                if settings.XML_TRANSCRIPTION_BEFORE:
+                    trs_left_sib = \
+                        trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
+                else:
+                    trs_left_sib = None
                 if trs_left_sib is None:
                     insert_idx = len(trss_xml)
                 else:
