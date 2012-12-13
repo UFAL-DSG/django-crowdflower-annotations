@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+# -*- coding: UTF-8 -*-
+
+CONVERSATION_DIR = "/webapps/cf_transcription/data/conversations"
+SESSION_FNAME = 'session-fixed.xml'
+
+CODE_LENGTH = 6 # length of the validation code
+CODE_LENGTH_EXT = 3 # length of the validation code extension
+
+CF_URL_START = "https://api.crowdflower.com/v1/"
+CF_KEY = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
+CF_JOB_ID = "123456"
+
+# Definitions for the old version of session.xml files:
+XML_USERTURN_PATH = ".//userturn"
+XML_TURNNUMBER_ATTR = "turnnum"
+XML_TRANSCRIPTIONS_BEFORE = "asr"
+XML_TRANSCRIPTIONS_ELEM = "transcriptions"
+XML_TRANSCRIPTION_BEFORE = None
+XML_TRANSCRIPTION_ELEM = "transcription"
+XML_AUTHOR_ATTR = "author"
+XML_DATE_ATTR = "date_saved"
+XML_DATE_FORMAT = None
+
+# Definitions for the new version of session.xml files:
+# XML_USERTURN_PATH = (".//turn[@speaker='user']")
+# XML_TURNNUMBER_ATTR = "turn_number"
+# XML_TRANSCRIPTIONS_BEFORE = None
+# XML_TRANSCRIPTIONS_ELEM = None
+# XML_TRANSCRIPTION_BEFORE = "slu"
+# XML_TRANSCRIPTION_ELEM = "asr_transcription"
+# XML_AUTHOR_ATTR = "transcriber"
+# XML_DATE_ATTR = "date"
+# XML_DATE_FORMAT = "%d/%m/%y %H:%M:%S %Z"
