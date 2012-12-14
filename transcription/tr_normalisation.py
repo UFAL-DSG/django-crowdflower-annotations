@@ -364,4 +364,5 @@ def trss_match(trs1, trs2):
         trs2: second Transcription to compare
 
     """
+    # TODO: Include string edit distance, and some toleration.
     return normalise_trs_text(trs1.text) == normalise_trs_text(trs2.text)
