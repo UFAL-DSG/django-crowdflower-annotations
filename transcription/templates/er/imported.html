@@ -27,10 +27,8 @@ There were no errors.
 Below is a breakdown according to the cause.
 </p>
 
+{% if copy_failed %}
 <h3>Failed to be copied</h3>
-{% if not copy_failed %}
-<p>None such.</p>
-{% else %}
 <table>
 	<tr><th>Name of the directory</th></tr>
 	{% for dirname in copy_failed %}
@@ -39,10 +37,8 @@ Below is a breakdown according to the cause.
 </table>
 {% endif %}
 
+{% if save_failed %}
 <h3>Failed to be saved in the DB</h3>
-{% if not save_failed %}
-<p>None such.</p>
-{% else %}
 <table>
 	<tr>
 		<th>Name of the directory</th>
@@ -57,10 +53,24 @@ Below is a breakdown according to the cause.
 </table>
 {% endif %}
 
+{% if save_price_failed %}
+<h3>Failed to save dialogue price in the DB</h3>
+<table>
+	<tr>
+		<th>Name of the directory</th>
+		<th>Conversation ID</th>
+	</tr>
+	{% for dirname, cid in save_price_failed %}
+	<tr>
+		<td><tt>{{ dirname }}</tt></td>
+		<td><tt>{{ cid }}</tt></td>
+	</tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% if dg_existed %}
 <h3>Already existed in the DB</h3>
-{% if not dg_existed %}
-<p>None such.</p>
-{% else %}
 <table>
 	<tr><th>Name of the directory</th></tr>
 	{% for dirname in dg_existed %}
@@ -70,10 +80,8 @@ Below is a breakdown according to the cause.
 {% endif %}
 
 {% if cf_upload %}
+	{% if cf_error is not None %}
 	<h3>Failed to upload to CrowdFlower</h3>
-	{% if cf_error == None %}
-	<p>None such.</p>
-	{% else %}
 	<p>See the error message from CrowdFlower below. The CrowdFlower URL
 	contacted was this: <tt>{{ cf_url }}</tt></p>
 	

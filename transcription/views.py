@@ -11,8 +11,8 @@ from tr_normalisation import trss_match
 
 import lxml.etree as etree
 import settings
-from transcription.models import Transcription, Dialogue
-from transcription.parser import DialogParser
+from transcription.models import Transcription, DialogueAnnotation, Dialogue, \
+    UserTurn, SystemTurn
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
@@ -20,10 +20,6 @@ from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
 from tempfile import TemporaryFile
-
-
-# Constants.
-TRS_FNAME = "user-transcription.xml"
 
 
 def group_by(objects, attrs):
@@ -46,20 +42,24 @@ def _hash(s):
 
 class TranscriptionForm(forms.Form):
     def __init__(self, *args, **kwargs):
-        turns = kwargs.pop('turns')
+        uturn_ind = kwargs.pop('uturn_ind')
         cid = kwargs.pop('cid', None)
         super(TranscriptionForm, self).__init__(*args, **kwargs)
 
         self.fields['cid'] = forms.CharField(widget=forms.HiddenInput(),
                                              initial=cid)
+        self.fields['quality'] = forms.CharField()
+        self.fields['accent'] = forms.CharField()
+        self.fields['offensive'] = forms.BooleanField()
+        self.fields['notes'] = forms.CharField()
 
-        for turn in turns:
-            if not turn.has_rec:
+        for turn_num, has_rec in enumerate(uturn_ind):
+            if not has_rec:
                 continue
-            self.fields['trs_{0}'.format(turn.id)] = \
+            self.fields['trs_{0}'.format(turn_num)] = \
                 forms.CharField(widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
-                    label=turn.id)
+                    label=turn_num)
 
 
 def finished(request):
@@ -78,12 +78,48 @@ def _gen_codes():
     return (code, code_corr, code_incorr)
 
 
-def _read_dialogue(dirname, cdir=settings.CONVERSATION_DIR, xmlname=TRS_FNAME):
-    dialogue = DialogParser.parse(os.path.join(cdir, dirname, xmlname))
-    dialogue.delete_from("Thank you for using the system.")
-    # TODO Delete also the long, repeating introduction.
-    dialogue.path = "/apps/transcription/data/recs/" + dirname
-    return dialogue
+def _read_dialogue_turns(dg_data):
+    sess_xml = etree.parse(os.path.join(dg_data.dirname,
+                                        settings.SESSION_FNAME))
+    # num_recs = 0 # number of recs seen so far
+    for uturn_xml in sess_xml.iterfind(settings.XML_USERTURN_PATH):
+        turn = UserTurn(
+            dialogue=dg_data,
+            turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
+            wav_fname=os.path.join(
+                settings.CONVERSATION_DIR,
+                uturn_xml.find(settings.XML_REC_SUBPATH).attrib[
+                    settings.XML_REC_FNAME_ATTR]))
+        turn.save()
+    for systurn_xml in sess_xml.iterfind(settings.XML_SYSTURN_PATH):
+        text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH)
+        # Throw away some distracting pieces of system prompts.
+        if text == "Thank you for using the system.":
+            continue
+        text = text.replace("Thank you for calling the Cambridge Information "
+                            "system. Your call will be recorded for research "
+                            "purposes.",
+                            "").strip()
+        turn = SystemTurn(
+            dialogue=dg_data,
+            turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
+            text=text)
+        turn.save()
+
+
+def update_price(dg_data):
+    """Computes the price of a dialogue transcription in USD."""
+    uturns = UserTurn.objects.filter(dialogue=dg_data)
+    # Compute the length of the audio.
+    wavsize = 0
+    for turn in uturns:
+        wavsize += os.path.getsize(turn.wav_fname)
+    sec = wavsize / float(16000 * 2)
+    minutes = sec / 60.
+
+    price = (settings.PRICE_CONST + settings.PRICE_PER_MIN * minutes
+             + settings.PRICE_PER_TURN * len(uturns))
+    dg_data.price = price
 
 
 def transcribe(request):
@@ -92,9 +128,13 @@ def transcribe(request):
     if request.method == "POST":
         cid = request.POST['cid']
         dg_data = Dialogue.objects.get(cid=cid)
-        dialogue = _read_dialogue(cid)
+        uturns = UserTurn.objects.filter(dialogue=dg_data)
+        uturn_nums = [uturn.turn_number for uturn in uturns]
+        uturn_ind = [False] * (max(uturn_nums) + 1)
+        for uturn_num in uturn_nums:
+            uturn_ind[uturn_num] = True
         dg_codes = dg_data.get_codes()
-        form = TranscriptionForm(request.POST, cid=cid, turns=dialogue.turns)
+        form = TranscriptionForm(request.POST, cid=cid, turn_inds=uturn_ind)
 
         if form.is_valid():
             # Read the XML session file.
@@ -103,12 +143,26 @@ def transcribe(request):
             xml_parser = etree.XMLParser(remove_blank_text=True)
             with open(sess_fname, 'r+') as sess_file:
                 sess_xml = etree.parse(sess_file, xml_parser)
-            # user_turns = sess_xml.findall(".//userturn")
             user_turns = sess_xml.findall(settings.XML_USERTURN_PATH)
+            # Create the DialogueAnnotation object and save it into DB.
+            dg_ann = DialogueAnnotation()
+            dg_ann.dialogue = dg_data
+            dg_ann.program_version = unicode(check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=settings.PROJECT_DIR).rstrip('\n'))
+            dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
+                              form.cleaned_data['quality_clear']
+                              else DialogueAnnotation.QUALITY_NOISY)
+            dg_ann.accent = (None if
+                             form.cleaned_data['accent_native']
+                             else form.cleaned_data['accent_name'])
+            dg_ann.offensive = bool(form.cleaned_data['offensive_yes'])
+            dg_ann.notes = form.cleaned_data['notes']
+            dg_ann.save()
             # Create Transcription objects and save them into DB.
             trss = dict()
-            for turn in dialogue.turns:
-                if not turn.has_rec:
+            for turn_num, has_rec in enumerate(uturn_ind):
+                if not has_rec:
                     continue
                 if request.user.is_authenticated():
                     trs = Transcription(user=request.user)
@@ -116,19 +170,16 @@ def transcribe(request):
                     # A dummy user.
                     dummy_user = User.objects.get(username='testres')
                     trs = Transcription(user=dummy_user)
-                trss[turn.id] = trs
-                trs.text = form.cleaned_data['trs_{0}'.format(turn.id)]
-                trs.turn_id = turn.id
-                trs.dg_cid = dg_data
-                trs.program_version = unicode(check_output(
-                    ["git", "rev-parse", "HEAD"],
-                    cwd=settings.PROJECT_DIR).rstrip('\n'))
+                trss[turn_num] = trs
+                trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
+                trs.turn_id = turn_num
+                trs.dialogue_annotation = dg_ann
 
             # Check the form against any gold items.  If all are OK, return one
             # code; if not, return another.
-            gold_trss = Transcription.objects.filter(dg_cid=dg_data,
+            gold_trss = Transcription.objects.filter(dialogue=dg_data,
                                                      is_gold=True)
-            gold_trss = group_by(gold_trss, ('dg_cid', 'turn_id'))
+            gold_trss = group_by(gold_trss, ('dialogue', 'turn_id'))
             mismatch = False
             for turn_gold_trss in gold_trss.itervalues():
                 submismatch = True
@@ -142,16 +193,17 @@ def transcribe(request):
 
             # Update transcriptions in the light of their comparison to gold
             # transcriptions, and save them.
-            for turn in dialogue.turns:
-                if not turn.has_rec:
+            for turn_num, has_rec in enumerate(uturn_ind):
+                if not has_rec:
                     continue
-                trs = trss[turn.id]
+                trs = trss[turn_num]
                 trs.some_breaks_gold = mismatch
                 trs.save()
                 # Reflect the transcription in the XML.
                 turn_xml = filter(
                     lambda turn_xml: \
-                    int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) == turn.id,
+                        int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) \
+                            == turn_num,
                     user_turns)[0]
                 if settings.XML_TRANSCRIPTIONS_ELEM is not None:
                     trss_xml = turn_xml.find(settings.XML_TRANSCRIPTIONS_ELEM)
@@ -220,33 +272,57 @@ def transcribe(request):
     else:
         # Find the dialogue to transcribe.
         dg_data = None
-        try:
-            cid = request.GET["cid"]
-        except:
+        cid = request.GET.get("cid", None)
+        # If the request did not specify the `cid' as a GET parameter,
+        if cid is None:
+            # Anonymous user cannot be helped.
             if request.user.is_anonymous():
                 return HttpResponseRedirect("finished")
+            # For a user, who is logged in, find a suitable dialogue to
+            # transcribe.
             trss_done = Transcription.objects.filter(user=request.user)
-            cids_done = set(trs.dg_cid.cid for trs in trss_done)
+            cids_done = set(trs.dialogue_annotation.dialogue.cid
+                            for trs in trss_done)
             cids_todo = set(dg.cid for dg in Dialogue.objects.all()) - \
                         cids_done
+            # Serve him/her the next free dialogue if there is one, else tell
+            # him he is finished.
             try:
                 cid = cids_todo.pop()
             except KeyError:
                 return HttpResponseRedirect("finished")
             dg_data = Dialogue.objects.get(cid=cid)
+        # If `cid' was specified as a GET parameter,
         if dg_data is None:
             # Find the corresponding Dialogue object in the DB.
             dg_data = Dialogue.objects.get(cid=cid)
-        dialogue = _read_dialogue(dg_data.cid)
+        # Prepare the data about turns into a form suitable for the template.
+        uturns = UserTurn.objects.filter(dialogue=dg_data)
+        systurns = SystemTurn.objects.filter(dialogue=dg_data)
+        turns = [dict()] * max(len(uturns), len(systurns))
+        for uturn in uturns:
+            turns[uturn.turn_number].update(turn_number=uturn.turn_number,
+                                            rec=uturn.wav_fname,
+                                            has_rec=True)
+        for systurn in systurns:
+            turns[systurn.turn_number].update(turn_number=systurn.turn_number,
+                                              prompt=systurn.text)
+        dbl_rec_num = 0
+        for turn in turns:
+            turn['dbl_rec_num'] = dbl_rec_num
+            if 'has_rec' in turn:
+                dbl_rec_num += 2
+            else:
+                turn['has_rec'] = False
+
+        uturn_ind = map(lambda turn: turn.has_rec, turns)
 
         context = dict()
         context['cid'] = cid
-        context['dialogue'] = dialogue
+        context['turns'] = turns
+        context['dbl_num_recs'] = 2 * len(turns)
         context['codes'] = dg_data.get_codes()
-
-        form = context['form'] = \
-            TranscriptionForm(cid=cid,
-                              turns=dialogue.turns)
+        context['form'] = TranscriptionForm(cid=cid, turn_inds=uturn_ind)
     response = render(request,
                       "er/transcribe.html",
                       context,
@@ -272,6 +348,7 @@ def import_dialogues(request):
     import shutil
     copy_failed = []
     save_failed = []
+    save_price_failed = []
     dg_existed = []
     count = 0   # number of successfully imported dialogues
     csv_fname = request.GET.get('csv_fname', '')
@@ -298,8 +375,8 @@ def import_dialogues(request):
         # Prepare the JSON output string.
         json_str = ''
         # Write the CSV header.
-        csv_file.write('cid, code\n')
-        # Process dg_data files.
+        csv_file.write('cid, code, gold\n')
+        # Process the dialogue files.
         for line in dirlist_file:
             src_fname = line.rstrip()
             dirname = os.path.basename(src_fname.rstrip(os.sep))
@@ -314,7 +391,7 @@ def import_dialogues(request):
                 salt += 1
                 cid = _hash(dirname + str(salt))
                 same_cid_dgs = Dialogue.objects.filter(cid=cid)
-            # Copy the dg_data files.
+            # Copy the dialogue files.
             try:
                 shutil.copytree(src_fname,
                                 os.path.join(settings.CONVERSATION_DIR, cid))
@@ -322,29 +399,44 @@ def import_dialogues(request):
                 if not ignore_exdirs:
                     copy_failed.append(src_fname)
                     continue
-            # Generate codes.
+            # Create an object for the dialogue and save it in the DB, unless
+            # it has been there already.
+            if same_cid_dgs:
+                # This should actually never happen.
+                dg_existed.append(dirname)
+                continue
+            # Generate codes and other defining attributes of the dialogue.
             dg_codes = _gen_codes()
             dg_data = Dialogue(cid=cid,
                                code=dg_codes[0],
                                code_corr=dg_codes[1],
                                code_incorr=dg_codes[2],
                                dirname=dirname)
-            # Save the dg_data in the DB, unless it has been there already.
-            if same_cid_dgs:
-                # This should actually never happen.
-                dg_existed.append(dirname)
+            try:
+                dg_data.save()
+            except:
+                save_failed.append((dirname, cid))
                 continue
-            else:
-                try:
-                    dg_data.save()
-                except:
-                    save_failed.append((dirname, cid))
-                    continue
-            # Add a record to the CSV for CrowdFlower. (left for extra safety)
-            csv_file.write('{cid}, {code}\n'.format(cid=cid, code=dg_codes[0]))
+            # Read the dialogue turns.
+            _read_dialogue_turns(dg_data)
+            # Compute the dialogue price.
+            update_price(dg_data)
+            # Update the dialogue in the DB.
+            try:
+                dg_data.save()
+            except:
+                save_price_failed.append((dirname, cid))
+                continue
+            # Add a record to the CSV for CrowdFlower. (kept for extra safety)
+            code_gold = dg_codes[0] + dg_codes[1]
+            csv_file.write('{cid}, {code}, {gold}\n'.format(cid=cid,
+                                                            code=dg_codes[0],
+                                                            gold=code_gold))
             # Add a record to the JSON for CrowdFlower.
-            json_str += '{{"cid":"{cid}","code":"{code}"}}'.format(\
-                cid=cid, code=dg_codes[0])
+            json_str += ('{{"cid":"{cid}","code":"{code}",'
+                         '"code_gold":"{gold}"}}').format(cid=cid,
+                                                          code=dg_codes[0],
+                                                          gold=code_gold)
             count += 1
     if upload_to_cf:
         # Communicate the new data to CrowdFlower via the CF API.
@@ -353,17 +445,16 @@ def import_dialogues(request):
             jobid=settings.CF_JOB_ID,
             key=settings.CF_KEY)
         try:
+            # Create a file for the response from CF.
             upload_outfile = TemporaryFile()
         except:
             cf_error = "Output from `curl' could not be obtained."
             upload_outfile = None
+        # The following would send the data in the CSV format.
         #     cf_retcode = call(['curl', '-T', csv_fname, '-H', 'Content-Type:
-        #     text/csv',
-        #                        cf_url],
-        #                       stdout=upload_outfile)
+        #     text/csv', cf_url], stdout=upload_outfile)
         cf_retcode = call(['curl', '-d', json_str, '-H',
-                           'Content-Type: application/json',
-                           cf_url],
+                           'Content-Type: application/json', cf_url],
                           stdout=upload_outfile)
         cf_outobj = None
         if upload_outfile is not None:
@@ -380,6 +471,7 @@ def import_dialogues(request):
     context = dict()
     context['copy_failed'] = copy_failed
     context['save_failed'] = save_failed
+    context['save_price_failed'] = save_price_failed
     context['dg_existed'] = dg_existed
     if upload_to_cf:
         context['cf_upload'] = True
@@ -389,5 +481,7 @@ def import_dialogues(request):
         context['cf_upload'] = False
     context['csv_fname'] = csv_fname
     context['count'] = count
-    context['n_failed'] = len(copy_failed) + len(save_failed) + len(dg_existed)
+    context['n_failed'] = (len(copy_failed) + len(save_failed)
+                           + len(save_price_failed) + len(dg_existed))
     return render(request, "er/imported.html", context)
+

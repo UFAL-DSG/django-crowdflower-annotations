@@ -11,9 +11,17 @@ CF_URL_START = "https://api.crowdflower.com/v1/"
 CF_KEY = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
 CF_JOB_ID = "123456"
 
+PRICE_CONST = 4 * 0.01
+PRICE_PER_MIN = 12 * 0.01
+PRICE_PER_TURN = 0.5 * 0.01
+
 # Definitions for the old version of session.xml files:
 XML_USERTURN_PATH = ".//userturn"
+XML_SYSTURN_PATH = ".//systurn"
 XML_TURNNUMBER_ATTR = "turnnum"
+XML_REC_SUBPATH = "./rec"
+XML_REC_FNAME_ATTR = "fname"
+XML_SYSTEXT_SUBPATH = "./prompt"
 XML_TRANSCRIPTIONS_BEFORE = "asr"
 XML_TRANSCRIPTIONS_ELEM = "transcriptions"
 XML_TRANSCRIPTION_BEFORE = None
@@ -23,8 +31,12 @@ XML_DATE_ATTR = "date_saved"
 XML_DATE_FORMAT = None
 
 # Definitions for the new version of session.xml files:
-# XML_USERTURN_PATH = (".//turn[@speaker='user']")
+# XML_USERTURN_PATH = ".//turn[@speaker='user']"
+# XML_SYSTURN_PATH = ".//turn[@speaker='system']"
 # XML_TURNNUMBER_ATTR = "turn_number"
+# XML_REC_SUBPATH = "./rec"
+# XML_REC_FNAME_ATTR = "fname"
+# XML_SYSTEXT_SUBPATH = "./text"
 # XML_TRANSCRIPTIONS_BEFORE = None
 # XML_TRANSCRIPTIONS_ELEM = None
 # XML_TRANSCRIPTION_BEFORE = "slu"

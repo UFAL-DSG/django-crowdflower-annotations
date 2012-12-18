@@ -58,6 +58,11 @@ input#ins-hide {
 	font-weight: bold;
 }
 
+.centering {
+	padding: 0pt;
+	text-align: center;
+}
+
 ul.errorlist {
     color: red;
     display:block;
@@ -228,6 +233,7 @@ p.user { color: orange; }
 
   $(document).ready(function() {
       accordion = $("#phases").multiAccordion({active: 0});
+			$("#accent_spec").slideUp();
 
       $("#player").jPlayer( {
           swfPath: "{{ MEDIA_URL }}flash/",
@@ -239,26 +245,33 @@ p.user { color: orange; }
 
       $("#turn_1").removeClass("ui-state-disabled");
 
-// 			$('body').keydown(function(e) {
-//           var code = e.keyCode || e.which;
-//           if (code == '9') {
-//               var curid =$("*:focus").attr("id");
-//               var buttons = $(".btnnext");
-//               for(var i = 0; i < buttons.length; i++) {
-//                   if(buttons[i].id == curid) {
-//                       $("#" + buttons[i + 1].id)[0].focus();
-//                       return false;
-//                   }
-//               }
-//           }
-//       });
+			var native_accent = document.getElementById("id_accent_native");
+			var other_accent = document.getElementById("id_accent_other");
+			var accent_name = document.getElementById("id_accent_name");
+			$("#id_accent_native").change(function() {
+				if(native_accent.checked)
+				{
+					$("#accent_spec").slideUp();
+				}
+			});
+			$("#id_accent_other").change(function() {
+				if(other_accent.checked)
+				{
+					$("#accent_spec").slideDown();
+				}
+			});
 
-      $("#submit").click(function() {
+			$("#submit").click(function() {
 					// Check that all fields (text areas) are filled in.
 					var res = 1;
 					var fields = document.getElementsByTagName("textarea");
 					for(var fldIdx = 0; fldIdx < fields.length; fldIdx++)
 					{
+						field = fields[fldIdx];
+						if(field.id === "id_notes")
+						{
+							continue;
+						}
 						if(fields[fldIdx].value.search(/\w/) === -1)
 						{
 							res = 0;
@@ -275,6 +288,14 @@ p.user { color: orange; }
 						alert(msg);
 						return false;
           }
+					
+					if(other_accent.checked && accent_name.value.search(/\w/) === -1)
+					{
+						msg = "You say the speaker had a non-native English accent.\n";
+						msg += "Please, specify what accent you think he/she had.";
+						alert(msg);
+						return false;
+					}
           return true;
       });
 
@@ -314,6 +335,11 @@ p.user { color: orange; }
 
 <span>
 	<div id="ins">
+		<div class="centering">
+			<img src="{{ MEDIA_URL }}img/logo_ufal_73_transparent.png" width="91" 
+			height="73" />
+		</div>
+
 		<h2>Instructions
 			<input type="button" id="ins-hide" value="Hide instructions"></input>
 		</h2>
@@ -428,9 +454,9 @@ p.user { color: orange; }
 			{{ form.non_field_errors }}
 			{% csrf_token %}
 			{{ form.cid }}
-		{% for turn in dialogue.turns %}
-			<h3 id="turn_{{ turn.id }}" class="head ui-state-disabled">
-				<a href="#">Turn {{ turn.id }}</a>
+		{% for turn in turns %}
+			<h3 id="turn_{{ turn.turn_number }}" class="head ui-state-disabled">
+				<a href="#">Turn {{ turn.turn_number }}</a>
 			</h3>
 			<div>
 				<div class="speaker">
@@ -442,13 +468,13 @@ p.user { color: orange; }
 					Human:
 				</div>
 				<div>
-					<button type="button" id="btnnext{{ turn.id }}" class="btnnext"
+					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
 						tabindex="{{ turn.dbl_rec_num|add:1 }}"
-						onclick="play_now('btnnext{{ turn.id }}', 'turn_{{ turn.id }}','{{ dialogue.path }}/{{ turn.rec }}')">Play</button>
+						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs/{{ turn.rec }}')">Play</button>
 				</div>
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
-						id="id_trs_{{ turn.id }}" name="trs_{{ turn.id }}"
+						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
 						tabindex="{{ turn.dbl_rec_num|add:2 }}"></textarea>
 				</div>
 			{% else %}
@@ -464,8 +490,73 @@ p.user { color: orange; }
 				<a href="#">Submit</a>
 			</h3>
 			<div>
-				<input id="submit" type="submit" name="send" value="Save transcription"
-								tabindex="{{ dialogue.dbl_num_recs|add:1 }}">
+				<table>
+					<tr>
+						<td>What was the quality of the recording?</td>
+						<td>
+							<input id="id_quality_noisy" name="quality" type="radio" 
+								value="noisy">
+									noisy</input>
+						</td>
+						<td>
+							<input id="id_quality_clear" name="quality" type="radio" 
+								value="clear" checked
+								tabindex="{{ dbl_num_recs|add:1 }}">
+									clear</input>
+						</td>
+					</tr>
+					<tr>
+						<td>What accent did the speaker have?</td>
+						<td>
+							<input id="id_accent_native" name="accent" type="radio" 
+								value="native" checked
+								tabindex="{{ dbl_num_recs|add:2 }}">
+									native English</input>
+						</td>
+						<td>
+							<input id="id_accent_other" name="accent" type="radio" 
+							value="other">other</input>
+						</td>
+					</tr>
+					<tr id="accent_spec">
+						<td>
+							<label for="id_accent_name">What accent did you hear?</label>
+						</td>
+						<td>
+							<input type="text" id="id_accent_name" name="accent_name" 
+								size="30"
+								tabindex="{{ dbl_num_recs|add:3 }}"/>
+						</td>
+					</tr>
+					<tr>
+						<td>Was offensive language used in the dialogue?</td>
+						<td>
+							<input id="id_offensive_yes" name="offensive" type="radio" 
+								value="yes">
+									yes</input>
+						</td>
+						<td>
+							<input id="id_offensive_no" name="offensive" type="radio" 
+							value="no" checked
+								tabindex="{{ dbl_num_recs|add:4 }}">no</input>
+						</td>
+					</tr>
+					<tr>
+						<td>
+							<label for="id_notes">Should you have any other comments to the dialogue, you can write them down to this box:</label>
+						</td>
+						<td>
+							<textarea id="id_notes" name="notes" cols="50" rows="3"></textarea>
+						</td>
+					</tr>
+					<tr>
+						<td colspan="3">
+							<input id="submit" type="submit" name="send" value="Save 
+											transcription"
+											tabindex="{{ dbl_num_recs|add:5 }}">
+						</td>
+					</tr>
+				</table>
 			</div>
 		</form>
 		</div>
@@ -484,6 +575,3 @@ $("#phase_answer").click();
 <div id="player">
 </div>
 {% endblock content %}
-
-
-
