@@ -37,6 +37,11 @@ div#dg {
 	max-width: 60em;
 }
 
+#id_notes {
+	margin-left: auto;
+	margin-right: auto;
+}
+
 input#ins-hide {
 	float: right;
 	margin-right: 1em;
@@ -470,7 +475,7 @@ p.user { color: orange; }
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
 						tabindex="{{ turn.dbl_rec_num|add:1 }}"
-						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs/{{ turn.rec }}')">Play</button>
+						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}')">Play</button>
 				</div>
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
@@ -542,10 +547,12 @@ p.user { color: orange; }
 						</td>
 					</tr>
 					<tr>
-						<td>
-							<label for="id_notes">Should you have any other comments to the dialogue, you can write them down to this box:</label>
+						<td colspan="3">
+							<label for="id_notes">Should you have any other comments to the dialogue, you can write them down to box below:</label>
 						</td>
-						<td>
+					</tr>
+					<tr>
+						<td colspan="3">
 							<textarea id="id_notes" name="notes" cols="50" rows="3"></textarea>
 						</td>
 					</tr>

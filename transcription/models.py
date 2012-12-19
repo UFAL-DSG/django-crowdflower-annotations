@@ -16,7 +16,7 @@ class Dialogue(models.Model):
     dirnames."""
     cid = models.CharField(max_length=40, unique=True, primary_key=True)
     """ conversation ID """
-    dirname = models.FilePathField(unique=True)
+    dirname = models.CharField(max_length=40, unique=True)
     """ the original name of the dialogue directory """
     code = models.CharField(max_length=CODE_LENGTH)
     """ check code -- the base """
@@ -45,10 +45,11 @@ class DialogueAnnotation(models.Model):
                                default=1)
     accent = models.CharField(max_length=100, blank=True, default="")
     offensive = models.BooleanField(default=False)
-    notes = models.CharField(max_length=500)
+    notes = models.CharField(max_length=500, blank=True, default="")
     program_version = models.CharField(max_length=40)
     date_saved = models.DateTimeField(auto_now_add=True)
     date_paid = models.DateTimeField(null=True)
+    user = models.ForeignKey(User)
 
 
 class DialogueTurn(models.Model):
@@ -64,6 +65,11 @@ class SystemTurn(DialogueTurn):
     """A system turn, provided with a textual representation of the prompt."""
     text = models.CharField(max_length=255)
 
+    def __unicode__(self):
+        return u'<SysTurn: n:{num}; "{text}">'.format(
+            num=self.turn_number,
+            text=self.text.replace('"', '\\"'))
+
 
 class UserTurn(DialogueTurn):
     """A user turn, provided with a path to the recorded sound."""
@@ -71,14 +77,16 @@ class UserTurn(DialogueTurn):
                                      recursive=True,
                                      unique=True)
 
+    def __unicode__(self):
+        return u'<UserTurn: n:{num}; f:"{file_}">'.format(
+            num=self.turn_number,
+            file_=self.wav_fname)
+
 
 class Transcription(models.Model):
     """Transcription of one dialogue turn."""
-    user = models.ForeignKey(User)
     text = models.TextField()
-    # turn_id = models.SmallIntegerField()
     turn = models.ForeignKey(UserTurn)
-    # dialogue = models.ForeignKey(Dialogue)
     dialogue_annotation = models.ForeignKey(DialogueAnnotation)
     is_gold = models.BooleanField(default=False)
     breaks_gold = models.BooleanField(default=False)
@@ -92,8 +100,8 @@ class Transcription(models.Model):
             .format(g=(u"G" if self.is_gold else u"_"),
                     b=(u"b" if self.some_breaks_gold else u"_"),
                     B=(u"B" if self.breaks_gold else u"_"),
-                    u=self.user,
-                    t=self.turn_id,
+                    u=self.dialogue_annotation.user,
+                    t=self.turn.turn_number,
                     d=self.dialogue_annotation.dialogue.dirname,
                     trs=self.text)
 
@@ -103,9 +111,6 @@ class Transcription(models.Model):
         consistent.
 
         """
-        # Only continue if this is an update -- ignore inserts.
-        if kwargs.pop('created'):
-            return
         trs = kwargs.pop('instance')
         # `is_gold = True' shall dictate values for `breaks_gold' and
         # `some_breaks_gold'
@@ -147,21 +152,22 @@ class Transcription(models.Model):
         with open(sess_fname, 'r+') as sess_file:
             sess_xml = etree.parse(sess_file)
         # Find the transcription's element.
+        dg_ann = trs.dialogue_annotation
         trs_xml = sess_xml.find(("{uturn}[@{turn_attr}='{turn}']"
                                  "{trss}/{trs}[@{auth_attr}='{author}']"
                                  "[@{date_attr}='{date}']").format(
                       uturn=XML_USERTURN_PATH,
                       turn_attr=XML_TURNNUMBER_ATTR,
-                      turn=str(trs.turn_id),
+                      turn=str(trs.turn.turn_number),
                       trss=(("/" + XML_TRANSCRIPTIONS_ELEM)
                             if XML_TRANSCRIPTIONS_ELEM else ""),
                       trs=XML_TRANSCRIPTION_ELEM,
                       auth_attr=XML_AUTHOR_ATTR,
-                      author=trs.user.username,
+                      author=dg_ann.user.username,
                       date_attr=XML_DATE_ATTR,
-                      date=(trs.date_updated.strptime(XML_DATE_FORMAT).rstrip()
+                      date=(dg_ann.date_saved.strptime(XML_DATE_FORMAT).rstrip()
                             if XML_DATE_FORMAT else
-                            unicode(trs.date_updated))))
+                            unicode(dg_ann.date_saved))))
         # Update the transcription's element.
         attribs = trs_xml.attrib
         attribs['is_gold'] = '1' if trs.is_gold else '0'

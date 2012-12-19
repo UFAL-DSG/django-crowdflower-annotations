@@ -4,8 +4,8 @@
 CONVERSATION_DIR = "/webapps/cf_transcription/data/conversations"
 SESSION_FNAME = 'session-fixed.xml'
 
-CODE_LENGTH = 6 # length of the validation code
-CODE_LENGTH_EXT = 3 # length of the validation code extension
+CODE_LENGTH = 6  # length of the validation code
+CODE_LENGTH_EXT = 3  # length of the validation code extension
 
 CF_URL_START = "https://api.crowdflower.com/v1/"
 CF_KEY = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
@@ -50,4 +50,6 @@ XML_DATE_FORMAT = None
 # XML_TRANSCRIPTION_ELEM = "asr_transcription"
 # XML_AUTHOR_ATTR = "transcriber"
 # XML_DATE_ATTR = "date"
+# # NOTE: including timezone info into the datetime format could disable
+# # finding the transcription in its XML if the timezone setting changes
 # XML_DATE_FORMAT = "%d/%m/%y %H:%M:%S %Z"

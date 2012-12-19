@@ -41,6 +41,11 @@ def _hash(s):
 
 
 class TranscriptionForm(forms.Form):
+    quality = forms.CharField()
+    accent = forms.CharField()
+    offensive = forms.BooleanField()
+    notes = forms.CharField(required=False)
+
     def __init__(self, *args, **kwargs):
         uturn_ind = kwargs.pop('uturn_ind')
         cid = kwargs.pop('cid', None)
@@ -48,18 +53,24 @@ class TranscriptionForm(forms.Form):
 
         self.fields['cid'] = forms.CharField(widget=forms.HiddenInput(),
                                              initial=cid)
-        self.fields['quality'] = forms.CharField()
-        self.fields['accent'] = forms.CharField()
-        self.fields['offensive'] = forms.BooleanField()
-        self.fields['notes'] = forms.CharField()
 
         for turn_num, has_rec in enumerate(uturn_ind):
             if not has_rec:
                 continue
-            self.fields['trs_{0}'.format(turn_num)] = \
+            self.fields['trs_{0}'.format(turn_num + 1)] = \
                 forms.CharField(widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
                     label=turn_num)
+
+    def __unicode__(self):
+        import pprint
+        return pprint.pformat(self.fields, depth=3)
+
+    def __repr__(self):
+        return self.__unicode__()
+
+    def __str__(self):
+        return self.__unicode__()
 
 
 def finished(request):
@@ -94,9 +105,10 @@ def _read_dialogue_turns(dg_data, dirname=None):
             turn.save()
     # Process system turns.
     for systurn_xml in sess_xml.iterfind(settings.XML_SYSTURN_PATH):
-        text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH)
+        text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH).strip()
         # Throw away some distracting pieces of system prompts.
-        if text == "Thank you for using the system.":
+        if (text.startswith("Thank you for using")
+            or text.startswith("Thank you goodbye")):
             continue
         text = text.replace("Thank you for calling the Cambridge Information "
                             "system. Your call will be recorded for research "
@@ -104,7 +116,7 @@ def _read_dialogue_turns(dg_data, dirname=None):
                             "").strip()
         turn = SystemTurn(
             dialogue=dg_data,
-            turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
+            turn_number=systurn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
             text=text)
         turn.save()
 
@@ -130,17 +142,19 @@ def transcribe(request):
 
     # If the form has been submitted,
     if request.method == "POST":
+        # Re-create the form object.
         cid = request.POST['cid']
         dg_data = Dialogue.objects.get(cid=cid)
         uturns = UserTurn.objects.filter(dialogue=dg_data)
         uturn_nums = [uturn.turn_number for uturn in uturns]
-        uturn_ind = [False] * (max(uturn_nums) + 1)
-        for uturn_num in uturn_nums:
-            uturn_ind[uturn_num] = True
+        uturn_ind = [None] * max(uturn_nums)  # (turn_num - 1) -> uturn
+        for uturn in uturns:
+            uturn_ind[uturn.turn_number - 1] = uturn
         dg_codes = dg_data.get_codes()
-        form = TranscriptionForm(request.POST, cid=cid, turn_inds=uturn_ind)
+        form = TranscriptionForm(request.POST, cid=cid, uturn_ind=uturn_ind)
 
         if form.is_valid():
+            dummy_user = User.objects.get(username='testres')
             # Read the XML session file.
             dg_dir = os.path.join(settings.CONVERSATION_DIR, cid)
             sess_fname = os.path.join(dg_dir, settings.SESSION_FNAME)
@@ -155,54 +169,58 @@ def transcribe(request):
                 ["git", "rev-parse", "HEAD"],
                 cwd=settings.PROJECT_DIR).rstrip('\n'))
             dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
-                              form.cleaned_data['quality_clear']
+                              request.POST['quality'] == 'clear'
                               else DialogueAnnotation.QUALITY_NOISY)
-            dg_ann.accent = (None if
-                             form.cleaned_data['accent_native']
+            dg_ann.accent = ("" if request.POST['accent'] == 'native'
                              else form.cleaned_data['accent_name'])
-            dg_ann.offensive = bool(form.cleaned_data['offensive_yes'])
+            dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
             dg_ann.notes = form.cleaned_data['notes']
+            if request.user.is_authenticated():
+                dg_ann.user = request.user
+            else:
+                # A dummy user.
+                dg_ann.user = dummy_user
             dg_ann.save()
             # Create Transcription objects and save them into DB.
             trss = dict()
-            for turn_num, has_rec in enumerate(uturn_ind):
-                if not has_rec:
+            for turn_num, uturn in enumerate(uturn_ind, start=1):
+                if not uturn:
                     continue
                 if request.user.is_authenticated():
-                    trs = Transcription(user=request.user)
+                    trs = Transcription()
                 else:
                     # A dummy user.
-                    dummy_user = User.objects.get(username='testres')
-                    trs = Transcription(user=dummy_user)
-                trss[turn_num] = trs
+                    trs = Transcription()
+                trss[turn_num - 1] = trs
                 trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
-                trs.turn_id = turn_num
+                trs.turn = uturn
                 trs.dialogue_annotation = dg_ann
 
             # Check the form against any gold items.  If all are OK, return one
             # code; if not, return another.
-            gold_trss = Transcription.objects.filter(dialogue=dg_data,
-                                                     is_gold=True)
-            gold_trss = group_by(gold_trss, ('dialogue', 'turn_id'))
+            gold_trss = Transcription.objects.filter(
+                dialogue_annotation__dialogue=dg_data,
+                is_gold=True)
+            gold_trss = group_by(gold_trss, ('turn', ))
             mismatch = False
             for turn_gold_trss in gold_trss.itervalues():
                 submismatch = True
                 for gold_trs in turn_gold_trss:
-                    if trss_match(trss[gold_trs.turn_id],
+                    if trss_match(trss[gold_trs.turn.turn_number],
                                   gold_trs,
                                   max_char_er=settings.MAX_CHAR_ER):
                         submismatch = False
                         break
                 if submismatch:
                     mismatch = True
-                    trss[gold_trs.turn_id].breaks_gold = True
+                    trss[gold_trs.turn.turn_number].breaks_gold = True
 
             # Update transcriptions in the light of their comparison to gold
             # transcriptions, and save them.
-            for turn_num, has_rec in enumerate(uturn_ind):
-                if not has_rec:
+            for turn_num, uturn in enumerate(uturn_ind, start=1):
+                if not uturn:
                     continue
-                trs = trss[turn_num]
+                trs = trss[turn_num - 1]
                 trs.some_breaks_gold = mismatch
                 trs.save()
                 # Reflect the transcription in the XML.
@@ -227,15 +245,16 @@ def transcribe(request):
                     trss_xml = turn_xml
                 trs_xml = etree.Element(
                     settings.XML_TRANSCRIPTION_ELEM,
-                    author=trs.user.username,
+                    author=dg_ann.user.username,
                     is_gold="0",
                     breaks_gold="1" if trs.breaks_gold else "0",
                     some_breaks_gold="1" if mismatch else "0",
-                    date_saved=(
-                        trs.date_updated.strptime(settings.XML_DATE_FORMAT)\
-                            .rstrip() if settings.XML_DATE_FORMAT else
-                        unicode(trs.date_updated)),
-                    program_version=trs.program_version)
+                    program_version=dg_ann.program_version)
+                trs_xml.set(settings.XML_DATE_ATTR,
+                            dg_ann.date_saved.strptime(
+                                    settings.XML_DATE_FORMAT).rstrip()
+                                if settings.XML_DATE_FORMAT
+                                else unicode(dg_ann.date_saved))
                 trs_xml.text = trs.text
                 if settings.XML_TRANSCRIPTION_BEFORE:
                     trs_left_sib = \
@@ -267,6 +286,7 @@ def transcribe(request):
             context = dict()
             for key, value in request.POST.iteritems():
                 context[key] = value
+            context['form'] = form
             response = render(request,
                               "er/transcribe.html",
                               context,
@@ -286,7 +306,8 @@ def transcribe(request):
                 return HttpResponseRedirect("finished")
             # For a user, who is logged in, find a suitable dialogue to
             # transcribe.
-            trss_done = Transcription.objects.filter(user=request.user)
+            trss_done = Transcription.objects.filter(
+                dialogue_annotation__user=request.user)
             cids_done = set(trs.dialogue_annotation.dialogue.cid
                             for trs in trss_done)
             cids_todo = set(dg.cid for dg in Dialogue.objects.all()) - \
@@ -305,14 +326,19 @@ def transcribe(request):
         # Prepare the data about turns into a form suitable for the template.
         uturns = UserTurn.objects.filter(dialogue=dg_data)
         systurns = SystemTurn.objects.filter(dialogue=dg_data)
-        turns = [dict()] * max(len(uturns), len(systurns))
+        turns = [dict() for _ in xrange(max(len(uturns), len(systurns)))]
         for uturn in uturns:
-            turns[uturn.turn_number].update(turn_number=uturn.turn_number,
-                                            rec=uturn.wav_fname,
-                                            has_rec=True)
+            seclast_slash = uturn.wav_fname.rfind(os.sep, 0,
+                                                  uturn.wav_fname.rfind(os.sep))
+            wav_fname_rest = uturn.wav_fname[seclast_slash:]
+            turns[uturn.turn_number - 1]\
+                .update(turn_number=uturn.turn_number,
+                        rec=wav_fname_rest,
+                        has_rec=True)
         for systurn in systurns:
-            turns[systurn.turn_number].update(turn_number=systurn.turn_number,
-                                              prompt=systurn.text)
+            turns[systurn.turn_number - 1]\
+                    .update(turn_number=systurn.turn_number,
+                            prompt=systurn.text)
         dbl_rec_num = 0
         for turn in turns:
             turn['dbl_rec_num'] = dbl_rec_num
@@ -321,14 +347,13 @@ def transcribe(request):
             else:
                 turn['has_rec'] = False
 
-        uturn_ind = map(lambda turn: turn.has_rec, turns)
+        uturn_ind = map(lambda turn: turn['has_rec'], turns)
 
         context = dict()
-        context['cid'] = cid
         context['turns'] = turns
         context['dbl_num_recs'] = 2 * len(turns)
         context['codes'] = dg_data.get_codes()
-        context['form'] = TranscriptionForm(cid=cid, turn_inds=uturn_ind)
+        context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
     response = render(request,
                       "er/transcribe.html",
                       context,

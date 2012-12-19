@@ -1,8 +1,7 @@
 from django.contrib import admin
 from django.forms.widgets import TextInput
 from django.db import models
-from transcription.models import Dialogue, DialogueAnnotation, Transcription, \
-    UserTurn
+from transcription.models import Dialogue, DialogueAnnotation, Transcription
 from transcription.views import update_price
 
 
