@@ -184,7 +184,9 @@ def transcribe(request):
             for turn_gold_trss in gold_trss.itervalues():
                 submismatch = True
                 for gold_trs in turn_gold_trss:
-                    if trss_match(trss[gold_trs.turn_id], gold_trs):
+                    if trss_match(trss[gold_trs.turn_id],
+                                  gold_trs,
+                                  max_char_er=settings.MAX_CHAR_ER):
                         submismatch = False
                         break
                 if submismatch:

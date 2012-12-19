@@ -15,6 +15,13 @@ PRICE_CONST = 4 * 0.01
 PRICE_PER_MIN = 12 * 0.01
 PRICE_PER_TURN = 0.5 * 0.01
 
+# maximum tolerated character error rate in transcriptions (after
+# normalisation)
+#
+# The value 0.07 implies that one in 14--15 characters being wrong be
+# tolerated.
+MAX_CHAR_ER = 0.07
+
 # Definitions for the old version of session.xml files:
 XML_USERTURN_PATH = ".//userturn"
 XML_SYSTURN_PATH = ".//systurn"

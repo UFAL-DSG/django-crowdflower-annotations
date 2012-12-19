@@ -356,13 +356,51 @@ def normalise_trs_text(text):
     return text
 
 
-def trss_match(trs1, trs2):
+def edit_dist(str1, str2):
+    """Computes the edit distance between strings."""
+    len1, len2 = len(str1), len(str2)
+    # Special case: zero length of one of the strings.
+    if len1 == 0 or len2 == 0:
+        return len1 + len2
+
+    # Initialise the table for dynamic programming.
+    dist = range(len2 + 1)
+
+    # Fill in the table based on the recurrent formula.
+    for i1 in xrange(1, len1 + 1):
+        corner = i1 - 1  # previous dist[i2] (here i2 == 0)
+        dist[0] = i1
+        for i2 in xrange(1, len2 + 1):
+            new_corner = dist[i2]
+            diff = int(str1[i1 - 1] != str2[i2 - 1])
+            dist[i2] = min(dist[i2] + 1,       # adding to str1
+                           dist[i2 - 1] + 1,   # deleting from str1
+                           corner + diff)      # substitution
+            corner = new_corner
+    # Return.
+    return dist[len2]
+
+
+def trss_match(trs1, trs2, max_char_er=0.):
     """Checks whether two given transcriptions can be considered equal.
 
     Keyword arguments:
         trs1: first Transcription to compare
         trs2: second Transcription to compare
+        max_char_er: maximal character error rate (how many characters
+            relatively are allowed to differ, after normalisation)
 
     """
-    # TODO: Include string edit distance, and some toleration.
-    return normalise_trs_text(trs1.text) == normalise_trs_text(trs2.text)
+    norm1 = normalise_trs_text(trs1.text)
+    norm2 = normalise_trs_text(trs2.text)
+    if max_char_er <= 0.:
+        return norm1 == norm2
+    else:
+        # a shortcut
+        if norm1 == norm2:
+            return True
+        # the proper evaluation
+        len1 = len(norm1)
+        len2 = len(norm2)
+        char_er = edit_dist(norm1, norm2) / float(max(len1, len2))
+        return char_er <= max_char_er
