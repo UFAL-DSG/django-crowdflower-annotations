@@ -78,19 +78,21 @@ def _gen_codes():
     return (code, code_corr, code_incorr)
 
 
-def _read_dialogue_turns(dg_data):
-    sess_xml = etree.parse(os.path.join(dg_data.dirname,
-                                        settings.SESSION_FNAME))
-    # num_recs = 0 # number of recs seen so far
+def _read_dialogue_turns(dg_data, dirname=None):
+    if dirname is None:
+        dirname = os.path.join(settings.CONVERSATION_DIR, dg_data.cid)
+    sess_xml = etree.parse(os.path.join(dirname, settings.SESSION_FNAME))
+    # Process user turns.
     for uturn_xml in sess_xml.iterfind(settings.XML_USERTURN_PATH):
-        turn = UserTurn(
-            dialogue=dg_data,
-            turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
-            wav_fname=os.path.join(
-                settings.CONVERSATION_DIR,
-                uturn_xml.find(settings.XML_REC_SUBPATH).attrib[
-                    settings.XML_REC_FNAME_ATTR]))
-        turn.save()
+        rec = uturn_xml.find(settings.XML_REC_SUBPATH)
+        if rec is not None:
+            rec = rec.attrib[settings.XML_REC_FNAME_ATTR]
+            turn = UserTurn(
+                dialogue=dg_data,
+                turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
+                wav_fname=os.path.join(dirname, rec))
+            turn.save()
+    # Process system turns.
     for systurn_xml in sess_xml.iterfind(settings.XML_SYSTURN_PATH):
         text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH)
         # Throw away some distracting pieces of system prompts.
@@ -113,13 +115,15 @@ def update_price(dg_data):
     # Compute the length of the audio.
     wavsize = 0
     for turn in uturns:
-        wavsize += os.path.getsize(turn.wav_fname)
+        wavsize += os.path.getsize(os.path.join(
+            settings.CONVERSATION_DIR,
+            turn.wav_fname))
     sec = wavsize / float(16000 * 2)
     minutes = sec / 60.
 
     price = (settings.PRICE_CONST + settings.PRICE_PER_MIN * minutes
              + settings.PRICE_PER_TURN * len(uturns))
-    dg_data.price = price
+    dg_data.transcription_price = price
 
 
 def transcribe(request):
@@ -342,6 +346,17 @@ def home(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def import_dialogues(request):
+    #     # DIRTY
+    #     import shutil
+    #
+    #     shutil.copy('/tmp/db.db', '/webapps/cf_transcription/db/cf_trss.db')
+    #     import subprocess
+    #     subprocess.call(['chgrp', 'korvas',
+    #                         '/webapps/cf_transcription/db/cf_trss.db'])
+    #     subprocess.call(['chmod', 'g+w',
+    #     '/webapps/cf_transcription/db/cf_trss.db'])
+    #     return render(request, "er/import.html", {})
+
     # Check whether the form is yet to be served.
     if not request.GET:
         return render(request, "er/import.html", {})
@@ -364,13 +379,6 @@ def import_dialogues(request):
     dirlist_fname = request.GET['list_fname']
     ignore_exdirs = request.GET.get('ignore_exdirs', False)
     upload_to_cf = request.GET.get('upload', True)
-    # # DIRTY
-    # shutil.copy('/tmp/db.db', '/webapps/cf_transcription/db')
-    # import subprocess
-    # subprocess.call(['chgrp', 'korvas',
-    # '/webapps/cf_transcription/db/db.db'])
-    # subprocess.call(['chmod', 'g+w', '/webapps/cf_transcription/db/db.db'])
-    # return render(request, "er/import.html", {})
 
     with open(dirlist_fname, 'r') as dirlist_file, \
          open(csv_fname, 'w') as csv_file:
@@ -394,9 +402,9 @@ def import_dialogues(request):
                 cid = _hash(dirname + str(salt))
                 same_cid_dgs = Dialogue.objects.filter(cid=cid)
             # Copy the dialogue files.
+            tgt_fname = os.path.join(settings.CONVERSATION_DIR, cid)
             try:
-                shutil.copytree(src_fname,
-                                os.path.join(settings.CONVERSATION_DIR, cid))
+                shutil.copytree(src_fname, tgt_fname)
             except:
                 if not ignore_exdirs:
                     copy_failed.append(src_fname)
@@ -420,7 +428,7 @@ def import_dialogues(request):
                 save_failed.append((dirname, cid))
                 continue
             # Read the dialogue turns.
-            _read_dialogue_turns(dg_data)
+            _read_dialogue_turns(dg_data, tgt_fname)
             # Compute the dialogue price.
             update_price(dg_data)
             # Update the dialogue in the DB.

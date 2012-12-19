@@ -16,9 +16,7 @@ class Dialogue(models.Model):
     dirnames."""
     cid = models.CharField(max_length=40, unique=True, primary_key=True)
     """ conversation ID """
-    dirname = models.FilePathField(path=CONVERSATION_DIR,
-                                   recursive=True,
-                                   unique=True)
+    dirname = models.FilePathField(unique=True)
     """ the original name of the dialogue directory """
     code = models.CharField(max_length=CODE_LENGTH)
     """ check code -- the base """
@@ -26,9 +24,8 @@ class Dialogue(models.Model):
     """ check code -- the extension in case of no mismatch with gold items """
     code_incorr = models.CharField(max_length=CODE_LENGTH_EXT)
     """ check code -- the extension in case of a mismatch with gold items """
-    transcription_price = models.FloatField(min_value=0.)
+    transcription_price = models.FloatField(null=True)
     """ price of this dialogue's transcriptions in USD """
-    num_turns = models.PositiveSmallIntegerField()
 
     def __unicode__(self):
         return u'({c}: {d})'.format(c=self.cid, d=self.dirname)
@@ -65,7 +62,7 @@ class DialogueTurn(models.Model):
 
 class SystemTurn(DialogueTurn):
     """A system turn, provided with a textual representation of the prompt."""
-    text = models.CharField()
+    text = models.CharField(max_length=255)
 
 
 class UserTurn(DialogueTurn):

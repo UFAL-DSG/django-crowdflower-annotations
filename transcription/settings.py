@@ -18,8 +18,18 @@ CF_URL_START = localsettings.CF_URL_START
 CF_KEY = localsettings.CF_KEY
 CF_JOB_ID = localsettings.CF_JOB_ID
 
+PRICE_CONST = localsettings.PRICE_CONST
+PRICE_PER_MIN = localsettings.PRICE_PER_MIN
+PRICE_PER_TURN = localsettings.PRICE_PER_TURN
+
+MAX_CHAR_ER = localsettings.MAX_CHAR_ER
+
 XML_USERTURN_PATH = localsettings.XML_USERTURN_PATH
+XML_SYSTURN_PATH = localsettings.XML_SYSTURN_PATH
 XML_TURNNUMBER_ATTR = localsettings.XML_TURNNUMBER_ATTR
+XML_REC_SUBPATH = localsettings.XML_REC_SUBPATH
+XML_REC_FNAME_ATTR = localsettings.XML_REC_FNAME_ATTR
+XML_SYSTEXT_SUBPATH = localsettings.XML_SYSTEXT_SUBPATH
 XML_TRANSCRIPTIONS_BEFORE = localsettings.XML_TRANSCRIPTIONS_BEFORE
 XML_TRANSCRIPTIONS_ELEM = localsettings.XML_TRANSCRIPTIONS_ELEM
 XML_TRANSCRIPTION_BEFORE = localsettings.XML_TRANSCRIPTION_BEFORE
@@ -42,7 +52,7 @@ MANAGERS = ADMINS
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': os.path.join(PROJECT_DIR, 'db/db.db'),                      # Or path to database file if using sqlite3.
+        'NAME': os.path.join(PROJECT_DIR, 'db/cf_trss.db'),                      # Or path to database file if using sqlite3.
 #         'NAME': '/tmp/db.db',
         'USER': '',                      # Not used with sqlite3.
         'PASSWORD': '',                  # Not used with sqlite3.
