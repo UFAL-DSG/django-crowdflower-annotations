@@ -14,6 +14,8 @@ import re
 
 
 # Constants.
+_variant_fname = '../libs/varcon-5.1/variant.tab'
+_variant_read = False
 _more_spaces = re.compile(r'\s{2,}')
 _special_words = ["breath", "hum", "laugh", "noise", "sil", "unint"]
 _special_rx = '(?:' + '|'.join(_special_words) + ')'
@@ -391,6 +393,10 @@ def trss_match(trs1, trs2, max_char_er=0.):
             relatively are allowed to differ, after normalisation)
 
     """
+    # a shortcut
+    if norm1 == norm2:
+        return True
+
     norm1 = normalise_trs_text(trs1.text)
     norm2 = normalise_trs_text(trs2.text)
     if max_char_er <= 0.:

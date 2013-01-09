@@ -1,0 +1,73 @@
+<script src="{{ MEDIA_URL }}js/jquery.js"></script>
+<script src="{{ MEDIA_URL }}js/jquery.jplayer.min.js"></script>
+<script type="text/javascript">
+	var btnid{{ script_id }} = "play_btn{{ script_id }}",
+			beenPlaying{{ script_id }} = false;
+
+  function getPlayer(pid) {
+      var obj = document.getElementById(pid);
+      if (obj.doPlay) return obj;
+      for(i=0; i<obj.childNodes.length; i++) {
+          var child = obj.childNodes[i];
+          if (child.tagName == "EMBED") return child;
+      }
+  }
+
+  function PlayerStopped() {
+      if(beenPlaying{{ script_id }}) {
+          beenPlaying{{ script_id }} = false;
+          $('#' + btnid{{ script_id }}).text("Play");
+      }
+  }
+
+  function PlayerPlaying() {
+      beenPlaying{{ script_id }} = true;
+  }
+
+  function init_player(name) {
+      var player = getPlayer(name);
+      var init = function() { init_player(name); }
+      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+      else {
+          player.attachHandler("PLAYER_PLAYING", "PlayerPlaying", "STOPPED");
+          player.attachHandler("PLAYER_STOPPED", "PlayerStopped", "STOPPED");
+          //window.TinyWav = new TinyWav('TinyWavBlock', 0.01);
+      }
+  }
+
+  function deinit_player(name) {
+      var player = getPlayer(name);
+      var init = function() { init_player(name); }
+      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+      else {
+          player.removeHandler(PlayerStopped);
+      }
+  }
+
+  $(document).ready(function() {
+			$("#player{{ script_id }}").jPlayer( {
+          swfPath: "{{ MEDIA_URL }}flash/",
+          supplied: "wav",
+          ended: function() {
+              PlayerStopped();
+          }
+      });
+  });
+
+  function play_now(btnid, f) {
+      btnid{{ script_id }} = btnid;
+      try{
+          PlayerPlaying();
+          $('#' + btnid).text("Playing...");
+					$("#player{{ script_id }}").jPlayer("setMedia", {wav: f}).jPlayer("play");
+      } catch(E){
+          alert(E);
+      }
+  }
+</script>
+<button type="button" id="play_btn{{ script_id }}"
+	onclick="play_now('play_btn{{ script_id }}',
+										'/apps/transcription/data/recs/{{ wav_fname }}')">
+	Play</button>
+<div id="player{{ script_id }}">
+</div>

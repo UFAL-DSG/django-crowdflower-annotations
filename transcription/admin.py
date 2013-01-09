@@ -3,11 +3,15 @@ from django.forms.widgets import TextInput
 from django.db import models
 from transcription.models import Dialogue, DialogueAnnotation, Transcription
 from transcription.views import update_price
+from transcription.fields import LinkField
 
 
 class DialogueAdmin(admin.ModelAdmin):
     add_form_template = 'er/import.html'
     list_display = ['dirname', 'cid', 'transcription_price', 'code', 'code_corr', 'code_incorr']
+    formfield_overrides = {
+        models.ForeignKey: {'form_class': LinkField}
+    }
 
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
@@ -19,12 +23,20 @@ class DialogueAdmin(admin.ModelAdmin):
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):
-    exclude = ('program_version', )
+    formfield_overrides = {
+        models.ForeignKey: {'form_class': LinkField}
+    }
+
     date_hierarchy = 'date_saved'
 
 
 class TranscriptionAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_updated'
+    fields = ('text', 'turn', 'dialogue_annotation', 'is_gold', 'breaks_gold')
+    raw_id_fields = ('turn', 'dialogue_annotation')
+    formfield_overrides = {
+        models.ForeignKey: {'form_class': LinkField}
+    }
 
     def toggle_gold(modeladmin, request, queryset):
         for trs in queryset:
