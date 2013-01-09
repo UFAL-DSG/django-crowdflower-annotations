@@ -1,5 +1,5 @@
 import os
-import localsettings
+from localsettings import *
 import re
 import sys
 
@@ -7,36 +7,6 @@ import sys
 PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
 if not PROJECT_DIR in sys.path:
     sys.path += [PROJECT_DIR]
-
-CONVERSATION_DIR = localsettings.CONVERSATION_DIR
-SESSION_FNAME = localsettings.SESSION_FNAME
-
-CODE_LENGTH = localsettings.CODE_LENGTH
-CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
-
-CF_URL_START = localsettings.CF_URL_START
-CF_KEY = localsettings.CF_KEY
-CF_JOB_ID = localsettings.CF_JOB_ID
-
-PRICE_CONST = localsettings.PRICE_CONST
-PRICE_PER_MIN = localsettings.PRICE_PER_MIN
-PRICE_PER_TURN = localsettings.PRICE_PER_TURN
-
-MAX_CHAR_ER = localsettings.MAX_CHAR_ER
-
-XML_USERTURN_PATH = localsettings.XML_USERTURN_PATH
-XML_SYSTURN_PATH = localsettings.XML_SYSTURN_PATH
-XML_TURNNUMBER_ATTR = localsettings.XML_TURNNUMBER_ATTR
-XML_REC_SUBPATH = localsettings.XML_REC_SUBPATH
-XML_REC_FNAME_ATTR = localsettings.XML_REC_FNAME_ATTR
-XML_SYSTEXT_SUBPATH = localsettings.XML_SYSTEXT_SUBPATH
-XML_TRANSCRIPTIONS_BEFORE = localsettings.XML_TRANSCRIPTIONS_BEFORE
-XML_TRANSCRIPTIONS_ELEM = localsettings.XML_TRANSCRIPTIONS_ELEM
-XML_TRANSCRIPTION_BEFORE = localsettings.XML_TRANSCRIPTION_BEFORE
-XML_TRANSCRIPTION_ELEM = localsettings.XML_TRANSCRIPTION_ELEM
-XML_AUTHOR_ATTR = localsettings.XML_AUTHOR_ATTR
-XML_DATE_ATTR = localsettings.XML_DATE_ATTR
-XML_DATE_FORMAT = localsettings.XML_DATE_FORMAT
 
 # Django settings for the `transcription' project.
 

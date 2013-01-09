@@ -6,30 +6,10 @@ from django.db import models
 from django.db.models.signals import post_save, pre_save
 from django.contrib.auth.models import User
 
-from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
-    SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT, \
-    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, \
-    XML_TURNNUMBER_ATTR, XML_USERTURN_PATH
-
-
-# class ObjectLinkField(models.ForeignKey):
-#     """Implements a field that shows up not as a select box, but rather as
-#     a link to the related object.
-#
-#     """
-#     def formfield(self, **kwargs):
-#         db = kwargs.pop('using', None)
-#         if isinstance(self.rel.to, basestring):
-#             raise ValueError("Cannot create form field for %r yet, because "
-#                              "its related model %r has not been loaded yet" %
-#                              (self.name, self.rel.to))
-#         defaults = {
-#             'form_class': forms.ModelChoiceField,
-#             'queryset': self.rel.to._default_manager.using(db).complex_filter(self.rel.limit_choices_to),
-#             'to_field_name': self.rel.field_name,
-#         }
-#         defaults.update(kwargs)
-#         return super(ForeignKey, self).formfield(**defaults)
+from settings import (CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR,
+    SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT,
+    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, XML_TURNNUMBER_ATTR,
+    XML_USERTURN_PATH)
 
 
 class Dialogue(models.Model):
@@ -66,7 +46,7 @@ class DialogueAnnotation(models.Model):
                                default=1)
     accent = models.CharField(max_length=100, blank=True, default="")
     offensive = models.BooleanField(default=False)
-    notes = models.CharField(max_length=500, blank=True, default="")
+    notes = models.TextField(max_length=500, blank=True, default="")
     program_version = models.CharField(max_length=40, editable=False)
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
     date_paid = models.DateTimeField(null=True)
@@ -185,23 +165,28 @@ class Transcription(models.Model):
             sess_xml = etree.parse(sess_file)
         # Find the transcription's element.
         dg_ann = trs.dialogue_annotation
-        trs_xml = sess_xml.find(("{uturn}[@{turn_attr}='{turn}']"
-                                 "{trss}/{trs}[@{auth_attr}='{author}']"
-                                 "[@{date_attr}='{date}']").format(
-                      uturn=XML_USERTURN_PATH,
-                      turn_attr=XML_TURNNUMBER_ATTR,
-                      turn=str(trs.turn.turn_number),
-                      trss=(("/" + XML_TRANSCRIPTIONS_ELEM)
-                            if XML_TRANSCRIPTIONS_ELEM else ""),
-                      trs=XML_TRANSCRIPTION_ELEM,
-                      auth_attr=XML_AUTHOR_ATTR,
-                      author=dg_ann.user.username,
-                      date_attr=XML_DATE_ATTR,
-                      date=(dg_ann.date_saved.strptime(XML_DATE_FORMAT).rstrip()
-                            if XML_DATE_FORMAT else
-                            unicode(dg_ann.date_saved))))
+        trs_path = ("{uturn}[@{turn_attr}='{turn}']{trss}/{trs}"
+                    "[@{auth_attr}='{author}'][@{ann_attr}='{ann}']").format(
+                    uturn=XML_USERTURN_PATH,
+                    turn_attr=XML_TURNNUMBER_ATTR,
+                    turn=str(trs.turn.turn_number),
+                    trss=(("/" + XML_TRANSCRIPTIONS_ELEM)
+                          if XML_TRANSCRIPTIONS_ELEM else ""),
+                    trs=XML_TRANSCRIPTION_ELEM,
+                    auth_attr=XML_AUTHOR_ATTR,
+                    author=dg_ann.user.username,
+                    ann_attr="annotation",  # hard-wired in views.py, too
+                    ann=str(dg_ann.pk))
+#                     date_attr=XML_DATE_ATTR,
+#                     date=(dg_ann.date_saved.strptime(XML_DATE_FORMAT).rstrip()
+#                         if XML_DATE_FORMAT else
+#                         unicode(dg_ann.date_saved)))
+        trs_xml = sess_xml.find(trs_path)
         # Update the transcription's element.
+        # NOTE Should a new attribute be added to the element, it has to be
+        # added also in views.py:transcribe() (the case of a valid bound form).
         attribs = trs_xml.attrib
+        attribs['annotation'] = str(trs.dialogue_annotation.pk)
         attribs['is_gold'] = '1' if trs.is_gold else '0'
         attribs['breaks_gold'] = '1' if trs.breaks_gold else '0'
         attribs['some_breaks_gold'] = '1' if trs.some_breaks_gold else '0'

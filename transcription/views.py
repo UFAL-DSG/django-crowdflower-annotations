@@ -7,12 +7,7 @@ import json
 import os
 import random
 from subprocess import check_output, call
-from tr_normalisation import trss_match
-
 import lxml.etree as etree
-import settings
-from transcription.models import Transcription, DialogueAnnotation, Dialogue, \
-    UserTurn, SystemTurn
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
@@ -21,6 +16,10 @@ from django.shortcuts import render
 from django.template import RequestContext
 from tempfile import TemporaryFile
 
+import settings
+from tr_normalisation import trss_match
+from transcription.models import (Transcription, DialogueAnnotation, Dialogue,
+    UserTurn, SystemTurn)
 
 def group_by(objects, attrs):
     """Groups `objects' by the values of their attributes `attrs'.
@@ -138,13 +137,27 @@ def update_price(dg_data):
     dg_data.transcription_price = price
 
 
+if settings.XML_DATE_FORMAT:
+    def format_datetime_xml(dt):
+        return dt.strptime(settings.XML_DATE_FORMAT)
+else:
+    def format_datetime_xml(dt):
+        return unicode(dt)
+
+
 def transcribe(request):
 
     # If the form has been submitted,
     if request.method == "POST":
         # Re-create the form object.
         cid = request.POST['cid']
-        dg_data = Dialogue.objects.get(cid=cid)
+        try:
+            dg_data = Dialogue.objects.get(cid=cid)
+        except Dialogue.DoesNotExist:
+            response = render(request, "er/nosuchcid.html")
+            # NOTE Perhaps not needed after all...
+            response['X-Frame-Options'] = 'ALLOWALL'
+            return response
         uturns = UserTurn.objects.filter(dialogue=dg_data)
         uturn_nums = [uturn.turn_number for uturn in uturns]
         uturn_ind = [None] * max(uturn_nums)  # (turn_num - 1) -> uturn
@@ -181,16 +194,39 @@ def transcribe(request):
                 # A dummy user.
                 dg_ann.user = dummy_user
             dg_ann.save()
+            # Insert dialogue annotations into the XML.
+            # First, find the annotations element or create one.
+            anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
+            anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
+            anns_after_idx = (anns_above.index(anns_after)
+                                if anns_after is not None else len(anns_above))
+            found_anns = False
+            if anns_after_idx > 0:
+                anns_el = anns_above[anns_after_idx - 1]
+                if anns_el.tag == settings.XML_ANNOTATIONS_ELEM:
+                    found_anns = True
+            if not found_anns:
+                anns_el = etree.Element(settings.XML_ANNOTATIONS_ELEM)
+                anns_above.insert(anns_after_idx, anns_el)
+            # Second, create an appropriate element for the new annotation.
+            etree.SubElement(
+                anns_el,
+                settings.XML_ANNOTATION_ELEM,
+                id=str(dg_ann.pk),
+                quality=('clear'
+                         if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
+                         else 'noisy'),
+                accent=dg_ann.accent or "native",
+                offensive=str(dg_ann.offensive),
+                program_version=dg_ann.program_version,
+                date_saved=format_datetime_xml(dg_ann.date_saved),
+                user=dg_ann.user.username).text = dg_ann.notes
             # Create Transcription objects and save them into DB.
             trss = dict()
             for turn_num, uturn in enumerate(uturn_ind, start=1):
                 if not uturn:
                     continue
-                if request.user.is_authenticated():
-                    trs = Transcription()
-                else:
-                    # A dummy user.
-                    trs = Transcription()
+                trs = Transcription()
                 trss[turn_num - 1] = trs
                 trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
                 trs.turn = uturn
@@ -216,7 +252,8 @@ def transcribe(request):
                     trss[gold_trs.turn.turn_number].breaks_gold = True
 
             # Update transcriptions in the light of their comparison to gold
-            # transcriptions, and save them.
+            # transcriptions, and save them both into the database, and to the
+            # XML.
             for turn_num, uturn in enumerate(uturn_ind, start=1):
                 if not uturn:
                     continue
@@ -246,15 +283,13 @@ def transcribe(request):
                 trs_xml = etree.Element(
                     settings.XML_TRANSCRIPTION_ELEM,
                     author=dg_ann.user.username,
+                    annotation=str(dg_ann.pk),
                     is_gold="0",
                     breaks_gold="1" if trs.breaks_gold else "0",
                     some_breaks_gold="1" if mismatch else "0",
                     program_version=dg_ann.program_version)
                 trs_xml.set(settings.XML_DATE_ATTR,
-                            dg_ann.date_saved.strptime(
-                                    settings.XML_DATE_FORMAT).rstrip()
-                                if settings.XML_DATE_FORMAT
-                                else unicode(dg_ann.date_saved))
+                            format_datetime_xml(dg_ann.date_saved))
                 trs_xml.text = trs.text
                 if settings.XML_TRANSCRIPTION_BEFORE:
                     trs_left_sib = \
@@ -322,7 +357,13 @@ def transcribe(request):
         # If `cid' was specified as a GET parameter,
         if dg_data is None:
             # Find the corresponding Dialogue object in the DB.
-            dg_data = Dialogue.objects.get(cid=cid)
+            try:
+                dg_data = Dialogue.objects.get(cid=cid)
+            except Dialogue.DoesNotExist:
+                response = render(request, "er/nosuchcid.html")
+                # NOTE Perhaps not needed after all...
+                response['X-Frame-Options'] = 'ALLOWALL'
+                return response
         # Prepare the data about turns into a form suitable for the template.
         uturns = UserTurn.objects.filter(dialogue=dg_data)
         systurns = SystemTurn.objects.filter(dialogue=dg_data)

@@ -1,6 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
+__all__ = ('CONVERSATION_DIR', 'SESSION_FNAME', 'CODE_LENGTH',
+           'CODE_LENGTH_EXT', 'CF_URL_START', 'CF_KEY', 'CF_JOB_ID',
+           'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN', 'MAX_CHAR_ER',
+           'XML_USERTURN_PATH', 'XML_SYSTURN_PATH', 'XML_TURNNUMBER_ATTR',
+           'XML_REC_SUBPATH', 'XML_REC_FNAME_ATTR', 'XML_SYSTEXT_SUBPATH',
+           'XML_TRANSCRIPTIONS_BEFORE', 'XML_TRANSCRIPTIONS_ELEM',
+           'XML_TRANSCRIPTION_BEFORE', 'XML_TRANSCRIPTION_ELEM',
+           'XML_AUTHOR_ATTR', 'XML_DATE_ATTR', 'XML_DATE_FORMAT',
+           'XML_ANNOTATIONS_ABOVE', 'XML_ANNOTATIONS_AFTER',
+           'XML_ANNOTATIONS_ELEM', 'XML_ANNOTATION_ELEM',
+          )
+
+
 CONVERSATION_DIR = "/webapps/cf_transcription/data/conversations"
 SESSION_FNAME = 'session-fixed.xml'
 
@@ -11,39 +24,49 @@ CF_URL_START = "https://api.crowdflower.com/v1/"
 CF_KEY = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
 CF_JOB_ID = "123456"
 
-PRICE_CONST = 4 * 0.01
-PRICE_PER_MIN = 12 * 0.01
+PRICE_CONST = 2 * 0.01
+PRICE_PER_MIN = 15 * 0.01
 PRICE_PER_TURN = 0.5 * 0.01
 
 # maximum tolerated character error rate in transcriptions (after
 # normalisation)
 #
-# The value 0.07 implies that one in 14--15 characters being wrong be
+# The value 0.07 implies that one in 14--15 characters being wrong shall be
 # tolerated.
 MAX_CHAR_ER = 0.07
 
 # Definitions for the old version of session.xml files:
+XML_ANNOTATIONS_ABOVE = "."
+XML_ANNOTATIONS_AFTER = "turn"  # This has to point to a direct child of
+                                # XML_ANNOTATIONS_ABOVE.
+XML_ANNOTATIONS_ELEM = "annotations"
+XML_ANNOTATION_ELEM = "annotation"
 XML_USERTURN_PATH = ".//userturn"
 XML_SYSTURN_PATH = ".//systurn"
 XML_TURNNUMBER_ATTR = "turnnum"
-XML_REC_SUBPATH = "./rec"
+XML_REC_SUBPATH = "rec"
 XML_REC_FNAME_ATTR = "fname"
-XML_SYSTEXT_SUBPATH = "./prompt"
+XML_SYSTEXT_SUBPATH = "prompt"
 XML_TRANSCRIPTIONS_BEFORE = "asr"
 XML_TRANSCRIPTIONS_ELEM = "transcriptions"
 XML_TRANSCRIPTION_BEFORE = None
 XML_TRANSCRIPTION_ELEM = "transcription"
 XML_AUTHOR_ATTR = "author"
-XML_DATE_ATTR = "date_saved"
+XML_DATE_ATTR = "date_updated"
 XML_DATE_FORMAT = None
 
 # Definitions for the new version of session.xml files:
+# XML_ANNOTATIONS_ABOVE = "."
+# XML_ANNOTATIONS_AFTER = "turn"  # This has to point to a direct child of
+#                                 # XML_ANNOTATIONS_ABOVE.
+# XML_ANNOTATIONS_ELEM = "annotations"
+# XML_ANNOTATION_ELEM = "annotation"
 # XML_USERTURN_PATH = ".//turn[@speaker='user']"
 # XML_SYSTURN_PATH = ".//turn[@speaker='system']"
 # XML_TURNNUMBER_ATTR = "turn_number"
-# XML_REC_SUBPATH = "./rec"
+# XML_REC_SUBPATH = "rec"
 # XML_REC_FNAME_ATTR = "fname"
-# XML_SYSTEXT_SUBPATH = "./text"
+# XML_SYSTEXT_SUBPATH = "text"
 # XML_TRANSCRIPTIONS_BEFORE = None
 # XML_TRANSCRIPTIONS_ELEM = None
 # XML_TRANSCRIPTION_BEFORE = "slu"
