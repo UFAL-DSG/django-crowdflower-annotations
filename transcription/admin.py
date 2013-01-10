@@ -1,14 +1,14 @@
 from django.contrib import admin
-from django.forms.widgets import TextInput
 from django.db import models
 from transcription.models import Dialogue, DialogueAnnotation, Transcription
-from transcription.views import update_price
+from transcription.dg_util import update_price
 from transcription.fields import LinkField
 
 
 class DialogueAdmin(admin.ModelAdmin):
     add_form_template = 'er/import.html'
-    list_display = ['dirname', 'cid', 'transcription_price', 'code', 'code_corr', 'code_incorr']
+    list_display = ['dirname', 'cid', 'transcription_price', 'code',
+                    'code_corr', 'code_incorr']
     formfield_overrides = {
         models.ForeignKey: {'form_class': LinkField}
     }
@@ -19,7 +19,18 @@ class DialogueAdmin(admin.ModelAdmin):
             dg.save()
 
     update_price_action.short_description = u"Update dialogue price"
-    actions = [update_price_action]
+
+    def upload_to_crowdflower(modeladmin, request, queryset):
+        # Ask CrowdFlower for list of current CIDs.
+        # Subtract the CIDs already uploaded from `queryset'.
+        # Upload the rest of `queryset' to CrowdFlower.
+        raise NotImplementedError()
+
+    upload_to_crowdflower.short_description = \
+            (u'Upload to CrowdFlower (only those dialogues that have not been '
+             u'uploaded yet)')
+
+    actions = [update_price_action, upload_to_crowdflower]
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):
@@ -50,3 +61,4 @@ class TranscriptionAdmin(admin.ModelAdmin):
 admin.site.register(Dialogue, DialogueAdmin)
 admin.site.register(DialogueAnnotation, DialogueAnnotationAdmin)
 admin.site.register(Transcription, TranscriptionAdmin)
+

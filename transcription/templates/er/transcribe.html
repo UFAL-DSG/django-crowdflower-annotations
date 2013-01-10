@@ -5,7 +5,7 @@
 <script type="text/javascript">
 <!--
 	var socket = new easyXDM.Socket({
-			onReady:  function(){
+			onReady:	function(){
 					socket.postMessage(document.body.scrollHeight);
 		 }
 	});
@@ -14,12 +14,12 @@
 <link href="{{ MEDIA_URL }}css/jquery-ui.css" rel="stylesheet" type="text/css"/>
 <style type="text/css">
 hr {
-  margin: 20px;
+	margin: 20px;
 }
 
 form label {
-    vertical-align: top;
-    display: block;
+		vertical-align: top;
+		display: block;
 }
 
 div#ins, div#dg {
@@ -69,35 +69,35 @@ input#ins-hide {
 }
 
 ul.errorlist {
-    color: red;
-    display:block;
+		color: red;
+		display:block;
 }
 
 div#task {
-  xborder: 1px solid red;
-  xbackground-color: #FFCCCC;
-  margin-top: 20px;
-  margin: 5px;
-  padding: 5px;
+	xborder: 1px solid red;
+	xbackground-color: #FFCCCC;
+	margin-top: 20px;
+	margin: 5px;
+	padding: 5px;
 }
 
 div#goal {
-  border: 1px solid yellow;
-  background-color: #FFFFCC;
-  margin-top: 20px;
-  margin: 5px;
-  padding: 5px;
+	border: 1px solid yellow;
+	background-color: #FFFFCC;
+	margin-top: 20px;
+	margin: 5px;
+	padding: 5px;
 }
 
 p.tasktext {
-  font-weight: bold;
-  color: red;
-  padding-top: 5px !important;
+	font-weight: bold;
+	color: red;
+	padding-top: 5px !important;
 }
 
 p.goaltext, #task p {
-  padding: 0px;
-  margin: 0px;
+	padding: 0px;
+	margin: 0px;
 }
 
 .speaker {
@@ -135,22 +135,22 @@ table.booktabs.noheader tr:first-child {
 }
 
 form li {
-  list-style-type: none;
-  padding-top: 10px;
+	list-style-type: none;
+	padding-top: 10px;
 }
 
 p.system { color: blue; }
 p.user { color: orange; }
 
 .errors {
-    background-color: red;
-    color: white;
+		background-color: red;
+		color: white;
 }
 
 #submit {
-  width: 120px;
-  height: 50px;
-  font-weight: bold;
+	width: 120px;
+	height: 50px;
+	font-weight: bold;
 }
 
 </style>
@@ -159,68 +159,68 @@ p.user { color: orange; }
 <script src="{{ MEDIA_URL }}js/jquery-ui.min.js"></script>
 <script src="{{ MEDIA_URL }}js/jquery.jplayer.min.js"></script>
 <script type="text/javascript">
-    String.prototype.endsWith = function(suffix) {
-        return this.indexOf(suffix, this.length - suffix.length) !== -1;
-    };
-    var curr_btnid = "";
+		String.prototype.endsWith = function(suffix) {
+				return this.indexOf(suffix, this.length - suffix.length) !== -1;
+		};
+		var curr_btnid = "";
 
-    var beenPlaying = false;
+		var beenPlaying = false;
 
-  function getPlayer(pid) {
-      var obj = document.getElementById(pid);
-      if (obj.doPlay) return obj;
-      for(i=0; i<obj.childNodes.length; i++) {
-          var child = obj.childNodes[i];
-          if (child.tagName == "EMBED") return child;
-      }
-  }
+	function getPlayer(pid) {
+			var obj = document.getElementById(pid);
+			if (obj.doPlay) return obj;
+			for(i=0; i<obj.childNodes.length; i++) {
+					var child = obj.childNodes[i];
+					if (child.tagName == "EMBED") return child;
+			}
+	}
 
-  function NextPhase() {
-      var PrevIndex = $('div .current');
-      var NextIndex = PrevIndex.next().next();
-      PrevIndex.removeClass("current");
-      NextIndex.addClass("current");
-      //NextIndex.click();
+	function NextPhase() {
+			var PrevIndex = $('div .current');
+			var NextIndex = PrevIndex.next().next();
+			PrevIndex.removeClass("current");
+			NextIndex.addClass("current");
+			//NextIndex.click();
 
-      NextIndex.removeClass("ui-state-disabled");
-      if(!NextIndex.hasClass("ui-state-active"))
-          NextIndex.click();
-  }
+			NextIndex.removeClass("ui-state-disabled");
+			if(!NextIndex.hasClass("ui-state-active"))
+					NextIndex.click();
+	}
 
-  function PlayerStopped() {
-      if(beenPlaying) {
-          beenPlaying = false;
-          $('#' + curr_btnid).text("Play");
+	function PlayerStopped() {
+			if(beenPlaying) {
+					beenPlaying = false;
+					$('#' + curr_btnid).text("Play");
 
-          NextPhase();
-      }
-  }
+					NextPhase();
+			}
+	}
 
-  function PlayerPlaying() {
-      beenPlaying = true;
-  }
+	function PlayerPlaying() {
+			beenPlaying = true;
+	}
 
-  function init_player(name) {
-      var player = getPlayer(name);
-      var init = function() { init_player(name); }
-      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
-      else {
-          player.attachHandler("PLAYER_PLAYING", "PlayerPlaying", "STOPPED");
-          player.attachHandler("PLAYER_STOPPED", "PlayerStopped", "STOPPED");
-          //window.TinyWav = new TinyWav('TinyWavBlock', 0.01);
-      }
-  }
+	function init_player(name) {
+			var player = getPlayer(name);
+			var init = function() { init_player(name); }
+			if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+			else {
+					player.attachHandler("PLAYER_PLAYING", "PlayerPlaying", "STOPPED");
+					player.attachHandler("PLAYER_STOPPED", "PlayerStopped", "STOPPED");
+					//window.TinyWav = new TinyWav('TinyWavBlock', 0.01);
+			}
+	}
 
-  function deinit_player(name) {
-      var player = getPlayer(name);
-      var init = function() { init_player(name); }
-      if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
-      else {
-          player.removeHandler(PlayerStopped);
-      }
-  }
+	function deinit_player(name) {
+			var player = getPlayer(name);
+			var init = function() { init_player(name); }
+			if (!player || !player.attachHandler) setTimeout(init, 100); // Wait for load
+			else {
+					player.removeHandler(PlayerStopped);
+			}
+	}
 
-  var accordion, hideButton, insAreShown = true;
+	var accordion, hideButton, insAreShown = true;
 
 	// Callback function called when the instructions have been hidden.
 	function insHidden() {
@@ -236,19 +236,19 @@ p.user { color: orange; }
 		hideButton.disabled = false;
 	}
 
-  $(document).ready(function() {
-      accordion = $("#phases").multiAccordion({active: 0});
+	$(document).ready(function() {
+			accordion = $("#phases").multiAccordion({active: 0});
 			$("#accent_spec").slideUp();
 
-      $("#player").jPlayer( {
-          swfPath: "{{ MEDIA_URL }}flash/",
-          supplied: "wav",
-          ended: function() {
-              PlayerStopped();
-          }
-      });
+			$("#player").jPlayer( {
+					swfPath: "{{ MEDIA_URL }}flash/",
+					supplied: "wav",
+					ended: function() {
+							PlayerStopped();
+					}
+			});
 
-      $("#turn_1").removeClass("ui-state-disabled");
+			$("#turn_1").removeClass("ui-state-disabled");
 
 			var native_accent = document.getElementById("id_accent_native");
 			var other_accent = document.getElementById("id_accent_other");
@@ -292,7 +292,7 @@ p.user { color: orange; }
 						msg += "non-speech sounds.";
 						alert(msg);
 						return false;
-          }
+					}
 					
 					if(other_accent.checked && accent_name.value.search(/\w/) === -1)
 					{
@@ -301,8 +301,8 @@ p.user { color: orange; }
 						alert(msg);
 						return false;
 					}
-          return true;
-      });
+					return true;
+			});
 
 			hideButton = document.getElementById("ins-hide");
 			$("input#ins-hide").click(function() {
@@ -316,20 +316,27 @@ p.user { color: orange; }
 					$("div#ins-inner").slideDown("fast", "swing", insShown);
 				}
 			});
-  });
+	});
 
-  function play_now(btnid, phase, f) {
-      curr_btnid = btnid;
-      $(".current").removeClass("current");
-      $("#" + phase).addClass("current");
-      try{
-          PlayerPlaying();
-          $('#' + btnid).text("Playing...");
-          $("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
-      } catch(E){
-          alert(E);
-      }
-  }
+	function play_now(btnid, phase, f) {
+			curr_btnid = btnid;
+			$(".current").removeClass("current");
+			$("#" + phase).addClass("current");
+			try{
+					PlayerPlaying();
+					$('#' + btnid).text("Playing...");
+					$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
+			} catch(E){
+					alert(E);
+			}
+	}
+
+	function pseudo_play_now(btnid, phase, f) {
+			curr_btnid = btnid;
+			$(".current").removeClass("current");
+			$("#" + phase).addClass("current");
+			NextPhase();
+	}
 </script>
 
 {% endblock head %}
@@ -437,11 +444,11 @@ p.user { color: orange; }
 			</p>
 			<div class="quote">
 				<table class="booktabs noheader">
-					<tr><td>Addenbrooke's</td>     <td>Girton</td>      <td>Chesterton</td></tr>
-					<tr><td>Gonville and Caius</td><td>Castlehill</td>  <td>Romsey</td></tr>
-					<tr><td>Barnwell</td>          <td>Huntingdon</td>  <td>Coco</td></tr>
-					<tr><td>Fenditton</td>         <td>Cherryhinton</td><td>Trumpington</td></tr>
-					<tr><td>Brasserie</td>         <td>Newnham</td>     <td></td></tr>
+					<tr><td>Addenbrooke's</td>		 <td>Girton</td>			<td>Chesterton</td></tr>
+					<tr><td>Gonville and Caius</td><td>Castlehill</td>	<td>Romsey</td></tr>
+					<tr><td>Barnwell</td>					 <td>Huntingdon</td>	<td>Coco</td></tr>
+					<tr><td>Fenditton</td>				 <td>Cherryhinton</td><td>Trumpington</td></tr>
+					<tr><td>Brasserie</td>				 <td>Newnham</td>			<td></td></tr>
 				</table>
 			</div>
 
@@ -474,17 +481,19 @@ p.user { color: orange; }
 				</div>
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
-						tabindex="{{ turn.dbl_rec_num|add:1 }}"
-						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}')">Play</button>
+						tabindex="{{ turn.dbl_turn_num|add:1 }}"
+						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}');">Play</button>
 				</div>
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
 						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
-						tabindex="{{ turn.dbl_rec_num|add:2 }}"></textarea>
+						tabindex="{{ turn.dbl_turn_num|add:2 }}"></textarea>
 				</div>
 			{% else %}
 				<div>
-					<button type="button" class="btnnext" onclick="NextPhase()" class="btnnext">Next</button>
+					<button type="button" class="btnnext{{ turn.turn_number }}" 
+						tabindex="{{ turn.dbl_turn_num|add:1 }}"
+					 onclick="pseudo_play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}', '');" class="btnnext">Next</button>
 				</div>
 			{% endif %}
 			
@@ -506,7 +515,7 @@ p.user { color: orange; }
 						<td>
 							<input id="id_quality_clear" name="quality" type="radio" 
 								value="clear" checked
-								tabindex="{{ dbl_num_recs|add:1 }}">
+								tabindex="{{ dbl_num_turns|add:1 }}">
 									clear</input>
 						</td>
 					</tr>
@@ -515,7 +524,7 @@ p.user { color: orange; }
 						<td>
 							<input id="id_accent_native" name="accent" type="radio" 
 								value="native" checked
-								tabindex="{{ dbl_num_recs|add:2 }}">
+								tabindex="{{ dbl_num_turns|add:2 }}">
 									native English</input>
 						</td>
 						<td>
@@ -530,7 +539,7 @@ p.user { color: orange; }
 						<td>
 							<input type="text" id="id_accent_name" name="accent_name" 
 								size="30"
-								tabindex="{{ dbl_num_recs|add:3 }}"/>
+								tabindex="{{ dbl_num_turns|add:3 }}"/>
 						</td>
 					</tr>
 					<tr>
@@ -543,7 +552,7 @@ p.user { color: orange; }
 						<td>
 							<input id="id_offensive_no" name="offensive" type="radio" 
 							value="no" checked
-								tabindex="{{ dbl_num_recs|add:4 }}">no</input>
+								tabindex="{{ dbl_num_turns|add:4 }}">no</input>
 						</td>
 					</tr>
 					<tr>
@@ -560,7 +569,7 @@ p.user { color: orange; }
 						<td colspan="3">
 							<input id="submit" type="submit" name="send" value="Save 
 											transcription"
-											tabindex="{{ dbl_num_recs|add:5 }}">
+											tabindex="{{ dbl_num_turns|add:5 }}">
 						</td>
 					</tr>
 				</table>

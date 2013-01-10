@@ -16,10 +16,12 @@ from django.shortcuts import render
 from django.template import RequestContext
 from tempfile import TemporaryFile
 
+import dg_util
 import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation, Dialogue,
     UserTurn, SystemTurn)
+
 
 def group_by(objects, attrs):
     """Groups `objects' by the values of their attributes `attrs'.
@@ -46,7 +48,9 @@ class TranscriptionForm(forms.Form):
     notes = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
-        uturn_ind = kwargs.pop('uturn_ind')
+        uturn_ind = kwargs.pop('uturn_ind', None)
+        if uturn_ind is None:
+            uturn_ind = tuple()
         cid = kwargs.pop('cid', None)
         super(TranscriptionForm, self).__init__(*args, **kwargs)
 
@@ -120,23 +124,6 @@ def _read_dialogue_turns(dg_data, dirname=None):
         turn.save()
 
 
-def update_price(dg_data):
-    """Computes the price of a dialogue transcription in USD."""
-    uturns = UserTurn.objects.filter(dialogue=dg_data)
-    # Compute the length of the audio.
-    wavsize = 0
-    for turn in uturns:
-        wavsize += os.path.getsize(os.path.join(
-            settings.CONVERSATION_DIR,
-            turn.wav_fname))
-    sec = wavsize / float(16000 * 2)
-    minutes = sec / 60.
-
-    price = (settings.PRICE_CONST + settings.PRICE_PER_MIN * minutes
-             + settings.PRICE_PER_TURN * len(uturns))
-    dg_data.transcription_price = price
-
-
 if settings.XML_DATE_FORMAT:
     def format_datetime_xml(dt):
         return dt.strptime(settings.XML_DATE_FORMAT)
@@ -158,12 +145,17 @@ def transcribe(request):
             # NOTE Perhaps not needed after all...
             response['X-Frame-Options'] = 'ALLOWALL'
             return response
-        uturns = UserTurn.objects.filter(dialogue=dg_data)
-        uturn_nums = [uturn.turn_number for uturn in uturns]
-        uturn_ind = [None] * max(uturn_nums)  # (turn_num - 1) -> uturn
-        for uturn in uturns:
-            uturn_ind[uturn.turn_number - 1] = uturn
         dg_codes = dg_data.get_codes()
+        uturns = UserTurn.objects.filter(dialogue=dg_data)
+        # Some dialogues have no records of the user whatsoever. If this
+        # dialogue had the user saying anything, index the user turns.
+        if uturns:
+            uturn_nums = [uturn.turn_number for uturn in uturns]
+            uturn_ind = [None] * max(uturn_nums)  # (turn_num - 1) -> uturn
+            for uturn in uturns:
+                uturn_ind[uturn.turn_number - 1] = uturn
+        else:
+            uturn_ind = None
         form = TranscriptionForm(request.POST, cid=cid, uturn_ind=uturn_ind)
 
         if form.is_valid():
@@ -194,113 +186,117 @@ def transcribe(request):
                 # A dummy user.
                 dg_ann.user = dummy_user
             dg_ann.save()
-            # Insert dialogue annotations into the XML.
-            # First, find the annotations element or create one.
-            anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
-            anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
-            anns_after_idx = (anns_above.index(anns_after)
-                                if anns_after is not None else len(anns_above))
-            found_anns = False
-            if anns_after_idx > 0:
-                anns_el = anns_above[anns_after_idx - 1]
-                if anns_el.tag == settings.XML_ANNOTATIONS_ELEM:
-                    found_anns = True
-            if not found_anns:
-                anns_el = etree.Element(settings.XML_ANNOTATIONS_ELEM)
-                anns_above.insert(anns_after_idx, anns_el)
-            # Second, create an appropriate element for the new annotation.
-            etree.SubElement(
-                anns_el,
-                settings.XML_ANNOTATION_ELEM,
-                id=str(dg_ann.pk),
-                quality=('clear'
-                         if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
-                         else 'noisy'),
-                accent=dg_ann.accent or "native",
-                offensive=str(dg_ann.offensive),
-                program_version=dg_ann.program_version,
-                date_saved=format_datetime_xml(dg_ann.date_saved),
-                user=dg_ann.user.username).text = dg_ann.notes
-            # Create Transcription objects and save them into DB.
-            trss = dict()
-            for turn_num, uturn in enumerate(uturn_ind, start=1):
-                if not uturn:
-                    continue
-                trs = Transcription()
-                trss[turn_num - 1] = trs
-                trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
-                trs.turn = uturn
-                trs.dialogue_annotation = dg_ann
 
-            # Check the form against any gold items.  If all are OK, return one
-            # code; if not, return another.
-            gold_trss = Transcription.objects.filter(
-                dialogue_annotation__dialogue=dg_data,
-                is_gold=True)
-            gold_trss = group_by(gold_trss, ('turn', ))
-            mismatch = False
-            for turn_gold_trss in gold_trss.itervalues():
-                submismatch = True
-                for gold_trs in turn_gold_trss:
-                    if trss_match(trss[gold_trs.turn.turn_number],
-                                  gold_trs,
-                                  max_char_er=settings.MAX_CHAR_ER):
-                        submismatch = False
-                        break
-                if submismatch:
-                    mismatch = True
-                    trss[gold_trs.turn.turn_number].breaks_gold = True
+            if not uturns:
+                mismatch = False
+            else:
+                # Insert dialogue annotations into the XML.
+                # First, find the annotations element or create one.
+                anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
+                anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
+                anns_after_idx = (anns_above.index(anns_after)
+                                    if anns_after is not None else len(anns_above))
+                found_anns = False
+                if anns_after_idx > 0:
+                    anns_el = anns_above[anns_after_idx - 1]
+                    if anns_el.tag == settings.XML_ANNOTATIONS_ELEM:
+                        found_anns = True
+                if not found_anns:
+                    anns_el = etree.Element(settings.XML_ANNOTATIONS_ELEM)
+                    anns_above.insert(anns_after_idx, anns_el)
+                # Second, create an appropriate element for the new annotation.
+                etree.SubElement(
+                    anns_el,
+                    settings.XML_ANNOTATION_ELEM,
+                    id=str(dg_ann.pk),
+                    quality=('clear'
+                            if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
+                            else 'noisy'),
+                    accent=dg_ann.accent or "native",
+                    offensive=str(dg_ann.offensive),
+                    program_version=dg_ann.program_version,
+                    date_saved=format_datetime_xml(dg_ann.date_saved),
+                    user=dg_ann.user.username).text = dg_ann.notes
+                # Create Transcription objects and save them into DB.
+                trss = dict()
+                for turn_num, uturn in enumerate(uturn_ind, start=1):
+                    if not uturn:
+                        continue
+                    trs = Transcription()
+                    trss[turn_num - 1] = trs
+                    trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
+                    trs.turn = uturn
+                    trs.dialogue_annotation = dg_ann
 
-            # Update transcriptions in the light of their comparison to gold
-            # transcriptions, and save them both into the database, and to the
-            # XML.
-            for turn_num, uturn in enumerate(uturn_ind, start=1):
-                if not uturn:
-                    continue
-                trs = trss[turn_num - 1]
-                trs.some_breaks_gold = mismatch
-                trs.save()
-                # Reflect the transcription in the XML.
-                turn_xml = filter(
-                    lambda turn_xml: \
-                        int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) \
-                            == turn_num,
-                    user_turns)[0]
-                if settings.XML_TRANSCRIPTIONS_ELEM is not None:
-                    trss_xml = turn_xml.find(settings.XML_TRANSCRIPTIONS_ELEM)
-                    if trss_xml is None:
-                        trss_left_sib = \
-                            turn_xml.find(settings.XML_TRANSCRIPTIONS_BEFORE)
-                        if trss_left_sib is None:
-                            insert_idx = len(turn_xml)
-                        else:
-                            insert_idx = turn_xml.index(trss_left_sib) + 1
-                        trss_xml = \
-                            etree.Element(settings.XML_TRANSCRIPTIONS_ELEM)
-                        turn_xml.insert(insert_idx, trss_xml)
-                else:
-                    trss_xml = turn_xml
-                trs_xml = etree.Element(
-                    settings.XML_TRANSCRIPTION_ELEM,
-                    author=dg_ann.user.username,
-                    annotation=str(dg_ann.pk),
-                    is_gold="0",
-                    breaks_gold="1" if trs.breaks_gold else "0",
-                    some_breaks_gold="1" if mismatch else "0",
-                    program_version=dg_ann.program_version)
-                trs_xml.set(settings.XML_DATE_ATTR,
-                            format_datetime_xml(dg_ann.date_saved))
-                trs_xml.text = trs.text
-                if settings.XML_TRANSCRIPTION_BEFORE:
-                    trs_left_sib = \
-                        trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
-                else:
-                    trs_left_sib = None
-                if trs_left_sib is None:
-                    insert_idx = len(trss_xml)
-                else:
-                    insert_idx = trss_xml.index(trs_left_sib) + 1
-                trss_xml.insert(insert_idx, trs_xml)
+                # Check the form against any gold items.  If all are OK, return one
+                # code; if not, return another.
+                gold_trss = Transcription.objects.filter(
+                    dialogue_annotation__dialogue=dg_data,
+                    is_gold=True)
+                gold_trss = group_by(gold_trss, ('turn', ))
+                mismatch = False
+                for turn_gold_trss in gold_trss.itervalues():
+                    submismatch = True
+                    for gold_trs in turn_gold_trss:
+                        if trss_match(trss[gold_trs.turn.turn_number],
+                                    gold_trs,
+                                    max_char_er=settings.MAX_CHAR_ER):
+                            submismatch = False
+                            break
+                    if submismatch:
+                        mismatch = True
+                        trss[gold_trs.turn.turn_number].breaks_gold = True
+
+                # Update transcriptions in the light of their comparison to gold
+                # transcriptions, and save them both into the database, and to the
+                # XML.
+                for turn_num, uturn in enumerate(uturn_ind, start=1):
+                    if not uturn:
+                        continue
+                    trs = trss[turn_num - 1]
+                    trs.some_breaks_gold = mismatch
+                    trs.save()
+                    # Reflect the transcription in the XML.
+                    turn_xml = filter(
+                        lambda turn_xml: \
+                            int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) \
+                                == turn_num,
+                        user_turns)[0]
+                    if settings.XML_TRANSCRIPTIONS_ELEM is not None:
+                        trss_xml = turn_xml.find(settings.XML_TRANSCRIPTIONS_ELEM)
+                        if trss_xml is None:
+                            trss_left_sib = \
+                                turn_xml.find(settings.XML_TRANSCRIPTIONS_BEFORE)
+                            if trss_left_sib is None:
+                                insert_idx = len(turn_xml)
+                            else:
+                                insert_idx = turn_xml.index(trss_left_sib) + 1
+                            trss_xml = \
+                                etree.Element(settings.XML_TRANSCRIPTIONS_ELEM)
+                            turn_xml.insert(insert_idx, trss_xml)
+                    else:
+                        trss_xml = turn_xml
+                    trs_xml = etree.Element(
+                        settings.XML_TRANSCRIPTION_ELEM,
+                        author=dg_ann.user.username,
+                        annotation=str(dg_ann.pk),
+                        is_gold="0",
+                        breaks_gold="1" if trs.breaks_gold else "0",
+                        some_breaks_gold="1" if mismatch else "0",
+                        program_version=dg_ann.program_version)
+                    trs_xml.set(settings.XML_DATE_ATTR,
+                                format_datetime_xml(dg_ann.date_saved))
+                    trs_xml.text = trs.text
+                    if settings.XML_TRANSCRIPTION_BEFORE:
+                        trs_left_sib = \
+                            trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
+                    else:
+                        trs_left_sib = None
+                    if trs_left_sib is None:
+                        insert_idx = len(trss_xml)
+                    else:
+                        insert_idx = trss_xml.index(trs_left_sib) + 1
+                    trss_xml.insert(insert_idx, trs_xml)
             # Write the XML session file.
             with open(sess_fname, 'w') as sess_file:
                 sess_file.write(etree.tostring(sess_xml,
@@ -380,19 +376,18 @@ def transcribe(request):
             turns[systurn.turn_number - 1]\
                     .update(turn_number=systurn.turn_number,
                             prompt=systurn.text)
-        dbl_rec_num = 0
+        dbl_turn_num = 0
         for turn in turns:
-            turn['dbl_rec_num'] = dbl_rec_num
-            if 'has_rec' in turn:
-                dbl_rec_num += 2
-            else:
+            turn['dbl_turn_num'] = dbl_turn_num
+            if not 'has_rec' in turn:
                 turn['has_rec'] = False
+            dbl_turn_num += 2
 
         uturn_ind = map(lambda turn: turn['has_rec'], turns)
 
         context = dict()
         context['turns'] = turns
-        context['dbl_num_recs'] = 2 * len(turns)
+        context['dbl_num_turns'] = 2 * len(turns)
         context['codes'] = dg_data.get_codes()
         context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
     response = render(request,
@@ -448,10 +443,11 @@ def import_dialogues(request):
 
     with open(dirlist_fname, 'r') as dirlist_file, \
          open(csv_fname, 'w') as csv_file:
-        # Prepare the JSON output string.
+        # Prepare the JSON output string, the CSV header, and a list of DB
+        # objects saved.
         json_str = ''
-        # Write the CSV header.
-        csv_file.write('cid, code, gold\n')
+        csv_file.write('cid, code, code_gold\n')
+        dg_ids = list()
         # Process the dialogue files.
         for line in dirlist_file:
             src_fname = line.rstrip()
@@ -496,10 +492,11 @@ def import_dialogues(request):
             # Read the dialogue turns.
             _read_dialogue_turns(dg_data, tgt_fname)
             # Compute the dialogue price.
-            update_price(dg_data)
+            dg_util.update_price(dg_data)
             # Update the dialogue in the DB.
             try:
                 dg_data.save()
+                dg_ids.append(dg_data.pk)
             except:
                 save_price_failed.append((dirname, cid))
                 continue
