@@ -4,6 +4,9 @@ from transcription.models import Dialogue, DialogueAnnotation, Transcription
 from transcription.dg_util import update_price
 from transcription.fields import LinkField
 
+import dg_util
+import settings
+
 
 class DialogueAdmin(admin.ModelAdmin):
     add_form_template = 'er/import.html'
@@ -21,10 +24,13 @@ class DialogueAdmin(admin.ModelAdmin):
     update_price_action.short_description = u"Update dialogue price"
 
     def upload_to_crowdflower(modeladmin, request, queryset):
-        # Ask CrowdFlower for list of current CIDs.
-        # Subtract the CIDs already uploaded from `queryset'.
+        # TODO Ask CrowdFlower for list of current CIDs.
+        # TODO Subtract the CIDs already uploaded from `queryset'.
         # Upload the rest of `queryset' to CrowdFlower.
-        raise NotImplementedError()
+        json_data = dg_util.JsonDialogueUpload()
+        for dg in queryset:
+            json_data.add(dg)
+        json_data.upload()
 
     upload_to_crowdflower.short_description = \
             (u'Upload to CrowdFlower (only those dialogues that have not been '

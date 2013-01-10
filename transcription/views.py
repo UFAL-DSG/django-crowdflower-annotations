@@ -14,7 +14,6 @@ from django.contrib.auth.models import User
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
-from tempfile import TemporaryFile
 
 import dg_util
 import settings
@@ -443,11 +442,9 @@ def import_dialogues(request):
 
     with open(dirlist_fname, 'r') as dirlist_file, \
          open(csv_fname, 'w') as csv_file:
-        # Prepare the JSON output string, the CSV header, and a list of DB
-        # objects saved.
-        json_str = ''
+        # Prepare the JSON upload data, and the CSV header.
+        json_data = dg_util.JsonDialogueUpload()
         csv_file.write('cid, code, code_gold\n')
-        dg_ids = list()
         # Process the dialogue files.
         for line in dirlist_file:
             src_fname = line.rstrip()
@@ -496,7 +493,6 @@ def import_dialogues(request):
             # Update the dialogue in the DB.
             try:
                 dg_data.save()
-                dg_ids.append(dg_data.pk)
             except:
                 save_price_failed.append((dirname, cid))
                 continue
@@ -506,40 +502,16 @@ def import_dialogues(request):
                                                             code=dg_codes[0],
                                                             gold=code_gold))
             # Add a record to the JSON for CrowdFlower.
-            json_str += ('{{"cid":"{cid}","code":"{code}",'
-                         '"code_gold":"{gold}"}}').format(cid=cid,
-                                                          code=dg_codes[0],
-                                                          gold=code_gold)
+            json_data.add(dg_data)
             count += 1
     if upload_to_cf:
-        # Communicate the new data to CrowdFlower via the CF API.
-        cf_url = '{start}jobs/{jobid}/upload.json?key={key}'.format(
-            start=settings.CF_URL_START,
-            jobid=settings.CF_JOB_ID,
-            key=settings.CF_KEY)
-        try:
-            # Create a file for the response from CF.
-            upload_outfile = TemporaryFile()
-        except:
-            cf_error = "Output from `curl' could not be obtained."
-            upload_outfile = None
-        # The following would send the data in the CSV format.
-        #     cf_retcode = call(['curl', '-T', csv_fname, '-H', 'Content-Type:
-        #     text/csv', cf_url], stdout=upload_outfile)
-        cf_retcode = call(['curl', '-d', json_str, '-H',
-                           'Content-Type: application/json', cf_url],
-                          stdout=upload_outfile)
-        cf_outobj = None
-        if upload_outfile is not None:
-            upload_outfile.seek(0)
-            cf_outobj = json.load(upload_outfile)
-            upload_outfile.close()
-        if cf_retcode == 0:
-            cf_error = None
-        else:
-            if cf_outobj is not None:
-                cf_error = cf_outobj['error']['message'] \
-                    if 'error' in cf_outobj else '(no message)'
+        cf_ret = json_data.upload()
+        if cf_ret is not True:
+            if cf_ret is False:
+                cf_error = ('Internal error. Attempted to upload the data '
+                            'twice.')
+            else:
+                cf_error = cf_ret
     # Render the response.
     context = dict()
     context['copy_failed'] = copy_failed
@@ -557,4 +529,3 @@ def import_dialogues(request):
     context['n_failed'] = (len(copy_failed) + len(save_failed)
                            + len(save_price_failed) + len(dg_existed))
     return render(request, "er/imported.html", context)
-

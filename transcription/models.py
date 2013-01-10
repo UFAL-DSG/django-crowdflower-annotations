@@ -34,6 +34,9 @@ class Dialogue(models.Model):
     def get_codes(self):
         return self.code, self.code_corr, self.code_incorr
 
+    def get_code_gold(self):
+        return self.code + self.code_corr
+
 
 class DialogueAnnotation(models.Model):
     """Represents a single submit of an annotation for a single dialogue."""
