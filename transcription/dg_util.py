@@ -3,8 +3,55 @@
 import os
 
 import settings
-from transcription.crowdflower import list_units, upload_units
-from transcription.models import UserTurn
+from transcription.crowdflower import list_units, upload_units,\
+    unit_pair_from_cid, update_unit
+from transcription.models import Transcription, UserTurn
+
+
+# Check whether dialogues should be split into several CF jobs based on their
+# price.
+if hasattr(settings, 'CF_JOB_IDS'):
+    price_classes = settings.CF_JOB_IDS
+else:
+    assert (hasattr(settings, 'CF_JOB_ID'),
+            'Either CF_JOB_ID or CF_JOB_IDS has to be set in '
+            'settings.py')
+    price_classes = None
+
+
+def get_job_id(dg):
+    if price_classes is None:
+        return settings.CF_JOB_ID
+    else:
+        try:
+            # This selects the nearest lower price step.
+            price_cat = max(filter(lambda step: step <= dg.transcription_price,
+                                   price_classes))
+        except ValueError:
+            # Or, in case no price step is lower, the lowest price step
+            # absolute.
+            price_cat = min(price_classes)
+        return price_classes[price_cat]
+
+
+def is_gold(dg):
+    return Transcription.objects.filter(dialogue_annotation__dialogue=dg,
+                                        is_gold=True).exists()
+
+
+def update_gold(dg):
+    job_id = get_job_id(dg)
+    success, unit_pair = unit_pair_from_cid(job_id, dg.cid)
+    if not success:
+        msg = unit_pair
+        return False, msg
+    unit_id, unit = unit_pair
+    params = 'unit[state]={gold}'.format(
+        gold=('true' if is_gold(dg) else unit['state']))
+    success, errors = update_unit(job_id, unit_id, params)
+    if not success:
+        return False, errors
+    return True, None
 
 
 def update_price(dg):
@@ -24,6 +71,19 @@ def update_price(dg):
     dg.transcription_price = price
 
 
+def create_dialogue_json(dg, check_gold=True):
+    if check_gold and is_gold(dg):
+        extra_str = ',"_golden":"True"'
+    else:
+        extra_str = ''
+    json_str = ('{{"cid":"{cid}","code":"{code}","code_gold":"{gold}"{extra}}}'
+                .format(cid=dg.cid,
+                        code=dg.code,
+                        gold=dg.get_code_gold(),
+                        extra=extra_str))
+    return json_str
+
+
 class JsonDialogueUpload(object):
     # TODO: Implementing __len__ might be helpful...
 
@@ -33,31 +93,10 @@ class JsonDialogueUpload(object):
 
         """
         self._uploaded = False
-        # Check whether dialogues should be split into several CF jobs based on
-        # their price.
-        if hasattr(settings, 'CF_JOB_IDS'):
-            self.price_classes = settings.CF_JOB_IDS
-        else:
-            assert (hasattr(settings, 'CF_JOB_ID'),
-                    'Either CF_JOB_ID or CF_JOB_IDS has to be set in '
-                    'settings.py')
-            self.price_classes = None
         self.data = dict()
 
-    def _get_job_id(self, dg):
-        if self.price_classes is None:
-            return settings.CF_JOB_ID
-        else:
-            try:
-                price_cat = max(
-                    filter(lambda step: step <= dg.transcription_price,
-                           self.price_classes.keys()))
-            except ValueError:
-                price_cat = min(self.price_classes)
-            return self.price_classes[price_cat]
-
     def add(self, dg):
-        self.data.setdefault(self._get_job_id(dg), []).append(dg)
+        self.data.setdefault(get_job_id(dg), []).append(dg)
 
     def extend(self, dg_datas):
         for dg in dg_datas:
@@ -79,12 +118,9 @@ class JsonDialogueUpload(object):
                                   'ID {jobid}.'.format(jobid=job_id))
                 continue
             # Build the JSON string describing the units.
-            json_str = ''.join(
-                ('{{"cid":"{cid}","code":"{code}","code_gold":"{gold}"}}')
-                .format(cid=dg.cid,
-                        code=dg.code,
-                        gold=dg.get_code_gold())
-                for dg in self.data[job_id] if dg.cid not in cur_cids)
+            json_str = ''.join(create_dialogue_json(dg)
+                               for dg in self.data[job_id]
+                               if dg.cid not in cur_cids)
             # Upload to CF.
             if not json_str:
                 # If there are no dialogues to upload (all have already been

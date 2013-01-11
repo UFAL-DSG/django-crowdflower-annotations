@@ -1,10 +1,8 @@
 from django.contrib import admin
 from django.db import models
 from transcription.models import Dialogue, DialogueAnnotation, Transcription
-from transcription.dg_util import update_price
+from transcription.dg_util import JsonDialogueUpload, update_gold, update_price
 from transcription.fields import LinkField
-
-import dg_util
 
 
 class DialogueAdmin(admin.ModelAdmin):
@@ -22,8 +20,16 @@ class DialogueAdmin(admin.ModelAdmin):
 
     update_price_action.short_description = u"Update dialogue price"
 
+    def update_gold_action(modeladmin, request, queryset):
+        for dg in queryset:
+            success, _ = update_gold(dg)
+            if not success:
+                raise ValueError()
+
+    update_gold_action.short_description = u"Update dialogue gold status on CF"
+
     def upload_to_crowdflower(modeladmin, request, queryset):
-        json_data = dg_util.JsonDialogueUpload()
+        json_data = JsonDialogueUpload()
         json_data.extend(queryset)
         json_data.upload()
 
@@ -31,7 +37,7 @@ class DialogueAdmin(admin.ModelAdmin):
         (u'Upload to CrowdFlower (only those dialogues that have not been '
          u'uploaded yet)')
 
-    actions = [update_price_action, upload_to_crowdflower]
+    actions = [update_price_action, upload_to_crowdflower, update_gold_action]
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):
