@@ -3,10 +3,9 @@
 #
 # TODO: User.objects.get_or_create(dummy_user) where appropriate.
 import hashlib
-import json
 import os
 import random
-from subprocess import check_output, call
+from subprocess import check_output
 import lxml.etree as etree
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
@@ -19,7 +18,7 @@ import dg_util
 import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation, Dialogue,
-    UserTurn, SystemTurn)
+        UserTurn, SystemTurn)
 
 
 def group_by(objects, attrs):
@@ -110,7 +109,7 @@ def _read_dialogue_turns(dg_data, dirname=None):
         text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH).strip()
         # Throw away some distracting pieces of system prompts.
         if (text.startswith("Thank you for using")
-            or text.startswith("Thank you goodbye")):
+                or text.startswith("Thank you goodbye")):
             continue
         text = text.replace("Thank you for calling the Cambridge Information "
                             "system. Your call will be recorded for research "
@@ -194,7 +193,8 @@ def transcribe(request):
                 anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
                 anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
                 anns_after_idx = (anns_above.index(anns_after)
-                                    if anns_after is not None else len(anns_above))
+                                  if anns_after is not None
+                                  else len(anns_above))
                 found_anns = False
                 if anns_after_idx > 0:
                     anns_el = anns_above[anns_after_idx - 1]
@@ -209,13 +209,14 @@ def transcribe(request):
                     settings.XML_ANNOTATION_ELEM,
                     id=str(dg_ann.pk),
                     quality=('clear'
-                            if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
-                            else 'noisy'),
+                        if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
+                        else 'noisy'),
                     accent=dg_ann.accent or "native",
                     offensive=str(dg_ann.offensive),
                     program_version=dg_ann.program_version,
                     date_saved=format_datetime_xml(dg_ann.date_saved),
-                    user=dg_ann.user.username).text = dg_ann.notes
+                    user=dg_ann.user.username)\
+                        .text = dg_ann.notes
                 # Create Transcription objects and save them into DB.
                 trss = dict()
                 for turn_num, uturn in enumerate(uturn_ind, start=1):
@@ -227,8 +228,8 @@ def transcribe(request):
                     trs.turn = uturn
                     trs.dialogue_annotation = dg_ann
 
-                # Check the form against any gold items.  If all are OK, return one
-                # code; if not, return another.
+                # Check the form against any gold items.  If all are OK, return
+                # one code; if not, return another.
                 gold_trss = Transcription.objects.filter(
                     dialogue_annotation__dialogue=dg_data,
                     is_gold=True)
@@ -238,18 +239,19 @@ def transcribe(request):
                     submismatch = True
                     for gold_trs in turn_gold_trss:
                         if trss_match(trss[gold_trs.turn.turn_number],
-                                    gold_trs,
-                                    max_char_er=settings.MAX_CHAR_ER):
+                                      gold_trs,
+                                      max_char_er=settings.MAX_CHAR_ER):
                             submismatch = False
                             break
                     if submismatch:
                         mismatch = True
                         trss[gold_trs.turn.turn_number].breaks_gold = True
 
-                # Update transcriptions in the light of their comparison to gold
-                # transcriptions, and save them both into the database, and to the
-                # XML.
-                for turn_num, uturn in enumerate(uturn_ind, start=1):
+                # Update transcriptions in the light of their comparison to
+                # gold transcriptions, and save them both into the database,
+                # and to the XML.
+                for turn_num, uturn in enumerate(uturn_ind,
+                                                 start=1):
                     if not uturn:
                         continue
                     trs = trss[turn_num - 1]
@@ -262,10 +264,11 @@ def transcribe(request):
                                 == turn_num,
                         user_turns)[0]
                     if settings.XML_TRANSCRIPTIONS_ELEM is not None:
-                        trss_xml = turn_xml.find(settings.XML_TRANSCRIPTIONS_ELEM)
+                        trss_xml = turn_xml.find(
+                            settings.XML_TRANSCRIPTIONS_ELEM)
                         if trss_xml is None:
-                            trss_left_sib = \
-                                turn_xml.find(settings.XML_TRANSCRIPTIONS_BEFORE)
+                            trss_left_sib = turn_xml.find(
+                                settings.XML_TRANSCRIPTIONS_BEFORE)
                             if trss_left_sib is None:
                                 insert_idx = len(turn_xml)
                             else:
@@ -340,8 +343,8 @@ def transcribe(request):
                 dialogue_annotation__user=request.user)
             cids_done = set(trs.dialogue_annotation.dialogue.cid
                             for trs in trss_done)
-            cids_todo = set(dg.cid for dg in Dialogue.objects.all()) - \
-                        cids_done
+            cids_todo = (set(dg.cid for dg in Dialogue.objects.all()) -
+                         cids_done)
             # Serve him/her the next free dialogue if there is one, else tell
             # him he is finished.
             try:
@@ -364,8 +367,8 @@ def transcribe(request):
         systurns = SystemTurn.objects.filter(dialogue=dg_data)
         turns = [dict() for _ in xrange(max(len(uturns), len(systurns)))]
         for uturn in uturns:
-            seclast_slash = uturn.wav_fname.rfind(os.sep, 0,
-                                                  uturn.wav_fname.rfind(os.sep))
+            seclast_slash = uturn.wav_fname.rfind(
+                os.sep, 0, uturn.wav_fname.rfind(os.sep))
             wav_fname_rest = uturn.wav_fname[seclast_slash:]
             turns[uturn.turn_number - 1]\
                 .update(turn_number=uturn.turn_number,
@@ -373,8 +376,8 @@ def transcribe(request):
                         has_rec=True)
         for systurn in systurns:
             turns[systurn.turn_number - 1]\
-                    .update(turn_number=systurn.turn_number,
-                            prompt=systurn.text)
+                .update(turn_number=systurn.turn_number,
+                        prompt=systurn.text)
         dbl_turn_num = 0
         for turn in turns:
             turn['dbl_turn_num'] = dbl_turn_num
@@ -505,13 +508,9 @@ def import_dialogues(request):
             json_data.add(dg_data)
             count += 1
     if upload_to_cf:
-        cf_ret = json_data.upload()
-        if cf_ret is not True:
-            if cf_ret is False:
-                cf_error = ('Internal error. Attempted to upload the data '
-                            'twice.')
-            else:
-                cf_error = cf_ret
+        cf_ret, cf_msg = json_data.upload()
+        if cf_ret is False:
+            cf_error = cf_msg
     # Render the response.
     context = dict()
     context['copy_failed'] = copy_failed
@@ -520,7 +519,6 @@ def import_dialogues(request):
     context['dg_existed'] = dg_existed
     if upload_to_cf:
         context['cf_upload'] = True
-        context['cf_url'] = cf_url
         context['cf_error'] = cf_error
     else:
         context['cf_upload'] = False

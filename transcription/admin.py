@@ -5,7 +5,6 @@ from transcription.dg_util import update_price
 from transcription.fields import LinkField
 
 import dg_util
-import settings
 
 
 class DialogueAdmin(admin.ModelAdmin):
@@ -24,17 +23,13 @@ class DialogueAdmin(admin.ModelAdmin):
     update_price_action.short_description = u"Update dialogue price"
 
     def upload_to_crowdflower(modeladmin, request, queryset):
-        # TODO Ask CrowdFlower for list of current CIDs.
-        # TODO Subtract the CIDs already uploaded from `queryset'.
-        # Upload the rest of `queryset' to CrowdFlower.
         json_data = dg_util.JsonDialogueUpload()
-        for dg in queryset:
-            json_data.add(dg)
+        json_data.extend(queryset)
         json_data.upload()
 
     upload_to_crowdflower.short_description = \
-            (u'Upload to CrowdFlower (only those dialogues that have not been '
-             u'uploaded yet)')
+        (u'Upload to CrowdFlower (only those dialogues that have not been '
+         u'uploaded yet)')
 
     actions = [update_price_action, upload_to_crowdflower]
 
@@ -67,4 +62,3 @@ class TranscriptionAdmin(admin.ModelAdmin):
 admin.site.register(Dialogue, DialogueAdmin)
 admin.site.register(DialogueAnnotation, DialogueAnnotationAdmin)
 admin.site.register(Transcription, TranscriptionAdmin)
-

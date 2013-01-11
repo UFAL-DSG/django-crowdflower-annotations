@@ -82,10 +82,6 @@ Below is a breakdown according to the cause.
 {% if cf_upload %}
 	{% if cf_error != None %}
 	<h3>Failed to upload to CrowdFlower</h3>
-	<p>See the error message from CrowdFlower below. The CrowdFlower URL
-	contacted was this: <tt>{{ cf_url }}</tt></p>
-	
-	<h4>Error message</h4>
 	<pre>{{ cf_error }}</pre>
 	{% endif %}
 {% endif %}
