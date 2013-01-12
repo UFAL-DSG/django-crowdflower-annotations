@@ -71,16 +71,11 @@ def update_price(dg):
     dg.transcription_price = price
 
 
-def create_dialogue_json(dg, check_gold=True):
-    if check_gold and is_gold(dg):
-        extra_str = ',"_golden":"True"'
-    else:
-        extra_str = ''
-    json_str = ('{{"cid":"{cid}","code":"{code}","code_gold":"{gold}"{extra}}}'
+def create_dialogue_json(dg):
+    json_str = ('{{"cid":"{cid}","code":"{code}","code_gold":"{gold}"}}'
                 .format(cid=dg.cid,
                         code=dg.code,
-                        gold=dg.get_code_gold(),
-                        extra=extra_str))
+                        gold=dg.get_code_gold()))
     return json_str
 
 

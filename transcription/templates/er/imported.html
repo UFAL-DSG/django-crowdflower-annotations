@@ -27,6 +27,16 @@ There were no errors.
 Below is a breakdown according to the cause.
 </p>
 
+{% if session_missing %}
+<h3>The session XML file not found</h3>
+<table>
+	<tr><th>Name of the directory</th></tr>
+	{% for dirname in session_missing %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
 {% if copy_failed %}
 <h3>Failed to be copied</h3>
 <table>

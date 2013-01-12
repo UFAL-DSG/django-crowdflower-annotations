@@ -409,9 +409,8 @@ def home(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def import_dialogues(request):
+    import shutil
     #     # DIRTY
-    #     import shutil
-    #
     #     shutil.copy('/tmp/db.db', '/webapps/cf_transcription/db/cf_trss.db')
     #     import subprocess
     #     subprocess.call(['chgrp', 'korvas',
@@ -423,9 +422,7 @@ def import_dialogues(request):
     # Check whether the form is yet to be served.
     if not request.GET:
         return render(request, "er/import.html", {})
-    import os
-    import os.path
-    import shutil
+    session_missing = []
     copy_failed = []
     save_failed = []
     save_price_failed = []
@@ -452,6 +449,11 @@ def import_dialogues(request):
         for line in dirlist_file:
             src_fname = line.rstrip()
             dirname = os.path.basename(src_fname.rstrip(os.sep))
+            # Check that that directory contains the required session XML file.
+            if not os.path.isfile(os.path.join(src_fname,
+                                               settings.SESSION_FNAME)):
+                session_missing.append(src_fname)
+                continue
             # Generate CID.
             cid = _hash(dirname)
             # Check that this CID does not collide with a hash for another
@@ -511,8 +513,11 @@ def import_dialogues(request):
         cf_ret, cf_msg = json_data.upload()
         if cf_ret is False:
             cf_error = cf_msg
+        else:
+            cf_error = None
     # Render the response.
     context = dict()
+    context['session_missing'] = session_missing
     context['copy_failed'] = copy_failed
     context['save_failed'] = save_failed
     context['save_price_failed'] = save_price_failed
@@ -524,6 +529,7 @@ def import_dialogues(request):
         context['cf_upload'] = False
     context['csv_fname'] = csv_fname
     context['count'] = count
-    context['n_failed'] = (len(copy_failed) + len(save_failed)
-                           + len(save_price_failed) + len(dg_existed))
+    context['n_failed'] = (len(session_missing) + len(copy_failed)
+                           + len(save_failed) + len(save_price_failed)
+                           + len(dg_existed))
     return render(request, "er/imported.html", context)
