@@ -132,18 +132,26 @@ def create_dialogue_json(dg):
 
 
 class JsonDialogueUpload(object):
+    """A container for dialogues to be uploaded to CrowdFlower. The container
+    is single-use only -- once uploaded, it can be disposed of.
+
+    """
     # TODO: Implementing __len__ might be helpful...
 
-    def __init__(self):
+    def __init__(self, dg_datas=None):
         """Creates a new JSON object to be uploaded to Crowdflower as job data
         for a dialogue.
 
         """
         self._uploaded = False
         self.data = dict()
+        if dg_datas is not None:
+            self.extend(dg_datas)
 
     def add(self, dg):
-        self.data.setdefault(get_job_id(dg), []).append(dg)
+        uturns = UserTurn.objects.filter(dialogue=dg)
+        if len(uturns) >= settings.CF_MIN_TURNS:
+            self.data.setdefault(get_job_id(dg), []).append(dg)
 
     def extend(self, dg_datas):
         for dg in dg_datas:

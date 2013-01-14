@@ -6,6 +6,7 @@ from django.db import models
 from django.db.models.signals import post_save, pre_save
 from django.contrib.auth.models import User
 
+from db_fields import WavField, SizedTextField
 from settings import (CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR,
     SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT,
     XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, XML_TURNNUMBER_ATTR,
@@ -42,17 +43,20 @@ class DialogueAnnotation(models.Model):
     """Represents a single submit of an annotation for a single dialogue."""
     QUALITY_NOISY = 0
     QUALITY_CLEAR = 1
-    QUALITY_CHOICES = ((QUALITY_NOISY, 'noisy'), (QUALITY_CLEAR, 'clear'))
+    QUALITY_CHOICES = ((u'0', 'noisy'),
+                       (QUALITY_NOISY, 'noisy'),
+                       (u'1', 'clear'),
+                       (QUALITY_CLEAR, 'clear'))
     dialogue = models.ForeignKey(Dialogue)
     quality = models.CharField(max_length=1,
                                choices=QUALITY_CHOICES,
                                default=1)
     accent = models.CharField(max_length=100, blank=True, default="")
     offensive = models.BooleanField(default=False)
-    notes = models.TextField(max_length=500, blank=True, default="")
+    notes = SizedTextField(max_length=500, blank=True, default="", rows=3)
     program_version = models.CharField(max_length=40, editable=False)
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
-    date_paid = models.DateTimeField(null=True)
+    date_paid = models.DateTimeField(null=True, blank=True)
     user = models.ForeignKey(User)
 
     def __unicode__(self):
@@ -68,8 +72,8 @@ class DialogueAnnotation(models.Model):
 
 class DialogueTurn(models.Model):
     """An abstract class for one turn in a dialogue."""
-    dialogue = models.ForeignKey(Dialogue, editable=False)
-    turn_number = models.PositiveSmallIntegerField(editable=False)
+    dialogue = models.ForeignKey(Dialogue)
+    turn_number = models.PositiveSmallIntegerField()
 
     class Meta(object):
         abstract = True
@@ -87,10 +91,7 @@ class SystemTurn(DialogueTurn):
 
 class UserTurn(DialogueTurn):
     """A user turn, provided with a path to the recorded sound."""
-    wav_fname = models.FilePathField(path=CONVERSATION_DIR,
-                                     recursive=True,
-                                     unique=True,
-                                     editable=False)
+    wav_fname = WavField(path=CONVERSATION_DIR, recursive=True, unique=True)
 
     def __unicode__(self):
         return u'<UserTurn: n:{num}; f:"{file_}">'.format(
@@ -100,7 +101,7 @@ class UserTurn(DialogueTurn):
 
 class Transcription(models.Model):
     """Transcription of one dialogue turn."""
-    text = models.TextField()
+    text = SizedTextField(rows='3')
     turn = models.ForeignKey(UserTurn)
     dialogue_annotation = models.ForeignKey(DialogueAnnotation)
     is_gold = models.BooleanField(default=False)
