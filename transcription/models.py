@@ -180,10 +180,6 @@ class Transcription(models.Model):
                     author=dg_ann.user.username,
                     ann_attr="annotation",  # hard-wired in views.py, too
                     ann=str(dg_ann.pk))
-#                     date_attr=XML_DATE_ATTR,
-#                     date=(dg_ann.date_saved.strptime(XML_DATE_FORMAT).rstrip()
-#                         if XML_DATE_FORMAT else
-#                         unicode(dg_ann.date_saved)))
         trs_xml = sess_xml.find(trs_path)
         # Update the transcription's element.
         # NOTE Should a new attribute be added to the element, it has to be

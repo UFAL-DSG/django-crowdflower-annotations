@@ -19,6 +19,14 @@ urlpatterns = patterns('',
                            'transcription.views.import_dialogues',
                            name="import_dialogues"),
 
+#                        url(r'^temp-test$',
+#                            'transcription.views.temp_test',
+#                            name="temp_test"),
+
+                       url(r'^log-work$',
+                           'transcription.views.log_work',
+                           name="log_work"),
+
                        url(r'^',
                            'transcription.views.home',
                            name='home')

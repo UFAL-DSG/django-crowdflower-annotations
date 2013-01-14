@@ -13,9 +13,13 @@ from django.contrib.auth.models import User
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
+from django.views.decorators.csrf import csrf_exempt
 
 import dg_util
 import settings
+# XXX: Beware, this imports the settings from within the `transcription'
+# directory. That means that PROJECT_DIR will be
+# /webapps/cf_transcription/transcription, not just /webapps/cf_transcription.
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation, Dialogue,
         UserTurn, SystemTurn)
@@ -42,6 +46,7 @@ def _hash(s):
 class TranscriptionForm(forms.Form):
     quality = forms.CharField()
     accent = forms.CharField()
+    accent_name = forms.CharField(required=False)
     offensive = forms.BooleanField()
     notes = forms.CharField(required=False)
 
@@ -533,3 +538,42 @@ def import_dialogues(request):
                            + len(save_failed) + len(save_price_failed)
                            + len(dg_existed))
     return render(request, "er/imported.html", context)
+
+
+@csrf_exempt
+def log_work(request):
+    try:
+        if request.POST.get(u'signal', None) == u'unit_complete':
+            # Save the request data to a log.
+            from datetime import datetime
+            timestamp = datetime.strftime(datetime.now(), '%y-%m-%d-%H%M%S')
+            while True:
+                log_num = 0
+                log_fname = '{ts}.{num!s}.log'.format(ts=timestamp, num=log_num)
+                log_path = os.path.join(settings.WORKLOGS_DIR, log_fname)
+                if not os.path.exists(log_path):
+                    break
+                else:
+                    log_num += 1
+            with open(log_path, 'w') as log_file:
+                log_file.write(repr(request.POST) if hasattr(request, 'POST')
+                                else 'None')
+            # Record the request to a session XML file.
+            dg_util.record_worker(request)
+    finally:
+        from django.http import HttpResponse
+        return HttpResponse(status=200)
+
+
+# @login_required
+# def temp_test(request):
+#     class C(object):
+#         pass
+#
+#     request = C()
+# #     request.POST = { u'signal': [u'unit_complete'], u'payload': [u'{"missed_count":0, "results":{ "judgments":[ {"webhook_sent_at":null, "city":"Prague", "region":"52", "created_at":"2013-01-13T22:38:14+00:00", "data":{ "code":"724265096"}, "unit_state":"finalized", "country":"CZE", "unit_id":244429837, "worker_trust":1.0, "judgment":1, "tainted":false, "trust":1.0, "id":811258063, "reviewed":null, "unit_data":{ "code_gold":"724265096", "code":"724265", "cid":"b94cca70a55b18a9b69bd77df2cee00e9127cbbb"}, "external_type":"amt", "worker_id":15409001, "missed":null, "started_at":"2013-01-13T22:37:25+00:00", "golden":false, "job_id":159604, "rejected":null}]}, "created_at":"2013-01-12T22:12:37+00:00", "data":{ "code_gold":"724265096", "code":"724265", "cid":"b94cca70a55b18a9b69bd77df2cee00e9127cbbb"}, "agreement":1.0, "updated_at":"2013-01-13T22:38:24+00:00", "judgments_count":1, "id":244429837, "difficulty":0, "job_id":159604, "state":"finalized"}'], u'signature': [u'd0370acdff5b1ac23879c0946f508455937d16c3']}
+#
+#     request.POST = {u'signal': [u'unit_complete'], u'payload': [u'{"missed_count":0,"results":{"judgments":[{"webhook_sent_at":null,"city":"Prague","region":"52","created_at":"2013-01-13T23:45:35+00:00","data":{"code":"119742797"},"unit_state":"finalized","country":"CZE","unit_id":244429841,"worker_trust":1.0,"judgment":1,"tainted":false,"trust":1.0,"id":811304303,"reviewed":null,"unit_data":{"code_gold":"119742797","code":"119742","cid":"b61e5b2cd437548292c71f7442d79f7b7efa097c"},"external_type":"amt","worker_id":15409001,"missed":null,"started_at":"2013-01-13T23:44:41+00:00","golden":false,"job_id":159604,"rejected":null}]},"created_at":"2013-01-12T22:12:37+00:00","data":{"code_gold":"119742797","code":"119742","cid":"b61e5b2cd437548292c71f7442d79f7b7efa097c"},"agreement":1.0,"updated_at":"2013-01-13T23:45:45+00:00","judgments_count":1,"id":244429841,"difficulty":0,"job_id":159604,"state":"finalized"}'], u'signature': [u'b837f155da2de0f49cafcf7a1f5dbb6c64578ade']}
+#     dg_util.record_worker(request)
+#     from django.http import HttpResponse
+#     return HttpResponse(status=200)

@@ -3,7 +3,7 @@
 
 __all__ = ('CONVERSATION_DIR', 'SESSION_FNAME', 'CODE_LENGTH',
            'CODE_LENGTH_EXT', 'CF_KEY', 'CF_JOB_IDS', 'PRICE_CONST',
-           'PRICE_PER_MIN', 'PRICE_PER_TURN', 'MAX_CHAR_ER',
+           'PRICE_PER_MIN', 'PRICE_PER_TURN', 'MAX_CHAR_ER', 'WORKLOGS_DIR',
            'XML_USERTURN_PATH', 'XML_SYSTURN_PATH', 'XML_TURNNUMBER_ATTR',
            'XML_REC_SUBPATH', 'XML_REC_FNAME_ATTR', 'XML_SYSTEXT_SUBPATH',
            'XML_TRANSCRIPTIONS_BEFORE', 'XML_TRANSCRIPTIONS_ELEM',
@@ -14,6 +14,7 @@ __all__ = ('CONVERSATION_DIR', 'SESSION_FNAME', 'CODE_LENGTH',
 
 
 CONVERSATION_DIR = "/webapps/cf_transcription/data/conversations"
+WORKLOGS_DIR = "/webapps/cf_transcription/data/work_logs"
 SESSION_FNAME = 'session-fixed.xml'
 
 CODE_LENGTH = 6  # length of the validation code
