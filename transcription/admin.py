@@ -74,6 +74,18 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
 
     date_hierarchy = 'date_saved'
 
+    def update_gold_action(modeladmin, request, queryset):
+        dialogues = set(dg_ann.dialogue for dg_ann in queryset)
+        for dialogue in dialogues:
+            success, _ = update_gold(dialogue)
+            if not success:
+                raise ValueError()
+
+    update_gold_action.short_description = \
+            u"Update gold status of related dialogues on CF"
+
+    actions = [update_gold_action]
+
 
 class TranscriptionAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_updated'
