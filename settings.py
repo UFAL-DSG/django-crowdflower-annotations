@@ -7,6 +7,7 @@ import sys
 PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
 if not PROJECT_DIR in sys.path:
     sys.path += [PROJECT_DIR]
+sys.path += [PYLIBS_DIR]
 
 # Django settings for the `transcription' project.
 

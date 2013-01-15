@@ -48,11 +48,13 @@ def update_gold(dg):
         msg = unit_pair
         return False, msg
     unit_id, unit = unit_pair
-    params = 'unit[state]={gold}'.format(
-        gold=('golden' if is_gold(dg) else unit['state']))
-    success, errors = update_unit(job_id, unit_id, params)
-    if not success:
-        return False, errors
+    dg_is_gold = is_gold(dg)
+    if dg_is_gold != (unit['state'] == 'golden'):
+        success, errors = update_unit(
+            job_id, unit_id, 'unit[state]={state}'.format(
+                state='golden' if dg_is_gold else 'new'))
+        if not success:
+            return False, errors
     return True, None
 
 

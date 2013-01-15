@@ -394,7 +394,7 @@ def trss_match(trs1, trs2, max_char_er=0.):
 
     """
     # a shortcut
-    if norm1 == norm2:
+    if trs1 == trs2:
         return True
 
     norm1 = normalise_trs_text(trs1.text)

@@ -1,6 +1,8 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
+# TODO: Reimplement without backing off to using the external program curl.
 import json
+from lru_cache import lru_cache
 import shutil
 from subprocess import call
 from tempfile import TemporaryFile
@@ -11,7 +13,8 @@ from util import get_log_path
 CF_URL_START = "https://api.crowdflower.com/v1/"
 
 
-def contact_cf(cf_url_part, data=None, json_str=None, verb='POST', log=True):
+def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
+               log=settings.LOG_CURL):
     """Note that specifying both `data' and `json_str' is not supported and
     the `data' argument will be silently ignored in such a case.
 
@@ -43,7 +46,9 @@ def contact_cf(cf_url_part, data=None, json_str=None, verb='POST', log=True):
     # Call the command.
     if log and logfile:
         logfile.write('Command: {cmd}\n----\nReturned: \n'
-                      .format(cmd=''.join(curl_args)))
+                      .format(cmd=' '.join(
+                          map(lambda arg: arg if ' ' not in arg else
+                              "'{arg}'".format(arg=arg), curl_args))))
     cf_retcode = call(curl_args, stdout=upload_outfile, stderr=None)
     if log and logfile:
         if upload_outfile:
@@ -80,10 +85,11 @@ def contact_cf(cf_url_part, data=None, json_str=None, verb='POST', log=True):
     return True, cf_outobj, tuple()
 
 
+@lru_cache(maxsize=10)
 def list_units(job_id):
     # Check what units are currently uploaded for the job.
     cf_url = 'jobs/{jobid}/units'.format(jobid=job_id)
-    success, cf_outobj, errors = contact_cf(cf_url, verb='GET')
+    success, cf_outobj, errors = _contact_cf(cf_url, verb='GET')
     if success:
         # The `cf_outobj' is expected to be a dictionary of the following
         # format:
@@ -99,8 +105,10 @@ def list_units(job_id):
 def upload_units(job_id, json_str):
     # Communicate the new data to CrowdFlower via the CF API.
     cf_url = 'jobs/{jobid}/upload'.format(jobid=job_id)
-    success, msg, error_msgs = contact_cf(cf_url, json_str=json_str)
+    success, msg, error_msgs = _contact_cf(cf_url, json_str=json_str)
     if success:
+        list_units.cache_clear()
+        unit_id_from_cid.cache_clear()
         return True, None
     else:
         lead = 'job {jobid}: '.format(jobid=job_id)
@@ -115,7 +123,7 @@ def unit_pair_from_cid(job_id, cid):
     else:
         cf_url = 'jobs/{jobid}/units/{unitid}'.format(jobid=job_id,
                                                       unitid=unit_id)
-        success, msg, error_msgs = contact_cf(cf_url, verb='GET')
+        success, msg, error_msgs = _contact_cf(cf_url, verb='GET')
         if success:
             return True, (unit_id, msg)
         else:
@@ -124,6 +132,7 @@ def unit_pair_from_cid(job_id, cid):
                            'dialogue CID {cid}.').format(cid=cid, jobid=job_id)
 
 
+@lru_cache(maxsize=2000)
 def unit_id_from_cid(job_id, cid):
     success, msg = list_units(job_id)
     if not success:
@@ -144,7 +153,7 @@ def unit_id_from_cid(job_id, cid):
 
 def update_unit(job_id, unit_id, params):
     cf_url = 'jobs/{jobid}/units/{unitid}'.format(jobid=job_id, unitid=unit_id)
-    success, msg, error_msgs = contact_cf(cf_url, verb='PUT', data=params)
+    success, msg, error_msgs = _contact_cf(cf_url, verb='PUT', data=params)
     if success:
         return True, None
     else:

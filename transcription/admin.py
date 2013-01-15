@@ -49,7 +49,7 @@ class DialogueAdmin(admin.ModelAdmin):
 
     def update_gold_action(modeladmin, request, queryset):
         for dg in queryset:
-            success, _ = update_gold(dg)
+            success, msg = update_gold(dg)
             if not success:
                 raise ValueError()
 
