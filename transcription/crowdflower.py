@@ -1,21 +1,27 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 import json
+import shutil
 from subprocess import call
 from tempfile import TemporaryFile
 
 import settings
+from util import get_log_path
 
 CF_URL_START = "https://api.crowdflower.com/v1/"
 
 
-def contact_cf(cf_url_part, data=None, json_str=None, verb='POST'):
+def contact_cf(cf_url_part, data=None, json_str=None, verb='POST', log=True):
     """Note that specifying both `data' and `json_str' is not supported and
     the `data' argument will be silently ignored in such a case.
 
     """
     # Create a file for the response from CF.
     try:
+        if log:
+            logfile = open(get_log_path(settings.CURLLOGS_DIR), 'w')
+        else:
+            logfile = None
         upload_outfile = TemporaryFile()
     except:
         error_msgs = ["Output from `curl' could not be obtained.\n"]
@@ -35,7 +41,15 @@ def contact_cf(cf_url_part, data=None, json_str=None, verb='POST'):
         curl_args = ['curl', '-X', verb, '-d', json_str, '-H',
                      'Content-Type: application/json', cf_url]
     # Call the command.
+    if log and logfile:
+        logfile.write('Command: {cmd}\n----\nReturned: \n'
+                      .format(cmd=''.join(curl_args)))
     cf_retcode = call(curl_args, stdout=upload_outfile, stderr=None)
+    if log and logfile:
+        if upload_outfile:
+            upload_outfile.seek(0)
+            logfile.write(upload_outfile.read())
+        logfile.write('\n----\nReturn code: {code}\n'.format(code=cf_retcode))
     # Check for errors.
     cf_outobj = None
     if upload_outfile is not None:
@@ -45,9 +59,11 @@ def contact_cf(cf_url_part, data=None, json_str=None, verb='POST'):
         except ValueError:
             cf_outobj = None
             # DEBUG
-            upload_outfile.seek(0)
-            raise ValueError('Unexpected reply from CF: {file}'.format(
-                file=upload_outfile.read()))
+            # (If annoyed by the exception, you can just delete the lines
+            # raising it.)
+            # upload_outfile.seek(0)
+            # raise ValueError('Unexpected reply from CF: {file}'.format(
+            #     file=upload_outfile.read()))
         finally:
             upload_outfile.close()
     if cf_retcode != 0:

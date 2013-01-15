@@ -17,6 +17,7 @@ from django.views.decorators.csrf import csrf_exempt
 
 import dg_util
 import settings
+from util import get_log_path
 # XXX: Beware, this imports the settings from within the `transcription'
 # directory. That means that PROJECT_DIR will be
 # /webapps/cf_transcription/transcription, not just /webapps/cf_transcription.
@@ -550,16 +551,7 @@ def log_work(request):
         try:
             if request.POST.get(u'signal', None) == u'unit_complete':
                 # Save the request data to a log.
-                from datetime import datetime
-                timestamp = datetime.strftime(datetime.now(), '%y-%m-%d-%H%M%S')
-                while True:
-                    log_num = 0
-                    log_fname = '{ts}.{num!s}.log'.format(ts=timestamp, num=log_num)
-                    log_path = os.path.join(settings.WORKLOGS_DIR, log_fname)
-                    if not os.path.exists(log_path):
-                        break
-                    else:
-                        log_num += 1
+                log_path = get_log_path(settings.WORKLOGS_DIR)
                 with open(log_path, 'w') as log_file:
                     log_file.write(repr(request.POST) if hasattr(request, 'POST')
                                     else 'None')
