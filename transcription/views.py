@@ -91,8 +91,10 @@ def _gen_codes():
                     for _ in xrange(settings.CODE_LENGTH)])
     code_corr = ''.join([random.choice('0123456789')
                          for _ in xrange(settings.CODE_LENGTH_EXT)])
-    code_incorr = ''.join([random.choice('0123456789')
-                           for _ in xrange(settings.CODE_LENGTH_EXT)])
+    code_incorr = code_corr
+    while code_incorr == code_corr:
+        code_incorr = ''.join([random.choice('0123456789')
+                               for _ in xrange(settings.CODE_LENGTH_EXT)])
     return (code, code_corr, code_incorr)
 
 
@@ -244,14 +246,14 @@ def transcribe(request):
                 for turn_gold_trss in gold_trss.itervalues():
                     submismatch = True
                     for gold_trs in turn_gold_trss:
-                        if trss_match(trss[gold_trs.turn.turn_number],
+                        if trss_match(trss[gold_trs.turn.turn_number - 1],
                                       gold_trs,
                                       max_char_er=settings.MAX_CHAR_ER):
                             submismatch = False
                             break
                     if submismatch:
                         mismatch = True
-                        trss[gold_trs.turn.turn_number].breaks_gold = True
+                        trss[gold_trs.turn.turn_number - 1].breaks_gold = True
 
                 # Update transcriptions in the light of their comparison to
                 # gold transcriptions, and save them both into the database,
