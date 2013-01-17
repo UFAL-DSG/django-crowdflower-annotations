@@ -12,6 +12,10 @@ UserTurn_nt = namedtuple('UserTurn_nt', ['turn_number', 'wav_fname'])
 SystemTurn_nt = namedtuple('SystemTurn_nt', ['turn_number', 'text'])
 
 
+class FileNotFoundError(Exception):
+    pass
+
+
 class XMLSession(object):
     """A context manager for handling XML files capturing dialogue sessions.
     These objects account for different versions of the XML scheme of sessions
@@ -20,19 +24,25 @@ class XMLSession(object):
     """
     xml_parser = etree.XMLParser(remove_blank_text=True)
 
-    def __init__(self, cid):
-        # Find the right session XML file.
+    @classmethod
+    def find_session_fname(cls, dirname):
+        """Finds the right session file and returns its path."""
         try:
             sess_fnames = settings.SESSION_FNAMES
         except AttributeError:
             sess_fnames = (settings.SESSION_FNAME, )
-        self.dirname = os.path.join(settings.CONVERSATION_DIR, cid)
         for sess_fname in sess_fnames:
-            sess_path = os.path.join(self.dirname, sess_fname)
+            sess_path = os.path.join(dirname, sess_fname)
             if os.path.isfile(sess_path):
                 break
-        # Set own fields.
-        self.sess_path = sess_path
+        else:
+            raise FileNotFoundError('No session XML file was found in {dir}.'
+                                    .format(dir=dirname))
+        return sess_path
+
+    def __init__(self, cid):
+        self.dirname = os.path.join(settings.CONVERSATION_DIR, cid)
+        self.sess_path = self.find_session_fname(self.dirname)
         self.sess_xml = None
 
     def __enter__(self):
@@ -195,7 +205,13 @@ class XMLSession(object):
 
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):
-            text = systurn_xml.findtext(self.SYSTEXT_SUBPATH).strip()
+            turn_number = systurn_xml.attrib[self.TURNNUMBER_ATTR]
+            try:
+                text = systurn_xml.findtext(self.SYSTEXT_SUBPATH).strip()
+            except AttributeError:
+                # Some turns might not have the text subelement.
+                yield SystemTurn_nt(turn_number, "")
+                continue
             # Throw away some distracting pieces of system prompts.
             if (text.startswith("Thank you for using")
                     or text.startswith("Thank you goodbye")):
@@ -204,5 +220,4 @@ class XMLSession(object):
                 "Thank you for calling the Cambridge Information system. "
                 "Your call will be recorded for research purposes.",
                 "").strip()
-            turn_number = systurn_xml.attrib[self.TURNNUMBER_ATTR]
             yield SystemTurn_nt(turn_number, text)

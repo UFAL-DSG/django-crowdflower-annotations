@@ -185,6 +185,11 @@ class JsonDialogueUpload(object):
                 success = True
             else:
                 success, msg = upload_units(job_id, json_str)
+                if success:
+                    for dg in self.data[job_id]:
+                        success, msg = update_gold(dg)
+                        if not success:
+                            error_msgs.append(msg)
             if not success:
                 error_msgs.append(msg)
 

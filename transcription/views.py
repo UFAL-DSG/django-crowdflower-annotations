@@ -15,7 +15,7 @@ from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
 import dg_util
-from session_xml import XMLSession
+from session_xml import FileNotFoundError, XMLSession
 import settings
 from util import get_log_path
 # XXX: Beware, this imports the settings from within the `transcription'
@@ -102,7 +102,7 @@ def _read_dialogue_turns(dg_data, dirname=None):
     with XMLSession(dg_data.cid) as session:
         # Process user turns.
         for uturn in session.iter_uturns():
-            if uturn.rec is not None:
+            if uturn.wav_fname is not None:
                 UserTurn(
                     dialogue=dg_data,
                     turn_number=uturn.turn_number,
@@ -358,11 +358,12 @@ def import_dialogues(request):
         csv_file.write('cid, code, code_gold\n')
         # Process the dialogue files.
         for line in dirlist_file:
-            src_fname = line.rstrip()
-            dirname = os.path.basename(src_fname.rstrip(os.sep))
+            src_fname = line.rstrip().rstrip(os.sep)
+            dirname = os.path.basename(src_fname)
             # Check that that directory contains the required session XML file.
-            if not os.path.isfile(os.path.join(src_fname,
-                                               settings.SESSION_FNAME)):
+            try:
+                XMLSession.find_session_fname(src_fname)
+            except FileNotFoundError:
                 session_missing.append(src_fname)
                 continue
             # Generate CID.
