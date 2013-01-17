@@ -397,7 +397,8 @@ def import_dialogues(request):
                                code=dg_codes[0],
                                code_corr=dg_codes[1],
                                code_incorr=dg_codes[2],
-                               dirname=dirname)
+                               dirname=dirname,
+                               list_filename=dirlist_fname)
             try:
                 dg_data.save()
             except:

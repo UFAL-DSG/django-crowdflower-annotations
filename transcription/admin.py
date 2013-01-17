@@ -47,7 +47,7 @@ class DialogueAdmin(admin.ModelAdmin):
         models.ForeignKey: {'form_class': LinkField}
     }
     inlines = [ DgAnnInline, UTurnInline ]
-    search_fields = ['cid', 'code', 'dirname']
+    search_fields = ['cid', 'code', 'dirname', 'list_filename']
 
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
