@@ -6,7 +6,6 @@ import hashlib
 import os
 import random
 from subprocess import check_output
-import lxml.etree as etree
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
@@ -16,14 +15,15 @@ from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
 import dg_util
+from session_xml import XMLSession
 import settings
 from util import get_log_path
 # XXX: Beware, this imports the settings from within the `transcription'
 # directory. That means that PROJECT_DIR will be
 # /webapps/cf_transcription/transcription, not just /webapps/cf_transcription.
 from tr_normalisation import trss_match
-from transcription.models import (Transcription, DialogueAnnotation, Dialogue,
-        UserTurn, SystemTurn)
+from transcription.models import Transcription, DialogueAnnotation, \
+    Dialogue, UserTurn, SystemTurn
 
 
 def group_by(objects, attrs):
@@ -61,10 +61,10 @@ class TranscriptionForm(forms.Form):
         self.fields['cid'] = forms.CharField(widget=forms.HiddenInput(),
                                              initial=cid)
 
-        for turn_num, has_rec in enumerate(uturn_ind):
+        for turn_num, has_rec in enumerate(uturn_ind, start=1):
             if not has_rec:
                 continue
-            self.fields['trs_{0}'.format(turn_num + 1)] = \
+            self.fields['trs_{0}'.format(turn_num)] = \
                 forms.CharField(widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
                     label=turn_num)
@@ -99,43 +99,19 @@ def _gen_codes():
 
 
 def _read_dialogue_turns(dg_data, dirname=None):
-    if dirname is None:
-        dirname = os.path.join(settings.CONVERSATION_DIR, dg_data.cid)
-    sess_xml = etree.parse(os.path.join(dirname, settings.SESSION_FNAME))
-    # Process user turns.
-    for uturn_xml in sess_xml.iterfind(settings.XML_USERTURN_PATH):
-        rec = uturn_xml.find(settings.XML_REC_SUBPATH)
-        if rec is not None:
-            rec = rec.attrib[settings.XML_REC_FNAME_ATTR]
-            turn = UserTurn(
-                dialogue=dg_data,
-                turn_number=uturn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
-                wav_fname=os.path.join(dirname, rec))
-            turn.save()
-    # Process system turns.
-    for systurn_xml in sess_xml.iterfind(settings.XML_SYSTURN_PATH):
-        text = systurn_xml.findtext(settings.XML_SYSTEXT_SUBPATH).strip()
-        # Throw away some distracting pieces of system prompts.
-        if (text.startswith("Thank you for using")
-                or text.startswith("Thank you goodbye")):
-            continue
-        text = text.replace("Thank you for calling the Cambridge Information "
-                            "system. Your call will be recorded for research "
-                            "purposes.",
-                            "").strip()
-        turn = SystemTurn(
-            dialogue=dg_data,
-            turn_number=systurn_xml.attrib[settings.XML_TURNNUMBER_ATTR],
-            text=text)
-        turn.save()
-
-
-if settings.XML_DATE_FORMAT:
-    def format_datetime_xml(dt):
-        return dt.strptime(settings.XML_DATE_FORMAT)
-else:
-    def format_datetime_xml(dt):
-        return unicode(dt)
+    with XMLSession(dg_data.cid) as session:
+        # Process user turns.
+        for uturn in session.iter_uturns():
+            if uturn.rec is not None:
+                UserTurn(
+                    dialogue=dg_data,
+                    turn_number=uturn.turn_number,
+                    wav_fname=os.path.join(dirname, uturn.wav_fname)).save()
+        # Process system turns.
+        for systurn in session.iter_systurns():
+            SystemTurn(dialogue=dg_data,
+                       turn_number=systurn.turn_number,
+                       text=systurn.text).save()
 
 
 def transcribe(request):
@@ -167,152 +143,75 @@ def transcribe(request):
         if form.is_valid():
             dummy_user = User.objects.get(username='testres')
             # Read the XML session file.
-            dg_dir = os.path.join(settings.CONVERSATION_DIR, cid)
-            sess_fname = os.path.join(dg_dir, settings.SESSION_FNAME)
-            xml_parser = etree.XMLParser(remove_blank_text=True)
-            with open(sess_fname, 'r+') as sess_file:
-                sess_xml = etree.parse(sess_file, xml_parser)
-            user_turns = sess_xml.findall(settings.XML_USERTURN_PATH)
-            # Create the DialogueAnnotation object and save it into DB.
-            dg_ann = DialogueAnnotation()
-            dg_ann.dialogue = dg_data
-            dg_ann.program_version = unicode(check_output(
-                ["git", "rev-parse", "HEAD"],
-                cwd=settings.PROJECT_DIR).rstrip('\n'))
-            dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
-                              request.POST['quality'] == 'clear'
-                              else DialogueAnnotation.QUALITY_NOISY)
-            dg_ann.accent = ("" if request.POST['accent'] == 'native'
-                             else form.cleaned_data['accent_name'])
-            dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
-            dg_ann.notes = form.cleaned_data['notes']
-            if request.user.is_authenticated():
-                dg_ann.user = request.user
-            else:
-                # A dummy user.
-                dg_ann.user = dummy_user
-            dg_ann.save()
+            with XMLSession(cid) as session:
+                # Create the DialogueAnnotation object and save it into DB.
+                dg_ann = DialogueAnnotation()
+                dg_ann.dialogue = dg_data
+                dg_ann.program_version = unicode(check_output(
+                    ["git", "rev-parse", "HEAD"],
+                    cwd=settings.PROJECT_DIR).rstrip('\n'))
+                dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
+                                  request.POST['quality'] == 'clear'
+                                  else DialogueAnnotation.QUALITY_NOISY)
+                dg_ann.accent = ("" if request.POST['accent'] == 'native'
+                                 else form.cleaned_data['accent_name'])
+                dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
+                dg_ann.notes = form.cleaned_data['notes']
+                if request.user.is_authenticated():
+                    dg_ann.user = request.user
+                else:
+                    # A dummy user.
+                    dg_ann.user = dummy_user
+                dg_ann.save()
 
-            if not uturns:
-                mismatch = False
-            else:
-                # Insert dialogue annotations into the XML.
-                # First, find the annotations element or create one.
-                anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
-                anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
-                anns_after_idx = (anns_above.index(anns_after)
-                                  if anns_after is not None
-                                  else len(anns_above))
-                found_anns = False
-                if anns_after_idx > 0:
-                    anns_el = anns_above[anns_after_idx - 1]
-                    if anns_el.tag == settings.XML_ANNOTATIONS_ELEM:
-                        found_anns = True
-                if not found_anns:
-                    anns_el = etree.Element(settings.XML_ANNOTATIONS_ELEM)
-                    anns_above.insert(anns_after_idx, anns_el)
-                # Second, create an appropriate element for the new annotation.
-                etree.SubElement(
-                    anns_el,
-                    settings.XML_ANNOTATION_ELEM,
-                    id=str(dg_ann.pk),
-                    quality=('clear'
-                        if dg_ann.quality == DialogueAnnotation.QUALITY_CLEAR
-                        else 'noisy'),
-                    accent=dg_ann.accent or "native",
-                    offensive=str(dg_ann.offensive),
-                    program_version=dg_ann.program_version,
-                    date_saved=format_datetime_xml(dg_ann.date_saved),
-                    user=dg_ann.user.username)\
-                        .text = dg_ann.notes
-                # Create Transcription objects and save them into DB.
-                trss = dict()
-                for turn_num, uturn in enumerate(uturn_ind, start=1):
-                    if not uturn:
-                        continue
-                    trs = Transcription()
-                    trss[turn_num - 1] = trs
-                    trs.text = form.cleaned_data['trs_{0}'.format(turn_num)]
-                    trs.turn = uturn
-                    trs.dialogue_annotation = dg_ann
+                if not uturns:
+                    mismatch = False
+                else:
+                    # Insert dialogue annotations into the XML.
+                    session.add_annotation(dg_ann)
+                    # Create Transcription objects and save them into DB.
+                    trss = dict()
+                    for turn_num, uturn in enumerate(uturn_ind, start=1):
+                        if not uturn:
+                            continue
+                        trs = Transcription()
+                        trss[turn_num - 1] = trs
+                        trs.text = form.cleaned_data[
+                            'trs_{0}'.format(turn_num)]
+                        trs.turn = uturn
+                        trs.dialogue_annotation = dg_ann
 
-                # Check the form against any gold items.  If all are OK, return
-                # one code; if not, return another.
-                gold_trss = Transcription.objects.filter(
-                    dialogue_annotation__dialogue=dg_data,
-                    is_gold=True)
-                gold_trss = group_by(gold_trss, ('turn', ))
-                mismatch = False
-                for turn_gold_trss in gold_trss.itervalues():
-                    submismatch = True
-                    for gold_trs in turn_gold_trss:
-                        if trss_match(trss[gold_trs.turn.turn_number - 1],
-                                      gold_trs,
-                                      max_char_er=settings.MAX_CHAR_ER):
-                            submismatch = False
-                            break
-                    if submismatch:
-                        mismatch = True
-                        trss[gold_trs.turn.turn_number - 1].breaks_gold = True
+                    # Check the form against any gold items.  If all are OK,
+                    # return one code; if not, return another.
+                    gold_trss = Transcription.objects.filter(
+                        dialogue_annotation__dialogue=dg_data,
+                        is_gold=True)
+                    gold_trss = group_by(gold_trss, ('turn', ))
+                    mismatch = False
+                    for turn_gold_trss in gold_trss.itervalues():
+                        submismatch = True
+                        for gold_trs in turn_gold_trss:
+                            if trss_match(trss[gold_trs.turn.turn_number - 1],
+                                          gold_trs,
+                                          max_char_er=settings.MAX_CHAR_ER):
+                                submismatch = False
+                                break
+                        if submismatch:
+                            mismatch = True
+                            trss[gold_trs.turn.turn_number - 1]\
+                                .breaks_gold = True
 
-                # Update transcriptions in the light of their comparison to
-                # gold transcriptions, and save them both into the database,
-                # and to the XML.
-                for turn_num, uturn in enumerate(uturn_ind,
-                                                 start=1):
-                    if not uturn:
-                        continue
-                    trs = trss[turn_num - 1]
-                    trs.some_breaks_gold = mismatch
-                    trs.save()
-                    # Reflect the transcription in the XML.
-                    turn_xml = filter(
-                        lambda turn_xml: \
-                            int(turn_xml.get(settings.XML_TURNNUMBER_ATTR)) \
-                                == turn_num,
-                        user_turns)[0]
-                    if settings.XML_TRANSCRIPTIONS_ELEM is not None:
-                        trss_xml = turn_xml.find(
-                            settings.XML_TRANSCRIPTIONS_ELEM)
-                        if trss_xml is None:
-                            trss_left_sib = turn_xml.find(
-                                settings.XML_TRANSCRIPTIONS_BEFORE)
-                            if trss_left_sib is None:
-                                insert_idx = len(turn_xml)
-                            else:
-                                insert_idx = turn_xml.index(trss_left_sib) + 1
-                            trss_xml = \
-                                etree.Element(settings.XML_TRANSCRIPTIONS_ELEM)
-                            turn_xml.insert(insert_idx, trss_xml)
-                    else:
-                        trss_xml = turn_xml
-                    trs_xml = etree.Element(
-                        settings.XML_TRANSCRIPTION_ELEM,
-                        author=dg_ann.user.username,
-                        annotation=str(dg_ann.pk),
-                        is_gold="0",
-                        breaks_gold="1" if trs.breaks_gold else "0",
-                        some_breaks_gold="1" if mismatch else "0",
-                        program_version=dg_ann.program_version)
-                    trs_xml.set(settings.XML_DATE_ATTR,
-                                format_datetime_xml(dg_ann.date_saved))
-                    trs_xml.text = trs.text
-                    if settings.XML_TRANSCRIPTION_BEFORE:
-                        trs_left_sib = \
-                            trss_xml.find(settings.XML_TRANSCRIPTION_BEFORE)
-                    else:
-                        trs_left_sib = None
-                    if trs_left_sib is None:
-                        insert_idx = len(trss_xml)
-                    else:
-                        insert_idx = trss_xml.index(trs_left_sib) + 1
-                    trss_xml.insert(insert_idx, trs_xml)
-            # Write the XML session file.
-            with open(sess_fname, 'w') as sess_file:
-                sess_file.write(etree.tostring(sess_xml,
-                                               pretty_print=True,
-                                               xml_declaration=True,
-                                               encoding='UTF-8'))
+                    # Update transcriptions in the light of their comparison to
+                    # gold transcriptions, and save them both into the
+                    # database, and to the XML.
+                    for turn_num, uturn in enumerate(uturn_ind, start=1):
+                        if not uturn:
+                            continue
+                        trs = trss[turn_num - 1]
+                        trs.some_breaks_gold = mismatch
+                        trs.save()
+                        # Reflect the transcription in the XML.
+                        session.add_transcription(trs)
 
             context = dict()
             context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
@@ -418,14 +317,17 @@ def home(request):
 @user_passes_test(lambda u: u.is_staff)
 def import_dialogues(request):
     import shutil
-    #     # DIRTY
-    #     shutil.copy('/tmp/db.db', '/webapps/cf_transcription/db/cf_trss.db')
-    #     import subprocess
-    #     subprocess.call(['chgrp', 'korvas',
-    #                         '/webapps/cf_transcription/db/cf_trss.db'])
-    #     subprocess.call(['chmod', 'g+w',
-    #     '/webapps/cf_transcription/db/cf_trss.db'])
-    #     return render(request, "er/import.html", {})
+
+    # # DIRTY
+    # shutil.copy('/webapps/cf_transcription/db/cf_trss.db',
+    #             '/webapps/cf_transcription/db/cf_trss.db~')
+    # shutil.copy('/tmp/cf_trss.db', '/webapps/cf_transcription/db/cf_trss.db')
+    # import subprocess
+    # subprocess.call(['chgrp', 'korvas',
+    #                  '/webapps/cf_transcription/db/cf_trss.db'])
+    # subprocess.call(['chmod', 'g+w',
+    #                  '/webapps/cf_transcription/db/cf_trss.db'])
+    # return render(request, "er/import.html", {})
 
     # Check whether the form is yet to be served.
     if not request.GET:
@@ -555,8 +457,8 @@ def log_work(request):
                 # Save the request data to a log.
                 log_path = get_log_path(settings.WORKLOGS_DIR)
                 with open(log_path, 'w') as log_file:
-                    log_file.write(repr(request.POST) if hasattr(request, 'POST')
-                                    else 'None')
+                    log_file.write(repr(request.POST)
+                                   if hasattr(request, 'POST') else 'None')
         except Exception:
             pass
         # Record the request to a session XML file.

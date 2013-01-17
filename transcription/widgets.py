@@ -1,10 +1,19 @@
 from django.core.urlresolvers import reverse, NoReverseMatch
-from django.forms.widgets import HiddenInput, Widget
+from django.forms.widgets import HiddenInput, TextInput, Widget
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 
 from settings import CONVERSATION_DIR, MEDIA_URL
+
+
+class ROInput(TextInput):
+    """A read-only input."""
+
+    def render(self, name, value, attrs=None):
+        attrs[u'readonly'] = u'true'
+        with_equals = super(TextInput, self).render(name, value, attrs)
+        return mark_safe(with_equals.replace(u'readonly="true"', u'readonly'))
 
 
 def get_object_link(model, attrs):

@@ -1,33 +1,34 @@
 #!/usr/bin/env python2
 # -*- coding: UTF-8 -*-
-import os.path
-import lxml.etree as etree
+# import os.path
+# import lxml.etree as etree
 from django.db import models
 from django.db.models.signals import post_save, pre_save
 from django.contrib.auth.models import User
 
-from db_fields import WavField, SizedTextField
-from settings import (CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR,
-    SESSION_FNAME, XML_AUTHOR_ATTR, XML_DATE_ATTR, XML_DATE_FORMAT,
-    XML_TRANSCRIPTIONS_ELEM, XML_TRANSCRIPTION_ELEM, XML_TURNNUMBER_ATTR,
-    XML_USERTURN_PATH)
+from db_fields import ROCharField, WavField, SizedTextField
+from session_xml import XMLSession
+from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
+    LISTS_DIR
 
 
 class Dialogue(models.Model):
     """Provides the mapping between conversation IDs and corresponding
     dirnames."""
-    cid = models.CharField(max_length=40, unique=True, primary_key=True, editable=False)
+    cid = ROCharField(max_length=40, unique=True, primary_key=True)
     """ conversation ID """
-    dirname = models.CharField(max_length=40, unique=True, editable=False)
+    dirname = ROCharField(max_length=40, unique=True)
     """ the original name of the dialogue directory """
-    code = models.CharField(max_length=CODE_LENGTH)
+    code = ROCharField(max_length=CODE_LENGTH)
     """ check code -- the base """
-    code_corr = models.CharField(max_length=CODE_LENGTH_EXT)
+    code_corr = ROCharField(max_length=CODE_LENGTH_EXT)
     """ check code -- the extension in case of no mismatch with gold items """
-    code_incorr = models.CharField(max_length=CODE_LENGTH_EXT)
+    code_incorr = ROCharField(max_length=CODE_LENGTH_EXT)
     """ check code -- the extension in case of a mismatch with gold items """
     transcription_price = models.FloatField(null=True)
     """ price of this dialogue's transcriptions in USD """
+    list_filename = models.FilePathField(path=LISTS_DIR, recursive=True,
+                                         null=True, blank=True)
 
     def __unicode__(self):
         return u'({c}: {d})'.format(c=self.cid, d=self.dirname)
@@ -81,7 +82,7 @@ class DialogueTurn(models.Model):
 
 class SystemTurn(DialogueTurn):
     """A system turn, provided with a textual representation of the prompt."""
-    text = models.CharField(max_length=255, editable=False)
+    text = ROCharField(max_length=255)
 
     def __unicode__(self):
         return u'<SysTurn: n:{num}; "{text}">'.format(
@@ -134,7 +135,7 @@ class Transcription(models.Model):
             # Check whether another transcribed segment from the same
             # annotation breaks gold too.
             trss = Transcription.objects.filter(
-                       dialogue_annotation=trs.dialogue_annotation)
+                dialogue_annotation=trs.dialogue_annotation)
             some_breaks_gold = False
             for ann_trs in trss:
                 if ann_trs == trs:
@@ -163,43 +164,20 @@ class Transcription(models.Model):
         trs = kwargs.pop('instance')
         cid = trs.dialogue_annotation.dialogue.cid
         # Read the XML session file.
-        dg_dir = os.path.join(CONVERSATION_DIR, cid)
-        sess_fname = os.path.join(dg_dir, SESSION_FNAME)
-        with open(sess_fname, 'r+') as sess_file:
-            sess_xml = etree.parse(sess_file)
-        # Find the transcription's element.
-        dg_ann = trs.dialogue_annotation
-        trs_path = ("{uturn}[@{turn_attr}='{turn}']{trss}/{trs}"
-                    "[@{auth_attr}='{author}'][@{ann_attr}='{ann}']").format(
-                    uturn=XML_USERTURN_PATH,
-                    turn_attr=XML_TURNNUMBER_ATTR,
-                    turn=str(trs.turn.turn_number),
-                    trss=(("/" + XML_TRANSCRIPTIONS_ELEM)
-                          if XML_TRANSCRIPTIONS_ELEM else ""),
-                    trs=XML_TRANSCRIPTION_ELEM,
-                    auth_attr=XML_AUTHOR_ATTR,
-                    author=dg_ann.user.username,
-                    ann_attr="annotation",  # hard-wired in views.py, too
-                    ann=str(dg_ann.pk))
-        trs_xml = sess_xml.find(trs_path)
-        # Update the transcription's element.
-        # NOTE Should a new attribute be added to the element, it has to be
-        # added also in views.py:transcribe() (the case of a valid bound form).
-        attribs = trs_xml.attrib
-        attribs['annotation'] = str(trs.dialogue_annotation.pk)
-        attribs['is_gold'] = '1' if trs.is_gold else '0'
-        attribs['breaks_gold'] = '1' if trs.breaks_gold else '0'
-        attribs['some_breaks_gold'] = '1' if trs.some_breaks_gold else '0'
-        attribs['date_updated'] = \
-            (trs.date_updated.strptime(XML_DATE_FORMAT) if XML_DATE_FORMAT
-             else unicode(trs.date_updated))
-        trs_xml.text = trs.text
-        # Write the XML session file.
-        with open(sess_fname, 'w') as sess_file:
-            sess_file.write(etree.tostring(sess_xml,
-                                           pretty_print=True,
-                                           xml_declaration=True,
-                                           encoding='UTF-8'))
+        with XMLSession(cid) as session:
+            # Find the transcription's element.
+            trs_xml = session.find_or_create_transcription(trs)
+            # Update the transcription's element.
+            # NOTE Should a new attribute be added to the element, it has to be
+            # added also in views.py:transcribe() (the case of a valid bound
+            # form).
+            attribs = trs_xml.attrib
+            attribs['annotation'] = str(trs.dialogue_annotation.pk)
+            attribs['is_gold'] = '1' if trs.is_gold else '0'
+            attribs['breaks_gold'] = '1' if trs.breaks_gold else '0'
+            attribs['some_breaks_gold'] = '1' if trs.some_breaks_gold else '0'
+            attribs['date_updated'] = session.format_datetime(trs.date_updated)
+            trs_xml.text = trs.text
 
 
 pre_save.connect(Transcription.pre_save, sender=Transcription)

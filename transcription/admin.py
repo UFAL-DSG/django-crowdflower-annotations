@@ -5,14 +5,16 @@ from django.db import models
 from transcription.models import Dialogue, DialogueAnnotation, \
         Transcription, UserTurn
 from transcription.dg_util import JsonDialogueUpload, update_gold, update_price
-from transcription.db_fields import SizedTextField
+from transcription.db_fields import SizedTextField, ROCharField
 from transcription.form_fields import LinkField
+from transcription.widgets import ROInput
 
 
 class DgAnnInline(admin.TabularInline):
     model = DialogueAnnotation
     extra = 0
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
 
@@ -21,6 +23,7 @@ class TranscriptionInline(admin.TabularInline):
     model = Transcription
     extra = 0
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})},
         models.ForeignKey: {'form_class': LinkField}
     }
@@ -29,6 +32,9 @@ class TranscriptionInline(admin.TabularInline):
 class UTurnInline(admin.TabularInline):
     model = UserTurn
     extra = 0
+    formfield_overrides = {
+        ROCharField: {'widget': ROInput}
+    }
 
 
 class DialogueAdmin(admin.ModelAdmin):
@@ -36,9 +42,12 @@ class DialogueAdmin(admin.ModelAdmin):
     list_display = ['dirname', 'cid', 'transcription_price', 'code',
                     'code_corr', 'code_incorr']
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
+        models.FilePathField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField}
     }
     inlines = [ DgAnnInline, UTurnInline ]
+    search_fields = ['cid', 'code', 'dirname']
 
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
@@ -67,6 +76,7 @@ class DialogueAdmin(admin.ModelAdmin):
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
@@ -92,6 +102,7 @@ class TranscriptionAdmin(admin.ModelAdmin):
     fields = ('text', 'turn', 'dialogue_annotation', 'is_gold', 'breaks_gold')
     raw_id_fields = ('turn', 'dialogue_annotation')
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
@@ -107,6 +118,7 @@ class TranscriptionAdmin(admin.ModelAdmin):
 
 class UserTurnAdmin(admin.ModelAdmin):
     formfield_overrides = {
+        ROCharField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField},
     }
     inlines = [ TranscriptionInline ]

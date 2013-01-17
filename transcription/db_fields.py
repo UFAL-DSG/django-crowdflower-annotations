@@ -2,7 +2,16 @@ from django import forms
 from django.db.models import fields
 from django.utils.translation import ugettext_lazy as _
 
-from transcription import form_fields
+from transcription import form_fields, widgets
+
+
+class ROCharField(fields.CharField):
+    description = _("Read-only string (up to %(max_length)s)")
+
+    def formfield(self, **kwargs):
+        defaults = {'widget': widgets.ROInput}
+        defaults.update(kwargs)
+        return super(ROCharField, self).formfield(**defaults)
 
 
 class WavField(fields.FilePathField):

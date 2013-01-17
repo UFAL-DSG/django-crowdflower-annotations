@@ -1,5 +1,5 @@
 from django import forms
-from cf_transcription.transcription.widgets import LinkWidget, PlayWidget
+from transcription.widgets import LinkWidget, PlayWidget
 from django.forms.models import ModelChoiceField
 
 

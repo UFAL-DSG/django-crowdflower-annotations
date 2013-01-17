@@ -1,23 +1,16 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 
-__all__ = ('APP_ROOT', 'PYLIBS_DIR', 'CF_MIN_TURNS', 'CURLLOGS_DIR',
-           'CONVERSATION_DIR', 'SESSION_FNAME', 'CODE_LENGTH',
-           'CODE_LENGTH_EXT', 'CF_KEY', 'CF_JOB_IDS', 'LOG_CURL',
-           'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN', 'MAX_CHAR_ER',
-           'WORKLOGS_DIR', 'XML_USERTURN_PATH', 'XML_SYSTURN_PATH',
-           'XML_TURNNUMBER_ATTR', 'XML_REC_SUBPATH', 'XML_REC_FNAME_ATTR',
-           'XML_SYSTEXT_SUBPATH', 'XML_TRANSCRIPTIONS_BEFORE',
-           'XML_TRANSCRIPTIONS_ELEM', 'XML_TRANSCRIPTION_BEFORE',
-           'XML_TRANSCRIPTION_ELEM', 'XML_AUTHOR_ATTR', 'XML_DATE_ATTR',
-           'XML_DATE_FORMAT', 'XML_ANNOTATIONS_ABOVE', 'XML_ANNOTATIONS_AFTER',
-           'XML_ANNOTATIONS_ELEM', 'XML_ANNOTATION_ELEM',)
-
 APP_ROOT = "/webapps/cf_transcription"
 PYLIBS_DIR = APP_ROOT + "/libs/python"
 
 CONVERSATION_DIR = APP_ROOT + "/data/conversations"
+LISTS_DIR = APP_ROOT + "/data/lists"
 SESSION_FNAME = 'session-fixed.xml'
+SESSION_FNAMES = ('session-fixed.xml', 'session.xml')
+# alternatives, tried from the first (up to the last if the previous did not
+# exist)
+
 WORKLOGS_DIR = APP_ROOT + "/log/work_logs"
 CURLLOGS_DIR = APP_ROOT + "/log/curl_logs"
 LOG_CURL = False
@@ -48,44 +41,43 @@ CF_MIN_TURNS = 2
 # tolerated.
 MAX_CHAR_ER = 0.07
 
-# Definitions for the old version of session.xml files:
-XML_ANNOTATIONS_ABOVE = "."
-XML_ANNOTATIONS_AFTER = "turn"  # This has to point to a direct child of
-                                # XML_ANNOTATIONS_ABOVE.
-XML_ANNOTATIONS_ELEM = "annotations"
-XML_ANNOTATION_ELEM = "annotation"
-XML_USERTURN_PATH = ".//userturn"
-XML_SYSTURN_PATH = ".//systurn"
-XML_TURNNUMBER_ATTR = "turnnum"
-XML_REC_SUBPATH = "rec"
-XML_REC_FNAME_ATTR = "fname"
-XML_SYSTEXT_SUBPATH = "prompt"
-XML_TRANSCRIPTIONS_BEFORE = "asr"
-XML_TRANSCRIPTIONS_ELEM = "transcriptions"
-XML_TRANSCRIPTION_BEFORE = None
-XML_TRANSCRIPTION_ELEM = "transcription"
-XML_AUTHOR_ATTR = "author"
-XML_DATE_ATTR = "date_updated"
-XML_DATE_FORMAT = None
+XML_COMMON = {
+    'ANNOTATIONS_ABOVE': ".",
+    'ANNOTATIONS_AFTER': "turn",  # This has to point to a direct child of
+                                  # ANNOTATIONS_ABOVE.
+    'ANNOTATIONS_ELEM': "annotations",
+    'ANNOTATION_ELEM': "annotation",
+    'REC_SUBPATH': "rec",
+    'REC_FNAME_ATTR': "fname"
+}
 
-# Definitions for the new version of session.xml files:
-# XML_ANNOTATIONS_ABOVE = "."
-# XML_ANNOTATIONS_AFTER = "turn"  # This has to point to a direct child of
-#                                 # XML_ANNOTATIONS_ABOVE.
-# XML_ANNOTATIONS_ELEM = "annotations"
-# XML_ANNOTATION_ELEM = "annotation"
-# XML_USERTURN_PATH = ".//turn[@speaker='user']"
-# XML_SYSTURN_PATH = ".//turn[@speaker='system']"
-# XML_TURNNUMBER_ATTR = "turn_number"
-# XML_REC_SUBPATH = "rec"
-# XML_REC_FNAME_ATTR = "fname"
-# XML_SYSTEXT_SUBPATH = "text"
-# XML_TRANSCRIPTIONS_BEFORE = None
-# XML_TRANSCRIPTIONS_ELEM = None
-# XML_TRANSCRIPTION_BEFORE = "slu"
-# XML_TRANSCRIPTION_ELEM = "asr_transcription"
-# XML_AUTHOR_ATTR = "transcriber"
-# XML_DATE_ATTR = "date"
-# # NOTE: including timezone info into the datetime format could disable
-# # finding the transcription in its XML if the timezone setting changes
-# XML_DATE_FORMAT = "%d/%m/%y %H:%M:%S %Z"
+XML_SCHEMES = {
+    'dialog': {
+        'USERTURN_PATH': ".//userturn",
+        'SYSTURN_PATH': ".//systurn",
+        'TURNNUMBER_ATTR': "turnnum",
+        'SYSTEXT_SUBPATH': "prompt",
+        'TRANSCRIPTIONS_BEFORE': "asr",
+        'TRANSCRIPTIONS_ELEM': "transcriptions",
+        'TRANSCRIPTION_BEFORE': None,
+        'TRANSCRIPTION_ELEM': "transcription",
+        'AUTHOR_ATTR': "author",
+        'DATE_ATTR': "date_updated",
+        'DATE_FORMAT': None
+    },
+    'dialogue': {
+        'USERTURN_PATH': ".//turn[@speaker='user']",
+        'SYSTURN_PATH': ".//turn[@speaker='system']",
+        'TURNNUMBER_ATTR': "turn_number",
+        'SYSTEXT_SUBPATH': "text",
+        'TRANSCRIPTIONS_BEFORE': None,
+        'TRANSCRIPTIONS_ELEM': None,
+        'TRANSCRIPTION_BEFORE': "slu",
+        'TRANSCRIPTION_ELEM': "asr_transcription",
+        'AUTHOR_ATTR': "transcriber",
+        'DATE_ATTR': "date",
+# NOTE: including timezone info into the datetime format could disable
+# finding the transcription in its XML if the timezone setting changes
+        'DATE_FORMAT': "%d/%m/%y, %H:%M:%S %Z"
+    }
+}
