@@ -22,8 +22,13 @@ form label {
 		display: block;
 }
 
+div.success_msg {
+	border: 2px solid green;
+}
+
 div#ins, div#dg {
 	display: inline-block;
+	vertical-align: top;
 }
 
 div#ins {
@@ -358,108 +363,24 @@ p.user { color: orange; }
 		
 		<div id="ins-inner">
 			<p>
-			The recordings and input fields will be enabled gradually, each time you 
-			finish listening to the previous recording. You can replay each sound any 
-			time later.
+			The recordings and input fields will be enabled gradually, each time 
+			you finish listening to the previous recording. You can move between 
+			the Play/Next buttons and text areas using the tab key. You will be 
+			able to replay each sound any time later.
 			</p>
 
-			<h3>Ortography</h3>
-			<p>
-			Please, try to avoid spelling errors. Punctuation and capitalisation 
-			generally do not matter. The exception is with acronyms &ndash; 
-			please transcribe acronyms in uppercase letters.
-			</p>
+			{% for fname in instruction_includes %}
+				{% include fname %}
+			{% endfor %}
 
-			<h3>Numerals</h3>
-			<p>
-			Please, do <em>not</em> use numbers to transcribe numerals; 
-			spell them out:
-			<div class="quote">
-				<table>
-					<tr>
-						<td>53</td>
-						<td class="no">NO</td>
-					<tr>
-						<td>fifty three</td>
-						<td class="yes">YES</td>
-					</tr>
-				</table>
-			</div>
-			</p>
-
-			<h3>Incomplete Words</h3>
-			<p>
-			If a word is pronounced incomplete, put &lsquo;-&rsquo; (dash) before 
-			or after the pronounced part of the word.
-			</p>
-			<p>
-			<strong>Examples:</strong> incomp- -eech -crastinat-
-			</p>
-
-			<h3>Non-speech Sounds</h3>
-			<p>
-			For non-speech sounds, you can transcribe them using the following symbols:
-			</p>
-	
-			<table class="booktabs">
-				<tr>
-					<th>symbol</th>
-					<th>meaning</th>
-				</tr>
-				<tr>
-					<td>(breath)</td>
-					<td>the sound of breathing, sniffing etc.</td>
-				</tr>
-				<tr>
-					<td>(cough)</td>
-					<td>the sound of coughing</td>
-				</tr>
-				<tr>
-					<td>(hum)</td>
-					<td>humming (all of <em>hum</em>, <em>erm</em>, <em>ehm hmm</em> 
-							etc.)</td>
-				</tr>
-				<tr>
-					<td>(laugh)</td>
-					<td>laughter</td>
-				</tr>
-				<tr>
-					<td>(noise)</td>
-					<td>noise on the background</td>
-				</tr>
-				<tr>
-					<td>(sil)</td>
-					<td>silence if it is prominent or if there is nothing else to transcribe</td>
-				</tr>
-				<tr>
-					<td>(unint)</td>
-					<td>unintelligible speech</td>
-				</tr>
-			</table>
-
-			<h3>Local Names</h3>
-			<p>
-			The following table lists the correct spelling of some place names 
-			that could otherwise be problematic to transcribe:
-			</p>
-			<div class="quote">
-				<table class="booktabs noheader">
-					<tr><td>Addenbrooke's</td>		 <td>Girton</td>			<td>Chesterton</td></tr>
-					<tr><td>Gonville and Caius</td><td>Castlehill</td>	<td>Romsey</td></tr>
-					<tr><td>Barnwell</td>					 <td>Huntingdon</td>	<td>Coco</td></tr>
-					<tr><td>Fen Ditton</td>				 <td>Cherryhinton</td><td>Trumpington</td></tr>
-					<tr><td>Brasserie</td>				 <td>Newnham</td>			<td></td></tr>
-				</table>
-			</div>
-
-			<p>
-			Please, <strong>DO NOT SPAM</strong>. We will check the responses, 
-			and reject all responses from spammers.
-			</p>
 		</div>
 	</div>
 	
 	<div id="dg">
+		{% if success == "True" %}
+			<div class="success_msg">Last annotation has been successfully 
+				saved.</div>
+		{% endif %}
 		<h2>The dialogue</h2>
 		<div>
 		<form action="" method="POST" id="phases" class="accordion">
@@ -480,14 +401,14 @@ p.user { color: orange; }
 					Human:
 				</div>
 				<div>
-					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
-						tabindex="{{ turn.dbl_turn_num|add:1 }}"
-						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}');">Play</button>
-				</div>
-				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
 						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
 						tabindex="{{ turn.dbl_turn_num|add:2 }}"></textarea>
+				</div>
+				<div>
+					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
+						tabindex="{{ turn.dbl_turn_num|add:1 }}"
+						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}');">Play</button>
 				</div>
 			{% else %}
 				<div>
@@ -557,7 +478,8 @@ p.user { color: orange; }
 					</tr>
 					<tr>
 						<td colspan="3">
-							<label for="id_notes">Should you have any other comments to the dialogue, you can write them down to the box below:</label>
+							<label for="id_notes">Should you have any comments to the 
+						dialogue, you can write them down to the box below:</label>
 						</td>
 					</tr>
 					<tr>

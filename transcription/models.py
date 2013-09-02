@@ -1,7 +1,8 @@
 #!/usr/bin/env python2
 # -*- coding: UTF-8 -*-
-# import os.path
-# import lxml.etree as etree
+# This code is PEP8-compliant. See http://www.python.org/dev/peps/pep-0008/.
+from __future__ import unicode_literals
+
 from django.db import models
 from django.db.models.signals import post_save, pre_save
 from django.contrib.auth.models import User
@@ -13,8 +14,9 @@ from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
 
 
 class Dialogue(models.Model):
-    """Provides the mapping between conversation IDs and corresponding
-    dirnames."""
+    """
+    Provides the mapping between conversation IDs and corresponding dirnames.
+    """
     cid = ROCharField(max_length=40, unique=True, primary_key=True)
     """ conversation ID """
     dirname = ROCharField(max_length=40, unique=True)
@@ -31,7 +33,7 @@ class Dialogue(models.Model):
                                          null=True, blank=True)
 
     def __unicode__(self):
-        return u'({c}: {d})'.format(c=self.cid, d=self.dirname)
+        return '({c}: {d})'.format(c=self.cid, d=self.dirname)
 
     def get_codes(self):
         return self.code, self.code_corr, self.code_incorr
@@ -58,17 +60,18 @@ class DialogueAnnotation(models.Model):
     program_version = models.CharField(max_length=40, editable=False)
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
     date_paid = models.DateTimeField(null=True, blank=True)
+    finished = models.BooleanField(default=True)
     user = models.ForeignKey(User)
 
     def __unicode__(self):
-        return (u'(u: {u}; saved: {ds}; q: {q}; acc: {acc}; off: {off}; dg: '
-                u'{dg})').format(u=self.user.username,
-                                 ds=self.date_saved,
-                                 q=DialogueAnnotation.QUALITY_CHOICES[
-                                     int(self.quality)][1],
-                                 acc=(self.accent or "native"),
-                                 off=self.offensive,
-                                 dg=self.dialogue.cid)
+        return ('(u: {u}; saved: {ds}; q: {q}; acc: {acc}; off: {off}; dg: '
+                '{dg})').format(u=self.user.username,
+                                ds=self.date_saved,
+                                q=DialogueAnnotation.QUALITY_CHOICES[
+                                    int(self.quality)][1],
+                                acc=(self.accent or "native"),
+                                off=self.offensive,
+                                dg=self.dialogue.cid)
 
 
 class DialogueTurn(models.Model):
@@ -85,7 +88,7 @@ class SystemTurn(DialogueTurn):
     text = ROCharField(max_length=255)
 
     def __unicode__(self):
-        return u'<SysTurn: n:{num}; "{text}">'.format(
+        return '<SysTurn: n:{num}; "{text}">'.format(
             num=self.turn_number,
             text=self.text.replace('"', '\\"'))
 
@@ -95,7 +98,7 @@ class UserTurn(DialogueTurn):
     wav_fname = WavField(path=CONVERSATION_DIR, recursive=True, unique=True)
 
     def __unicode__(self):
-        return u'<UserTurn: n:{num}; f:"{file_}">'.format(
+        return '<UserTurn: n:{num}; f:"{file_}">'.format(
             num=self.turn_number,
             file_=self.wav_fname)
 
@@ -113,10 +116,10 @@ class Transcription(models.Model):
     date_updated = models.DateTimeField(auto_now=True)
 
     def __unicode__(self):
-        return u'({g}{b}{B} u:{u}, t:{t}, d:{d}, "{trs}")'\
-            .format(g=(u"G" if self.is_gold else u"_"),
-                    b=(u"b" if self.some_breaks_gold else u"_"),
-                    B=(u"B" if self.breaks_gold else u"_"),
+        return '({g}{b}{B} u:{u}, t:{t}, d:{d}, "{trs}")'\
+            .format(g=("G" if self.is_gold else u"_"),
+                    b=("b" if self.some_breaks_gold else u"_"),
+                    B=("B" if self.breaks_gold else u"_"),
                     u=self.dialogue_annotation.user,
                     t=self.turn.turn_number,
                     d=self.dialogue_annotation.dialogue.dirname,
@@ -124,9 +127,8 @@ class Transcription(models.Model):
 
     @staticmethod
     def pre_save(sender, **kwargs):
-        """Makes sure that the specified values from the user are
-        consistent.
-
+        """
+        Makes sure that the specified values from the user are consistent.
         """
         trs = kwargs.pop('instance')
         # `is_gold = True' shall dictate values for `breaks_gold' and

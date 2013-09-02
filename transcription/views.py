@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 #
 # TODO: User.objects.get_or_create(dummy_user) where appropriate.
+from datetime import datetime
 import hashlib
 import os
 import random
@@ -9,6 +10,7 @@ from subprocess import check_output
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
+from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
@@ -64,10 +66,10 @@ class TranscriptionForm(forms.Form):
         for turn_num, has_rec in enumerate(uturn_ind, start=1):
             if not has_rec:
                 continue
-            self.fields['trs_{0}'.format(turn_num)] = \
-                forms.CharField(widget=forms.Textarea(
+            self.fields['trs_{0}'.format(turn_num)] = forms.CharField(
+                widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
-                    label=turn_num)
+                label=turn_num)
 
     def __unicode__(self):
         import pprint
@@ -81,20 +83,23 @@ class TranscriptionForm(forms.Form):
 
 
 def finished(request):
-    return render(request, "er/finished.html")
+    return render(request, "trs/finished.html")
 
 
 def _gen_codes():
-    """Generates a random code for a dialogue, to be used in validation of CF
-    workers' input."""
-    code = ''.join([random.choice('0123456789')
-                    for _ in xrange(settings.CODE_LENGTH)])
-    code_corr = ''.join([random.choice('0123456789')
-                         for _ in xrange(settings.CODE_LENGTH_EXT)])
+    """
+    Generates a random code for a dialogue, to be used in validation of CF
+    workers' input.
+    """
+
+    code = ''.join(random.choice('0123456789')
+                   for _ in xrange(settings.CODE_LENGTH))
+    code_corr = ''.join(random.choice('0123456789')
+                        for _ in xrange(settings.CODE_LENGTH_EXT))
     code_incorr = code_corr
     while code_incorr == code_corr:
-        code_incorr = ''.join([random.choice('0123456789')
-                               for _ in xrange(settings.CODE_LENGTH_EXT)])
+        code_incorr = ''.join(random.choice('0123456789')
+                              for _ in xrange(settings.CODE_LENGTH_EXT))
     return (code, code_corr, code_incorr)
 
 
@@ -116,6 +121,8 @@ def _read_dialogue_turns(dg_data, dirname=None):
 
 def transcribe(request):
 
+    success = None  # whether annotation data have been successfully stored
+
     # If the form has been submitted,
     if request.method == "POST":
         # Re-create the form object.
@@ -123,9 +130,10 @@ def transcribe(request):
         try:
             dg_data = Dialogue.objects.get(cid=cid)
         except Dialogue.DoesNotExist:
-            response = render(request, "er/nosuchcid.html")
-            # NOTE Perhaps not needed after all...
-            response['X-Frame-Options'] = 'ALLOWALL'
+            response = render(request, "trs/nosuchcid.html")
+            if settings.USE_CF:
+                # NOTE Perhaps not needed after all...
+                response['X-Frame-Options'] = 'ALLOWALL'
             return response
         dg_codes = dg_data.get_codes()
         uturns = UserTurn.objects.filter(dialogue=dg_data)
@@ -142,27 +150,39 @@ def transcribe(request):
 
         if form.is_valid():
             dummy_user = User.objects.get(username='testres')
-            # Read the XML session file.
-            with XMLSession(cid) as session:
-                # Create the DialogueAnnotation object and save it into DB.
+
+            # Create the DialogueAnnotation object and save it into DB.
+            dg_ann = None
+            if request.user.is_authenticated():
+                open_dg_ann = DialogueAnnotation.objects.filter(
+                    user=request.user, dialogue=dg_data, finished=False)
+                if open_dg_ann.exists():
+                    dg_ann = open_dg_ann[0]
+                    dg_ann.finished = True
+
+            if dg_ann is None:
                 dg_ann = DialogueAnnotation()
                 dg_ann.dialogue = dg_data
-                dg_ann.program_version = unicode(check_output(
-                    ["git", "rev-parse", "HEAD"],
-                    cwd=settings.PROJECT_DIR).rstrip('\n'))
-                dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
-                                  request.POST['quality'] == 'clear'
-                                  else DialogueAnnotation.QUALITY_NOISY)
-                dg_ann.accent = ("" if request.POST['accent'] == 'native'
-                                 else form.cleaned_data['accent_name'])
-                dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
-                dg_ann.notes = form.cleaned_data['notes']
-                if request.user.is_authenticated():
-                    dg_ann.user = request.user
-                else:
-                    # A dummy user.
-                    dg_ann.user = dummy_user
-                dg_ann.save()
+
+            dg_ann.program_version = unicode(check_output(
+                ["git", "rev-parse", "HEAD"],
+                cwd=settings.PROJECT_DIR).rstrip('\n'))
+            dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
+                                request.POST['quality'] == 'clear'
+                                else DialogueAnnotation.QUALITY_NOISY)
+            dg_ann.accent = ("" if request.POST['accent'] == 'native'
+                                else form.cleaned_data['accent_name'])
+            dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
+            dg_ann.notes = form.cleaned_data['notes']
+            if request.user.is_authenticated():
+                dg_ann.user = request.user
+            else:
+                # A dummy user.
+                dg_ann.user = dummy_user
+            dg_ann.save()
+
+            # Read the XML session file.
+            with XMLSession(cid) as session:
 
                 if not uturns:
                     mismatch = False
@@ -198,8 +218,8 @@ def transcribe(request):
                                 break
                         if submismatch:
                             mismatch = True
-                            trss[gold_trs.turn.turn_number - 1]\
-                                .breaks_gold = True
+                            (trss[gold_trs.turn.turn_number - 1]
+                                .breaks_gold) = True
 
                     # Update transcriptions in the light of their comparison to
                     # gold transcriptions, and save them both into the
@@ -214,44 +234,93 @@ def transcribe(request):
                         session.add_transcription(trs)
 
             context = dict()
-            context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
-                                             dg_codes[1])
-            return render(request,
-                          "er/code.html",
-                          context,
-                          context_instance=RequestContext(request))
+
+            # If working with Crowdflower,
+            if settings.USE_CF:
+                # Render a page showing the dialogue code.
+                context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
+                                                 dg_codes[1])
+                return render(request,
+                              "trs/code.html",
+                              context,
+                              context_instance=RequestContext(request))
+            # Else, if working locally, continue to serving a blank form.
+            else:
+                success = True
         # If the form is not valid,
         else:
+            # Touch the current DialogueAnnotation.
+            DialogueAnnotation.objects.filter(
+                user=request.user, dialogue=dg_data).update(finished=False)
+
             # Populate context with data from the previous dialogue (form).
-            context = dict()
+            context = settings.TRANSCRIBE_EXTRA_CONTEXT
             for key, value in request.POST.iteritems():
                 context[key] = value
             context['form'] = form
             response = render(request,
-                              "er/transcribe.html",
+                              "trs/transcribe.html",
                               context,
                               context_instance=RequestContext(request))
-            # NOTE Perhaps not needed after all...
-            response['X-Frame-Options'] = 'ALLOWALL'
+            if settings.USE_CF:
+                # NOTE Perhaps not needed after all...
+                response['X-Frame-Options'] = 'ALLOWALL'
             return response
-    # Else, if a blank form is to be served,
-    else:
-        # Find the dialogue to transcribe.
-        dg_data = None
-        cid = request.GET.get("cid", None)
-        # If the request did not specify the `cid' as a GET parameter,
-        if cid is None:
-            # Anonymous user cannot be helped.
-            if request.user.is_anonymous():
-                return HttpResponseRedirect("finished")
-            # For a user, who is logged in, find a suitable dialogue to
-            # transcribe.
-            trss_done = Transcription.objects.filter(
-                dialogue_annotation__user=request.user)
-            cids_done = set(trs.dialogue_annotation.dialogue.cid
-                            for trs in trss_done)
-            cids_todo = (set(dg.cid for dg in Dialogue.objects.all()) -
-                         cids_done)
+
+    # If a blank form is to be served:
+    open_annions = None
+
+    # Find the dialogue to transcribe.
+    dg_data = None
+    cid = None if request.method == 'POST' else request.GET.get("cid", None)
+    # If the request did not specify the `cid' as a GET parameter,
+    if cid is None:
+        # Anonymous user cannot be helped.
+        if request.user.is_anonymous():
+            return HttpResponseRedirect("finished")
+        # For a user who is logged in, find a suitable dialogue to transcribe.
+
+        # Try using the last started annotation of this user.
+        open_annions = DialogueAnnotation.objects.filter(user=request.user,
+                                                         finished=False)
+        if open_annions.exists():
+            assert len(open_annions) == 1
+            dg_data = open_annions[0].dialogue
+            cid = dg_data.cid
+        else:
+            # If there is no open annotation for this user, find a dialogue
+            # that is free to annotate.
+
+            # Start by deleting old open transcriptions.
+            sessions_earliest_start = datetime.now() - settings.SESSION_EXPIRED
+            (DialogueAnnotation.objects.filter(
+                finished=False, date_saved__lte=sessions_earliest_start)
+                .delete())
+
+            # Count which dialogues have not the full required number of
+            # transcriptions.
+            if settings.MAX_ANNOTATIONS_PER_INPUT is None:
+                cids_done = set()
+            else:
+                _max_annions = settings.MAX_ANNOTATIONS_PER_INPUT  # shorthand
+                # XXX Not sure whether the following line does what it should
+                # do.  However, for MAX_ANNOTATIONS_PER_INPUT=1, it definitely
+                # works.
+                dg_ann_counts = DialogueAnnotation.objects.annotate(
+                    Count('dialogue')).filter(
+                        dialogue__count__gte=_max_annions)
+                cids_done = set(ann.dialogue.cid for ann in dg_ann_counts)
+            # If being annotated by this user does not imply the dialogue was
+            # already included in the above query results,
+            if (settings.MAX_ANNOTATIONS_PER_INPUT is None
+                    or settings.MAX_ANNOTATIONS_PER_INPUT > 1):
+                # Exclude dialogues annotated by this user explicitly.
+                trss_done = Transcription.objects.filter(
+                    dialogue_annotation__user=request.user)
+                cids_done.update(trs.dialogue_annotation.dialogue.cid
+                                 for trs in trss_done)
+            cids_todo = (set(dg.cid for dg in Dialogue.objects.all())
+                         - cids_done)
             # Serve him/her the next free dialogue if there is one, else tell
             # him he is finished.
             try:
@@ -259,58 +328,69 @@ def transcribe(request):
             except KeyError:
                 return HttpResponseRedirect("finished")
             dg_data = Dialogue.objects.get(cid=cid)
-        # If `cid' was specified as a GET parameter,
-        if dg_data is None:
-            # Find the corresponding Dialogue object in the DB.
-            try:
-                dg_data = Dialogue.objects.get(cid=cid)
-            except Dialogue.DoesNotExist:
-                response = render(request, "er/nosuchcid.html")
+    # If `cid' was specified as a GET parameter,
+    if dg_data is None:
+        # Find the corresponding Dialogue object in the DB.
+        try:
+            dg_data = Dialogue.objects.get(cid=cid)
+        except Dialogue.DoesNotExist:
+            response = render(request, "trs/nosuchcid.html")
+            if settings.USE_CF:
                 # NOTE Perhaps not needed after all...
                 response['X-Frame-Options'] = 'ALLOWALL'
-                return response
-        # Prepare the data about turns into a form suitable for the template.
-        uturns = UserTurn.objects.filter(dialogue=dg_data)
-        systurns = SystemTurn.objects.filter(dialogue=dg_data)
-        turns = [dict() for _ in xrange(max(len(uturns), len(systurns)))]
-        for uturn in uturns:
-            seclast_slash = uturn.wav_fname.rfind(
-                os.sep, 0, uturn.wav_fname.rfind(os.sep))
-            wav_fname_rest = uturn.wav_fname[seclast_slash:]
-            turns[uturn.turn_number - 1]\
-                .update(turn_number=uturn.turn_number,
-                        rec=wav_fname_rest,
-                        has_rec=True)
-        for systurn in systurns:
-            turns[systurn.turn_number - 1]\
-                .update(turn_number=systurn.turn_number,
-                        prompt=systurn.text)
-        dbl_turn_num = 0
-        for turn in turns:
-            turn['dbl_turn_num'] = dbl_turn_num
-            if not 'has_rec' in turn:
-                turn['has_rec'] = False
-            dbl_turn_num += 2
+            return response
 
-        uturn_ind = map(lambda turn: turn['has_rec'], turns)
+    # Store a new DialogueAnnotation.
+    if open_annions is not None and open_annions.exists():
+        open_annions.update(finished=False)
+    else:
+        DialogueAnnotation(user=request.user,
+                           dialogue=dg_data,
+                           finished=False).save()
 
-        context = dict()
-        context['turns'] = turns
-        context['dbl_num_turns'] = 2 * len(turns)
-        context['codes'] = dg_data.get_codes()
-        context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
+    # Prepare the data about turns into a form suitable for the template.
+    uturns = UserTurn.objects.filter(dialogue=dg_data)
+    systurns = SystemTurn.objects.filter(dialogue=dg_data)
+    turns = [dict() for _ in xrange(max(len(uturns), len(systurns)))]
+    for uturn in uturns:
+        seclast_slash = uturn.wav_fname.rfind(
+            os.sep, 0, uturn.wav_fname.rfind(os.sep))
+        wav_fname_rest = uturn.wav_fname[seclast_slash:]
+        turns[uturn.turn_number - 1].update(turn_number=uturn.turn_number,
+                                            rec=wav_fname_rest,
+                                            has_rec=True)
+    for systurn in systurns:
+        turns[systurn.turn_number - 1].update(turn_number=systurn.turn_number,
+                                              prompt=systurn.text)
+    dbl_turn_num = 0
+    for turn in turns:
+        turn['dbl_turn_num'] = dbl_turn_num
+        if not 'has_rec' in turn:
+            turn['has_rec'] = False
+        dbl_turn_num += 2
+
+    uturn_ind = map(lambda turn: turn['has_rec'], turns)
+
+    context = settings.TRANSCRIBE_EXTRA_CONTEXT
+    context['success'] = str(success)
+    context['turns'] = turns
+    context['dbl_num_turns'] = 2 * len(turns)
+    context['codes'] = dg_data.get_codes()
+    context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
     response = render(request,
-                      "er/transcribe.html",
+                      "trs/transcribe.html",
                       context,
                       context_instance=RequestContext(request))
-    # NOTE Perhaps not needed after all...
-    response['X-Frame-Options'] = 'ALLOWALL'
+    if settings.USE_CF:
+        # NOTE Perhaps not needed after all...
+        response['X-Frame-Options'] = 'ALLOWALL'
+
     return response
 
 
 @login_required
 def home(request):
-    return render(request, "er/home.html")
+    return render(request, "trs/home.html")
 
 
 @login_required
@@ -327,12 +407,15 @@ def import_dialogues(request):
     #                  '/webapps/cf_transcription/db/cf_trss.db'])
     # subprocess.call(['chmod', 'g+w',
     #                  '/webapps/cf_transcription/db/cf_trss.db'])
-    # return render(request, "er/import.html", {})
+    # return render(request, "trs/import.html", {})
 
     # Check whether the form is yet to be served.
     if not request.GET:
-        return render(request, "er/import.html", {})
+        context = {'use_cf': settings.USE_CF}
+        return render(request, "trs/import.html", context,
+                      context_instance=RequestContext(request))
     session_missing = []
+    session_empty = []
     copy_failed = []
     save_failed = []
     save_price_failed = []
@@ -348,7 +431,7 @@ def import_dialogues(request):
             csv_fname = os.path.join(settings.CONVERSATION_DIR, csv_fname)
     dirlist_fname = request.GET['list_fname']
     ignore_exdirs = request.GET.get('ignore_exdirs', False)
-    upload_to_cf = request.GET.get('upload', True)
+    upload_to_cf = settings.USE_CF and request.GET.get('upload', True)
 
     with open(dirlist_fname, 'r') as dirlist_file, \
          open(csv_fname, 'w') as csv_file:
@@ -362,10 +445,18 @@ def import_dialogues(request):
             dirname = os.path.basename(src_fname)
             # Check that that directory contains the required session XML file.
             try:
-                XMLSession.find_session_fname(src_fname)
+                sess_fname = XMLSession.find_session_fname(src_fname)
             except FileNotFoundError:
                 session_missing.append(src_fname)
                 continue
+            # Check that there are any user turns in the session.
+            with XMLSession(fname=sess_fname, mode='r') as session:
+                try:
+                    for uturn_idx in xrange(settings.MIN_TURNS):
+                        next(session.iter_uturns())
+                except StopIteration:
+                    session_empty.append(src_fname)
+                    continue
             # Generate CID.
             cid = _hash(dirname)
             # Check that this CID does not collide with a hash for another
@@ -431,7 +522,9 @@ def import_dialogues(request):
             cf_error = None
     # Render the response.
     context = dict()
+    context['MIN_TURNS'] = settings.MIN_TURNS
     context['session_missing'] = session_missing
+    context['session_empty'] = session_empty
     context['copy_failed'] = copy_failed
     context['save_failed'] = save_failed
     context['save_price_failed'] = save_price_failed
@@ -443,28 +536,29 @@ def import_dialogues(request):
         context['cf_upload'] = False
     context['csv_fname'] = csv_fname
     context['count'] = count
-    context['n_failed'] = (len(session_missing) + len(copy_failed)
-                           + len(save_failed) + len(save_price_failed)
-                           + len(dg_existed))
-    return render(request, "er/imported.html", context)
+    context['n_failed'] = (len(session_missing) + len(session_empty)
+                           + len(copy_failed) + len(save_failed)
+                           + len(save_price_failed) + len(dg_existed))
+    return render(request, "trs/imported.html", context)
 
 
-@csrf_exempt
-def log_work(request):
-    try:
-        # Try: be robust
-        # a.k.a. Pokemon exception handling: catch 'em all
+if settings.USE_CF:
+    @csrf_exempt
+    def log_work(request):
         try:
-            if request.POST.get(u'signal', None) == u'unit_complete':
-                # Save the request data to a log.
-                log_path = get_log_path(settings.WORKLOGS_DIR)
-                with open(log_path, 'w') as log_file:
-                    log_file.write(repr(request.POST)
-                                   if hasattr(request, 'POST') else 'None')
-        except Exception:
-            pass
-        # Record the request to a session XML file.
-        dg_util.record_worker(request)
-    finally:
-        from django.http import HttpResponse
-        return HttpResponse(status=200)
+            # Try: be robust
+            # a.k.a. Pokemon exception handling: catch 'em all
+            try:
+                if request.POST.get(u'signal', None) == u'unit_complete':
+                    # Save the request data to a log.
+                    log_path = get_log_path(settings.WORKLOGS_DIR)
+                    with open(log_path, 'w') as log_file:
+                        log_file.write(repr(request.POST)
+                                       if hasattr(request, 'POST') else 'None')
+            except Exception:
+                pass
+            # Record the request to a session XML file.
+            dg_util.record_worker(request)
+        finally:
+            from django.http import HttpResponse
+            return HttpResponse(status=200)

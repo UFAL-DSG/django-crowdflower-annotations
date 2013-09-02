@@ -1,3 +1,5 @@
+from __future__ import unicode_literals
+
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.forms.widgets import HiddenInput, TextInput, Widget
 from django.utils.html import escape

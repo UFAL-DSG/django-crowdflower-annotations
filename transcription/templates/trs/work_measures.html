@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Work measures</h1>
+
+<table>
+	<tr>
+		<th>User name</th>
+		<th># dialogues</th>
+		<th># turns</th>
+		<th># words</th>
+		<th>estimated pay</th>
+	</tr>
+	{% for user, dgnum, trsnum, wordcnt, price in measures %}
+	<tr>
+		<td>{{ user }}</td>
+		<td>{{ dgnum }}</td>
+		<td>{{ trsnum }}</td>
+		<td>{{ wordcnt }}</td>
+		<td>{{ price }}</td>
+	</tr>
+	{% endfor %}
+</table>
+
+{% endblock %}

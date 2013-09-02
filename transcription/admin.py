@@ -1,10 +1,12 @@
 from django import forms
 from django.contrib import admin
 from django.db import models
+from django.shortcuts import render
 
+import settings
+from transcription.dg_util import update_price
 from transcription.models import Dialogue, DialogueAnnotation, \
-        Transcription, UserTurn
-from transcription.dg_util import JsonDialogueUpload, update_gold, update_price
+    Transcription, UserTurn
 from transcription.db_fields import SizedTextField, ROCharField
 from transcription.form_fields import LinkField
 from transcription.widgets import ROInput
@@ -38,7 +40,7 @@ class UTurnInline(admin.TabularInline):
 
 
 class DialogueAdmin(admin.ModelAdmin):
-    add_form_template = 'er/import.html'
+    add_form_template = 'trs/import.html'
     list_display = ['dirname', 'cid', 'transcription_price', 'code',
                     'code_corr', 'code_incorr']
     formfield_overrides = {
@@ -46,32 +48,66 @@ class DialogueAdmin(admin.ModelAdmin):
         models.FilePathField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField}
     }
-    inlines = [ DgAnnInline, UTurnInline ]
-    search_fields = ['cid', 'code', 'dirname', 'list_filename']
+    inlines = [DgAnnInline, UTurnInline]
+    search_fields = ['cid', 'code', 'dirname']
+    list_filter = ['list_filename']
 
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
             update_price(dg)
             dg.save()
 
-    update_price_action.short_description = u"Update dialogue price"
+    update_price_action.short_description = "Update dialogue price"
 
-    def update_gold_action(modeladmin, request, queryset):
+    def export_annotations(self, request, queryset):
+        from datetime import datetime
+        import os
+        import os.path
+        import shutil
+        from session_xml import XMLSession
+
+        tgt_dir = os.path.join(settings.EXPORT_DIR, '{dt}-sessions'.format(
+            dt=datetime.strftime(datetime.now(), '%y%m%d%H%M')))
+        os.makedirs(tgt_dir)
         for dg in queryset:
-            success, msg = update_gold(dg)
-            if not success:
-                raise ValueError()
+            dg_dir = os.path.join(settings.CONVERSATION_DIR, dg.cid)
+            dg_xml = XMLSession.find_session_fname(dg_dir)
+            tgt_dg_dir = os.path.join(tgt_dir, dg.dirname)
+            os.mkdir(tgt_dg_dir)
+            shutil.copy2(dg_xml, tgt_dg_dir)
+        # Output a message to the user.
+        self.message_user(request,
+                          '{num} dialogue annotation{shashave} been '
+                          'successfully exported to {outdir}.'.format(
+                          num=len(queryset),
+                          shashave=' has' if len(queryset) == 1 else 's have',
+                          outdir=tgt_dir))
 
-    update_gold_action.short_description = u"Update dialogue gold status on CF"
+    export_annotations.short_description = "Export annotations"
 
-    def upload_to_crowdflower(modeladmin, request, queryset):
-        JsonDialogueUpload(queryset).upload()
+    if settings.USE_CF:
+        from transcription.dg_util import JsonDialogueUpload, update_gold
 
-    upload_to_crowdflower.short_description = \
-        (u'Upload to CrowdFlower (only those dialogues that have not been '
-         u'uploaded yet)')
+        def update_gold_action(modeladmin, request, queryset):
+            for dg in queryset:
+                success, msg = update_gold(dg)
+                if not success:
+                    raise ValueError()
 
-    actions = [update_price_action, upload_to_crowdflower, update_gold_action]
+        update_gold_action.short_description = (
+            "Update dialogue gold status on CF")
+
+        def upload_to_crowdflower(modeladmin, request, queryset):
+            JsonDialogueUpload(queryset).upload()
+
+        upload_to_crowdflower.short_description = (
+            'Upload to CrowdFlower (only those dialogues that have not been '
+            'uploaded yet)')
+
+        actions = [update_price_action, export_annotations,
+                   upload_to_crowdflower, update_gold_action]
+    else:
+        actions = [update_price_action, export_annotations]
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):
@@ -80,21 +116,28 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         models.ForeignKey: {'form_class': LinkField},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
-    inlines = [ TranscriptionInline ]
+    inlines = [TranscriptionInline]
+    search_fields = ['dialogue__cid', 'dialogue__code', 'dialogue__dirname']
+    list_filter = ['user__username']
 
     date_hierarchy = 'date_saved'
 
-    def update_gold_action(modeladmin, request, queryset):
-        dialogues = set(dg_ann.dialogue for dg_ann in queryset)
-        for dialogue in dialogues:
-            success, _ = update_gold(dialogue)
-            if not success:
-                raise ValueError()
+    if settings.USE_CF:
+        from transcription.dg_util import update_gold
 
-    update_gold_action.short_description = \
-            u"Update gold status of related dialogues on CF"
+        def update_gold_action(modeladmin, request, queryset):
+            dialogues = set(dg_ann.dialogue for dg_ann in queryset)
+            for dialogue in dialogues:
+                success, _ = update_gold(dialogue)
+                if not success:
+                    raise ValueError()
 
-    actions = [update_gold_action]
+        update_gold_action.short_description = (
+            "Update gold status of related dialogues on CF")
+
+        actions = [update_gold_action]
+    else:
+        actions = list()
 
 
 class TranscriptionAdmin(admin.ModelAdmin):
@@ -106,14 +149,48 @@ class TranscriptionAdmin(admin.ModelAdmin):
         models.ForeignKey: {'form_class': LinkField},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
+    search_fields = ['text']
+    list_filter = ['dialogue_annotation__user__username',
+                   'dialogue_annotation__dialogue__list_filename',
+                   'dialogue_annotation__date_saved',
+                   'dialogue_annotation__date_paid']
 
     def toggle_gold(modeladmin, request, queryset):
         for trs in queryset:
             trs.is_gold = not trs.is_gold
             trs.save()
 
-    toggle_gold.short_description = u"Toggle gold status"
-    actions = [toggle_gold]
+    toggle_gold.short_description = "Toggle gold status"
+
+    def work_measures(modeladmin, request, queryset):
+        # Group the transcriptions and their dialogues according to the author.
+        user2trss = dict()
+        user2prices = dict()  # :: username -> dialogue annotation -> price
+        for trs in queryset:
+            dg_ann = trs.dialogue_annotation
+            user = dg_ann.user.username
+            user2trss.setdefault(user, list()).append(trs)
+            user2prices.setdefault(user, dict()).setdefault(
+                dg_ann, dg_ann.dialogue.transcription_price)
+        # Compute statistics.
+        user2price = {user: sum(ann2price.values())
+                    for user, ann2price in user2prices.iteritems()}
+        user2dgnum = {user: len(ann2price)
+                    for user, ann2price in user2prices.iteritems()}
+        user2trsnum = {user: len(user_trss)
+                    for user, user_trss in user2trss.iteritems()}
+        user2wordcnt = {user: sum(len(trs.text.split()) for trs in user_trss)
+                        for user, user_trss in user2trss.iteritems()}
+        context = dict()
+        context['measures'] = sorted((user, user2dgnum[user],
+                                      user2trsnum[user], user2wordcnt[user],
+                                      user2price[user])
+                                     for user in user2price)
+        return render(request, 'trs/work_measures.html', context)
+
+    work_measures.short_description = "Measure work done"
+
+    actions = [toggle_gold, work_measures]
 
 
 class UserTurnAdmin(admin.ModelAdmin):
@@ -121,7 +198,7 @@ class UserTurnAdmin(admin.ModelAdmin):
         ROCharField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField},
     }
-    inlines = [ TranscriptionInline ]
+    inlines = [TranscriptionInline]
 
 
 admin.site.register(UserTurn, UserTurnAdmin)

@@ -35,7 +35,11 @@ nosetests.xml
 .pydevproject
 .ropeproject
 
+# vim
+.*.sw[op]
+
 # transcription specific
 /localsettings.py
 nohup.out
 /db.db
+/data

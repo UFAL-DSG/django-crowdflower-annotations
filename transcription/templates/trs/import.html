@@ -25,10 +25,12 @@ input[type="checkbox"] {
 			<td><input type="checkbox" name="ignore_exdirs" id="id_ignore_exdirs"></input></td>
 			<td><label for="id_ignore_exdirs">Ignore copy errors due to existing directories?</label></td>
 		</tr>
+		{% if use_cf %}
 		<tr>
 			<td><input type="checkbox" name="upload" id="id_upload" checked></input></td>
 			<td><label for="id_upload">Upload to CrowdFlower?</label></td>
 		</tr>
+		{% endif %}
 		<tr>
 			<td colspan="2" style="align: center;">
 				<button type="submit" name="submit" id="id_submit">Import</button>

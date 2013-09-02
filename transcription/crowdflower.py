@@ -14,9 +14,10 @@ CF_URL_START = "https://api.crowdflower.com/v1/"
 
 
 def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
-               log=settings.LOG_CURL):
-    """Note that specifying both `data' and `json_str' is not supported and
-    the `data' argument will be silently ignored in such a case.
+                log=settings.LOG_CURL):
+    """
+    Note that specifying both `data' and `json_str' is not supported and the
+    `data' argument will be silently ignored in such a case.
 
     """
     # Create a file for the response from CF.

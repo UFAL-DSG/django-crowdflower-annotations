@@ -17,9 +17,10 @@ class FileNotFoundError(Exception):
 
 
 class XMLSession(object):
-    """A context manager for handling XML files capturing dialogue sessions.
-    These objects account for different versions of the XML scheme of sessions
-    XML files.
+    """
+    A context manager for handling XML files capturing dialogue sessions.
+    These objects handle different versions of the XML scheme of sessions XML
+    files.
 
     """
     xml_parser = etree.XMLParser(remove_blank_text=True)
@@ -40,13 +41,21 @@ class XMLSession(object):
                                     .format(dir=dirname))
         return sess_path
 
-    def __init__(self, cid):
-        self.dirname = os.path.join(settings.CONVERSATION_DIR, cid)
-        self.sess_path = self.find_session_fname(self.dirname)
+    def __init__(self, cid=None, fname=None, mode='r+'):
+        if cid is None and fname is None:
+            raise ValueError('Either `cid\' or `fname\' have to be specified.')
+
+        if cid is not None:
+            self.dirname = os.path.join(settings.CONVERSATION_DIR, cid)
+            self.sess_path = self.find_session_fname(self.dirname)
+        else:
+            self.sess_path = os.path.abspath(fname)
+            self.dirname = os.path.dirname(self.sess_path)
+        self.mode = mode
         self.sess_xml = None
 
     def __enter__(self):
-        with open(self.sess_path, 'r+') as sess_file:
+        with open(self.sess_path, self.mode) as sess_file:
             self.sess_xml = etree.parse(sess_file, self.xml_parser)
 
         # Check the version of the session XML scheme and set all the XML
@@ -87,17 +96,19 @@ class XMLSession(object):
             # Simple behaviour: just reraise the exception.
             return False
 
-        with open(self.sess_path, 'w') as sess_file:
-            sess_file.write(etree.tostring(self.sess_xml,
-                                           pretty_print=True,
-                                           xml_declaration=True,
-                                           encoding='UTF-8'))
+        if any(ltr in self.mode for ltr in 'aw+'):
+            with open(self.sess_path, 'w') as sess_file:
+                sess_file.write(etree.tostring(self.sess_xml,
+                                               pretty_print=True,
+                                               xml_declaration=True,
+                                               encoding='UTF-8'))
 
         return True
 
     def find_transcription(self, trs):
-        """Finds the transcription element in the XML for a given
-        transcription.  If the element is not there, returns None.
+        """
+        Finds the transcription element in the XML for a given transcription.
+        If the element is not there, returns None.
 
         Keyword arguments:
             - trs -- the transcription.models.Transcription object whose
@@ -141,12 +152,12 @@ class XMLSession(object):
             trss_xml = turn_xml
         trs_xml = etree.Element(
             self.TRANSCRIPTION_ELEM,
-            author=dg_ann.user.username,
             annotation=str(dg_ann.pk),
             is_gold="0",
             breaks_gold="1" if trs.breaks_gold else "0",
             some_breaks_gold="1" if trs.some_breaks_gold else "0",
             program_version=dg_ann.program_version)
+        trs_xml.set(self.AUTHOR_ATTR, dg_ann.user.username)
         trs_xml.set(self.DATE_ATTR,
                     self.format_datetime(dg_ann.date_saved))
         trs_xml.text = trs.text

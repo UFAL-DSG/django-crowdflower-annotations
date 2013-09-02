@@ -37,6 +37,16 @@ Below is a breakdown according to the cause.
 </table>
 {% endif %}
 
+{% if session_empty %}
+<h3>The session XML file contained less than settings.MIN_TURNS (={{ MIN_TURNS }}) turns</h3>
+<table>
+	<tr><th>Name of the directory</th></tr>
+	{% for dirname in session_empty %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
 {% if copy_failed %}
 <h3>Failed to be copied</h3>
 <table>

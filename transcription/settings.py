@@ -1,10 +1,11 @@
 import os
 from localsettings import *
-import re
+import localsettings
 import sys
 
 # custom variables
-PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
+_module = sys.modules[__name__]
+PROJECT_DIR = os.path.join(os.path.realpath(os.path.dirname(__file__)), '..')
 if not PROJECT_DIR in sys.path:
     sys.path.append(PROJECT_DIR)
 sys.path.append(PYLIBS_DIR)
@@ -15,30 +16,32 @@ SESSION_FNAME = localsettings.SESSION_FNAME
 CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
 
-CF_URL_START = localsettings.CF_URL_START
-CF_KEY = localsettings.CF_KEY
-CF_JOB_ID = localsettings.CF_JOB_ID
-
-PRICE_CONST = localsettings.PRICE_CONST
-PRICE_PER_MIN = localsettings.PRICE_PER_MIN
-PRICE_PER_TURN = localsettings.PRICE_PER_TURN
+USE_CF = localsettings.USE_CF
+for name in ('CF_URL_START', 'CF_KEY', 'CF_JOB_ID', 'PRICE_CONST',
+             'PRICE_PER_MIN', 'PRICE_PER_TURN'):
+    try:
+        setattr(_module, name, getattr(localsettings, name))
+    except AttributeError as er:
+        if USE_CF:
+            raise er
 
 MAX_CHAR_ER = localsettings.MAX_CHAR_ER
 
-XML_USERTURN_PATH = localsettings.XML_USERTURN_PATH
-XML_SYSTURN_PATH = localsettings.XML_SYSTURN_PATH
-XML_TURNNUMBER_ATTR = localsettings.XML_TURNNUMBER_ATTR
-XML_REC_SUBPATH = localsettings.XML_REC_SUBPATH
-XML_REC_FNAME_ATTR = localsettings.XML_REC_FNAME_ATTR
-XML_SYSTEXT_SUBPATH = localsettings.XML_SYSTEXT_SUBPATH
-XML_TRANSCRIPTIONS_BEFORE = localsettings.XML_TRANSCRIPTIONS_BEFORE
-XML_TRANSCRIPTIONS_ELEM = localsettings.XML_TRANSCRIPTIONS_ELEM
-XML_TRANSCRIPTION_BEFORE = localsettings.XML_TRANSCRIPTION_BEFORE
-XML_TRANSCRIPTION_ELEM = localsettings.XML_TRANSCRIPTION_ELEM
-XML_AUTHOR_ATTR = localsettings.XML_AUTHOR_ATTR
-XML_DATE_ATTR = localsettings.XML_DATE_ATTR
-XML_DATE_FORMAT = localsettings.XML_DATE_FORMAT
->>>>>>> Stashed changes
+XML_COMMON = localsettings.XML_COMMON
+XML_SCHEMES = localsettings.XML_SCHEMES
+# XML_USERTURN_PATH = localsettings.XML_USERTURN_PATH
+# XML_SYSTURN_PATH = localsettings.XML_SYSTURN_PATH
+# XML_TURNNUMBER_ATTR = localsettings.XML_TURNNUMBER_ATTR
+# XML_REC_SUBPATH = localsettings.XML_REC_SUBPATH
+# XML_REC_FNAME_ATTR = localsettings.XML_REC_FNAME_ATTR
+# XML_SYSTEXT_SUBPATH = localsettings.XML_SYSTEXT_SUBPATH
+# XML_TRANSCRIPTIONS_BEFORE = localsettings.XML_TRANSCRIPTIONS_BEFORE
+# XML_TRANSCRIPTIONS_ELEM = localsettings.XML_TRANSCRIPTIONS_ELEM
+# XML_TRANSCRIPTION_BEFORE = localsettings.XML_TRANSCRIPTION_BEFORE
+# XML_TRANSCRIPTION_ELEM = localsettings.XML_TRANSCRIPTION_ELEM
+# XML_AUTHOR_ATTR = localsettings.XML_AUTHOR_ATTR
+# XML_DATE_ATTR = localsettings.XML_DATE_ATTR
+# XML_DATE_FORMAT = localsettings.XML_DATE_FORMAT
 
 # Django settings for the `transcription' project.
 
@@ -89,14 +92,14 @@ USE_L10N = True
 # Absolute filesystem path to the directory that will hold user-uploaded files.
 # Example: "/home/media/media.lawrence.com/media/"
 MEDIA_ROOT = os.path.join(PROJECT_DIR, 'media')
-# ADMIN_MEDIA_ROOT = '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
+ADMIN_MEDIA_ROOT = '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
 # ADMIN_MEDIA_ROOT = os.path.join(PROJECT_DIR, 'static')
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
 # Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-# MEDIA_URL = '/apps/transcription/media/'
-MEDIA_URL = '/media/'
+MEDIA_URL = '/apps/cir-transcription/media/'
+# MEDIA_URL = '/media/'
 
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
@@ -106,22 +109,22 @@ STATIC_ROOT = os.path.join(PROJECT_DIR, 'static')
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-# STATIC_URL = '/apps/transcription/static/'
-STATIC_URL = '/static/'
+STATIC_URL = '/apps/cir-transcription/static/'
+# STATIC_URL = '/static/'
 # STATIC_ROOT = STATIC_URL = '/cf_transcription/static/'
 
 # URL prefix for admin static files -- CSS, JavaScript and images.
 # Make sure to use a trailing slash.
 # Examples: "http://foo.com/static/admin/", "/static/admin/".
-# ADMIN_MEDIA_PREFIX = '/apps/transcription/static/admin/'
-ADMIN_MEDIA_PREFIX = '/static/admin/'
+ADMIN_MEDIA_PREFIX = '/apps/cir-transcription/static/admin/'
+# ADMIN_MEDIA_PREFIX = '/static/admin/'
 
 # Additional locations of static files
 STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-	# "/webapps/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
+	"/webapps/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
 	# "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
 )
 
@@ -151,13 +154,14 @@ MIDDLEWARE_CLASSES = (
     'django.contrib.messages.middleware.MessageMiddleware',
 )
 
-ROOT_URLCONF = 'transcription.urls'
+# ROOT_URLCONF = 'transcription.urls'
+ROOT_URLCONF = 'urls'
 
 TEMPLATE_DIRS = (
-    "/home/matej/wc/vys/cf_transcription/templates",
+#     "/home/matej/wc/vys/cf_transcription/templates",
     os.path.join(PROJECT_DIR, "templates"),
-    "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/auth/templates/",
-    "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/templates/",
+#     "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/auth/templates/",
+#     "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/templates/",
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
@@ -200,9 +204,10 @@ LOGGING = {
     }
 }
 
-# WSGI_APPLICATION = "transcription.wsgi.application"
-# SUB_SITE="/apps/transcription/"
-# #FORCE_SCRIPT_NAME="/er"
-# LOGIN_URL="/apps/transcription/accounts/login/"
-# # STATICFILES_STORAGE="/apps/transcription"
-# LOGIN_REDIRECT_URL=SUB_SITE
+WSGI_APPLICATION = "transcription.wsgi.application"
+SUB_SITE="/apps/cir-transcription/"
+#FORCE_SCRIPT_NAME="/er"
+LOGIN_URL="/apps/cir-transcription/accounts/login/"
+# LOGIN_URL="/accounts/login/"
+# STATICFILES_STORAGE="/apps/cir-transcription"
+LOGIN_REDIRECT_URL=SUB_SITE
