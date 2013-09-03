@@ -17,13 +17,27 @@ CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
 
 USE_CF = localsettings.USE_CF
-for name in ('CF_URL_START', 'CF_KEY', 'CF_JOB_ID', 'PRICE_CONST',
-             'PRICE_PER_MIN', 'PRICE_PER_TURN'):
+for name in ('CF_URL_START', 'CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN',
+             'PRICE_PER_TURN'):
     try:
         setattr(_module, name, getattr(localsettings, name))
     except AttributeError as er:
         if USE_CF:
             raise er
+# For the CF_JOB_ID and CF_JOB_IDS configuration variables, if USE_CF is in
+# force, at least one of them has to be set.
+_cf_ids_set = False
+for name in ('CF_JOB_IDS', 'CF_JOB_ID'):
+    try:
+        setattr(_module, name, getattr(localsettings, name))
+    except AttributeError as er:
+        pass
+    else:
+        _cf_ids_set = True
+if USE_CF and not _cf_ids_set:
+    raise AttributeError('USE_CF == True but neither CF_JOB_IDS or CF_JOB_ID '
+                         'is set.')
+del _cf_ids_set
 
 MAX_CHAR_ER = localsettings.MAX_CHAR_ER
 
