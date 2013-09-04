@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 
 {% block head %}
-<script src="http://vystadial.ms.mff.cuni.cz/apps/transcription/media/js/easyXDM.min.js" type="text/javascript"></script>
+<script src="{{ MEDIA_URL }}js/easyXDM.min.js" type="text/javascript"></script>
 <script type="text/javascript">
 <!--
 	var socket = new easyXDM.Socket({
@@ -408,7 +408,7 @@ p.user { color: orange; }
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
 						tabindex="{{ turn.dbl_turn_num|add:1 }}"
-						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/transcription/data/recs{{ turn.rec }}');">Play</button>
+						onclick="play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}','/apps/cir_transcription/data/recs{{ turn.rec }}');">Play</button>
 				</div>
 			{% else %}
 				<div>

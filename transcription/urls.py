@@ -22,14 +22,13 @@ pattern_args = ['',
 #                 url(r'^temp-test$',
 #                     'transcription.views.temp_test',
 #                     name="temp_test"),
-
-                url(r'^',
-                    'transcription.views.home',
-                    name='home')
                ]
 if settings.USE_CF:
     pattern_args.append(url(r'^log-work$',
                             'transcription.views.log_work',
                             name="log_work"))
+pattern_args.append(url(r'^',
+                        'transcription.views.home',
+                        name='home'))
 
 urlpatterns = patterns(*pattern_args)

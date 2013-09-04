@@ -140,8 +140,7 @@ class XMLSession(object):
         if self.TRANSCRIPTIONS_ELEM is not None:
             trss_xml = turn_xml.find(self.TRANSCRIPTIONS_ELEM)
             if trss_xml is None:
-                trss_left_sib = turn_xml.find(
-                    self.TRANSCRIPTIONS_BEFORE)
+                trss_left_sib = turn_xml.find(self.TRANSCRIPTIONS_BEFORE)
                 if trss_left_sib is None:
                     insert_idx = len(turn_xml)
                 else:
@@ -207,12 +206,19 @@ class XMLSession(object):
                 .text = dg_ann.notes
 
     def iter_uturns(self):
+        turnnums_seen = set()
         for uturn_xml in self.sess_xml.iterfind(self.USERTURN_PATH):
             rec = uturn_xml.find(self.REC_SUBPATH)
             if rec is not None:
                 rec = rec.attrib[self.REC_FNAME_ATTR]
-            turn_number = uturn_xml.attrib[self.TURNNUMBER_ATTR]
-            yield UserTurn_nt(turn_number, rec)
+            try:
+                turn_number = uturn_xml.attrib[self.TURNNUMBER_ATTR]
+            except KeyError as er:  # There may be a turn with no turn number.
+                pass
+            else:
+                if turn_number not in turnnums_seen:
+                    yield UserTurn_nt(turn_number, rec)
+                    turnnums_seen.add(turn_number)
 
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):

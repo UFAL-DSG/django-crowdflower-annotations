@@ -1,0 +1,12 @@
+# This file lists templates for static files (including Django templates).
+# Each line of the file should be
+# 	a) a comment, starting with a hash ('#')
+#   b) in the form <path-to-template>\t<path-to-instantiation>
+# All lines not conforming to (b) will be ignored. Relative paths are 
+# interpreted with respect to the (absolutized path to) the directory where 
+# this list resides.
+#
+# Templates will get instantiated using the Django templating mechanism, 
+# getting the settings module as an additional context in the 'settings' 
+# key.
+../transcription/crowdflower/job.cml.tpt	../transcription/crowdflower/job.cml

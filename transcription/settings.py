@@ -93,7 +93,7 @@ TIME_ZONE = 'Europe/Prague'
 # http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = 'en-gb'
 
-SITE_ID = 2
+SITE_ID = 1
 
 # If you set this to False, Django will make some optimizations so as not
 # to load the internationalization machinery.
@@ -112,7 +112,7 @@ ADMIN_MEDIA_ROOT = '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
 # Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-MEDIA_URL = '/apps/cir-transcription/media/'
+MEDIA_URL = '/apps/cir_transcription/media/'
 # MEDIA_URL = '/media/'
 
 # Absolute path to the directory static files should be collected to.
@@ -123,14 +123,14 @@ STATIC_ROOT = os.path.join(PROJECT_DIR, 'static')
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-STATIC_URL = '/apps/cir-transcription/static/'
+STATIC_URL = '/apps/cir_transcription/static/'
 # STATIC_URL = '/static/'
 # STATIC_ROOT = STATIC_URL = '/cf_transcription/static/'
 
 # URL prefix for admin static files -- CSS, JavaScript and images.
 # Make sure to use a trailing slash.
 # Examples: "http://foo.com/static/admin/", "/static/admin/".
-ADMIN_MEDIA_PREFIX = '/apps/cir-transcription/static/admin/'
+ADMIN_MEDIA_PREFIX = '/apps/cir_transcription/static/admin/'
 # ADMIN_MEDIA_PREFIX = '/static/admin/'
 
 # Additional locations of static files
@@ -138,7 +138,8 @@ STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-	"/webapps/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
+# 	"/webapps/cir_transcription/libs/django-1.4.1/django/contrib/admin/static",
+    '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
 	# "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
 )
 
@@ -219,9 +220,9 @@ LOGGING = {
 }
 
 WSGI_APPLICATION = "transcription.wsgi.application"
-SUB_SITE="/apps/cir-transcription/"
+SUB_SITE="/apps/cir_transcription/"
 #FORCE_SCRIPT_NAME="/er"
-LOGIN_URL="/apps/cir-transcription/accounts/login/"
+LOGIN_URL="/apps/cir_transcription/accounts/login/"
 # LOGIN_URL="/accounts/login/"
-# STATICFILES_STORAGE="/apps/cir-transcription"
+# STATICFILES_STORAGE="/apps/cir_transcription"
 LOGIN_REDIRECT_URL=SUB_SITE

@@ -20,18 +20,32 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
     `data' argument will be silently ignored in such a case.
 
     """
-    # Create a file for the response from CF.
+
+    error_msgs = list()
+    serious_errors = False
+
+    # Create a log file.
     try:
         if log:
             logfile = open(get_log_path(settings.CURLLOGS_DIR), 'w')
         else:
             logfile = None
+    except Exception as er:
+        error_msg = "Output from `curl' could not be logged.\n"
+        error_msg += 'The original exception said: "{er}".\n'.format(er=er)
+        error_msgs += [error_msg]
+        logfile = None
+
+    # Create a file for the response from CF.
+    try:
         upload_outfile = TemporaryFile()
-    except:
-        error_msgs = ["Output from `curl' could not be obtained.\n"]
+    except Exception as er:
+        error_msg = "Output from `curl' could not be obtained.\n"
+        error_msg += 'The original exception said: "{er}".\n'.format(er=er)
+        error_msgs += [error_msg]
         upload_outfile = None
-    else:
-        error_msgs = list()
+        serious_errors = True
+
     # Build the curl command line.
     cf_url = '{start}{arg}.json?key={key}'.format(start=CF_URL_START,
                                                   arg=cf_url_part,
@@ -44,6 +58,7 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
     else:
         curl_args = ['curl', '-X', verb, '-d', json_str, '-H',
                      'Content-Type: application/json', cf_url]
+
     # Call the command.
     if log and logfile:
         logfile.write('Command: {cmd}\n----\nReturned: \n'
@@ -56,6 +71,7 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
             upload_outfile.seek(0)
             logfile.write(upload_outfile.read())
         logfile.write('\n----\nReturn code: {code}\n'.format(code=cf_retcode))
+
     # Check for errors.
     cf_outobj = None
     if upload_outfile is not None:
@@ -64,15 +80,13 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
             cf_outobj = json.load(upload_outfile)
         except ValueError:
             cf_outobj = None
-            # DEBUG
-            # (If annoyed by the exception, you can just delete the lines
-            # raising it.)
-            # upload_outfile.seek(0)
-            # raise ValueError('Unexpected reply from CF: {file}'.format(
-            #     file=upload_outfile.read()))
+            upload_outfile.seek(0)
+            error_msgs += ['Unexpected reply from CF: """{body}"""\n'.format(
+                           body=upload_outfile.read())]
+            serious_errors = True
         finally:
             upload_outfile.close()
-    if cf_retcode != 0:
+    if cf_retcode != 0 or serious_errors:
         if cf_outobj is not None:
             try:
                 error_msgs.append(cf_outobj['error']['message'])
@@ -82,8 +96,9 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
             error_msgs.append('(no message)')
         # In case of lack of success, return also the error messages.
         return False, cf_outobj, error_msgs
+
     # Return the returned object in case of success.
-    return True, cf_outobj, tuple()
+    return True, cf_outobj, error_msgs
 
 
 @lru_cache(maxsize=10)

@@ -1,7 +1,7 @@
 import os
 import sys
 print >> sys.stderr, sys.path
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cf_transcription.settings")
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "cir_transcription.settings")
 
 # This application object is used by the development server
 # as well as any WSGI server configured to use this file.

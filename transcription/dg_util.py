@@ -169,6 +169,8 @@ if settings.USE_CF:
                 self.add(dg)
 
         def upload(self, force=False, check_existing=True):
+            # TODO Change the interface such that the return value implies also
+            # how many dialogues have been successfully uploaded.
             if self._uploaded and not force:
                 msg = 'Internal error: attempted to upload the data twice.'
                 return False, msg
@@ -187,8 +189,8 @@ if settings.USE_CF:
                     continue
                 # Build the JSON string describing the units.
                 json_str = ''.join(create_dialogue_json(dg)
-                                for dg in self.data[job_id]
-                                if dg.cid not in cur_cids)
+                                   for dg in self.data[job_id]
+                                   if dg.cid not in cur_cids)
                 # Upload to CF.
                 if not json_str:
                     # If there are no dialogues to upload (all have already

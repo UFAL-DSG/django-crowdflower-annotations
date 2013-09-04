@@ -340,10 +340,10 @@ def transcribe(request):
                 response['X-Frame-Options'] = 'ALLOWALL'
             return response
 
-    # Store a new DialogueAnnotation.
+    # Store a new DialogueAnnotation, unless the user is anonymous.
     if open_annions is not None and open_annions.exists():
         open_annions.update(finished=False)
-    else:
+    elif not request.user.is_anonymous():
         DialogueAnnotation(user=request.user,
                            dialogue=dg_data,
                            finished=False).save()
@@ -351,7 +351,9 @@ def transcribe(request):
     # Prepare the data about turns into a form suitable for the template.
     uturns = UserTurn.objects.filter(dialogue=dg_data)
     systurns = SystemTurn.objects.filter(dialogue=dg_data)
-    turns = [dict() for _ in xrange(max(len(uturns), len(systurns)))]
+    max_turn_num = max(max(uturn.turn_number for uturn in uturns),
+                       max(sturn.turn_number for sturn in systurns))
+    turns = [dict() for _ in xrange(max_turn_num)]
     for uturn in uturns:
         seclast_slash = uturn.wav_fname.rfind(
             os.sep, 0, uturn.wav_fname.rfind(os.sep))

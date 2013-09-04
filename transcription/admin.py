@@ -1,14 +1,20 @@
+from datetime import datetime
+import os
+import os.path
+import shutil
+
 from django import forms
 from django.contrib import admin
 from django.db import models
 from django.shortcuts import render
 
+from session_xml import XMLSession
 import settings
-from transcription.dg_util import update_price
+from transcription.db_fields import SizedTextField, ROCharField
+from transcription.dg_util import JsonDialogueUpload, update_gold, update_price
+from transcription.form_fields import LinkField
 from transcription.models import Dialogue, DialogueAnnotation, \
     Transcription, UserTurn
-from transcription.db_fields import SizedTextField, ROCharField
-from transcription.form_fields import LinkField
 from transcription.widgets import ROInput
 
 
@@ -60,12 +66,6 @@ class DialogueAdmin(admin.ModelAdmin):
     update_price_action.short_description = "Update dialogue price"
 
     def export_annotations(self, request, queryset):
-        from datetime import datetime
-        import os
-        import os.path
-        import shutil
-        from session_xml import XMLSession
-
         tgt_dir = os.path.join(settings.EXPORT_DIR, '{dt}-sessions'.format(
             dt=datetime.strftime(datetime.now(), '%y%m%d%H%M')))
         os.makedirs(tgt_dir)
@@ -86,8 +86,6 @@ class DialogueAdmin(admin.ModelAdmin):
     export_annotations.short_description = "Export annotations"
 
     if settings.USE_CF:
-        from transcription.dg_util import JsonDialogueUpload, update_gold
-
         def update_gold_action(modeladmin, request, queryset):
             for dg in queryset:
                 success, msg = update_gold(dg)
@@ -123,8 +121,6 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_saved'
 
     if settings.USE_CF:
-        from transcription.dg_util import update_gold
-
         def update_gold_action(modeladmin, request, queryset):
             dialogues = set(dg_ann.dialogue for dg_ann in queryset)
             for dialogue in dialogues:

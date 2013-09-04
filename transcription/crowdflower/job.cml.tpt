@@ -1,0 +1,81 @@
+<style type="text/css">
+  #embedded {
+    width: 100%;
+  }
+</style>
+
+<script src="{{ settings.DOMAIN_URL }}{{ settings.MEDIA_URL }}/js/easyXDM.min.js" type="text/javascript"></script>
+<script type="text/javascript" language="javascript">
+  var codeInput;
+
+  function findInputField() {
+    codeInput = document.getElementById("embedded").nextSibling;
+    while(codeInput.nodeType !== 1)
+      codeInput = codeInput.nextSibling;
+    codeInput = codeInput.childNodes[1];
+    while(codeInput.nodeType !== 1 || codeInput.tagName.toLowerCase() !== "div")
+      codeInput = codeInput.nextSibling;
+    codeInput = codeInput.firstChild;
+    while(codeInput.nodeType !== 1 || codeInput.tagName.toLowerCase() !== "input")
+      codeInput = codeInput.nextSibling;
+  }
+
+  function createSocket() {
+    var transport = new easyXDM.Socket({
+        remote: "{{ settings.DOMAIN_URL }}{{ settings.SUB_SITE }}/transcribe?cid={% templatetag openvariable %}cid{% templatetag closevariable %}",
+        container: document.getElementById("embedded"),
+        onMessage: function(message, origin){
+          // Determine message type:
+          // a) message with the code
+          if(message.substr(0, 4) === "code")
+            codeInput.value = message.substr(4);
+          // b) message asking to press a button
+          else if(message.substr(0, 6) === "button")
+          {
+            var button = document.getElementById(message.substr(6));
+            // Find the right button.
+            if(button === null)
+            {
+              var buttons = document.getElementsByTagName("button");
+              for(var cand in buttons)
+              {
+                if(cand.value === "Submit task")
+                {
+                  button = cand;
+                  break;
+                }
+              }
+            }
+            if(button !== null)
+            {
+              var evt = document.createEvent("MouseEvents");
+              evt.initEvent("click", true, true);
+              button.dispatchEvent(evt);
+            }
+          }
+          // c) message with the frame height
+          else
+          {
+            var vysF = this.container.getElementsByTagName("iframe")[0];
+            vysF.style.height = message + "px";
+            vysF.style.width = "90%";
+          }
+        }
+    });
+  }
+
+  if (window.addEventListener) // W3C standard
+  {
+    window.addEventListener('load', createSocket, false);
+    window.addEventListener('load', findInputField, false);
+  } 
+  else if (window.attachEvent) // Microsoft
+  {
+    window.attachEvent('onload', createSocket);
+    window.attachEvent('onload', findInputField);
+  }
+
+</script>
+
+<div id="embedded"></div>
+<cml:text instructions="Copy here the code obtained above" label="Code" validates="required regex" data-validates-regex="^{% templatetag openvariable %}code{% templatetag closevariable %}" data-validates-regex-message="You  have  not provided the correct code. It has to be exactly same as the  one  provided by the system. You get the code after pressing the 'Save transcription' button." class=""/>
