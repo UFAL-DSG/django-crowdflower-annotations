@@ -15,19 +15,23 @@ input[type="checkbox"] {
 	<table>
 		<tr>
 			<td><label for="id_list_fname">Filelist filename</label></td>
-			<td><input type="text" name="list_fname" id="id_list_fname" size="100"></input></td>
+			<td><input type="text" name="list_fname" id="id_list_fname" size="100"></td>
 		</tr>
 		<tr>
 			<td><label for="id_csv_fname">Output CSV filename (default: <tt>new_tasks.csv</tt>)</label></td>
-			<td><input type="text" name="csv_fname" id="id_csv_fname"></input></td>
+			<td><input type="text" name="csv_fname" id="id_csv_fname"></td>
 		</tr>
 		<tr>
-			<td><input type="checkbox" name="ignore_exdirs" id="id_ignore_exdirs"></input></td>
+			<td><input type="checkbox" name="with_trss" id="id_with_trss" value="on" checked></td>
+			<td><label for="id_with_trss">Import also any existing transcriptions from the logs?</label></td>
+		</tr>
+		<tr>
+			<td><input type="checkbox" name="ignore_exdirs" value="on" id="id_ignore_exdirs"></td>
 			<td><label for="id_ignore_exdirs">Ignore copy errors due to existing directories?</label></td>
 		</tr>
 		{% if use_cf %}
 		<tr>
-			<td><input type="checkbox" name="upload" id="id_upload" checked></input></td>
+			<td><input type="checkbox" name="upload" value="on" id="id_upload" checked></td>
 			<td><label for="id_upload">Upload to CrowdFlower?</label></td>
 		</tr>
 		{% endif %}

@@ -103,20 +103,87 @@ def _gen_codes():
     return (code, code_corr, code_incorr)
 
 
-def _read_dialogue_turns(dg_data, dirname=None):
+def _read_dialogue_turns(dg_data, dirname, with_trss=False):
+    """
+    Reads system and user turns from an XML session file and saves it
+    to the DB.  This function should be called after the dialogue in question
+    has been copied into the target directory (one called after its CID).
+
+    Arguments:
+        dg_data -- the Django object for the dialogue that should be saved
+        dirname -- path towards the directory where related WAV files should be
+                   looked for
+        with_trss -- should any annotations and transcriptions be read too?
+            (default: False)
+
+    """
+
     with XMLSession(dg_data.cid) as session:
         # Process user turns.
-        for uturn in session.iter_uturns():
-            if uturn.wav_fname is not None:
-                UserTurn(
+        uturns = list()
+        for uturn_nt in session.iter_uturns():
+            if uturn_nt.wav_fname is not None:
+                turnnum = uturn_nt.turn_number
+                # Do not override turns saved earlier.
+                if turnnum < len(uturns) and uturns[turnnum] is not None:
+                    continue
+
+                # Create the user turn object.
+                uturn = UserTurn(
                     dialogue=dg_data,
-                    turn_number=uturn.turn_number,
-                    wav_fname=os.path.join(dirname, uturn.wav_fname)).save()
+                    turn_number=turnnum,
+                    wav_fname=os.path.join(dirname, uturn_nt.wav_fname))
+
+                # Prepare the `uturns' list for storing the new user turn.
+                while turnnum > len(uturns):
+                    uturns.append(None)
+
+                # Save the user turn object.
+                uturns.append(uturn)
+                assert (uturns[turnnum] == uturn)
+                uturn.save()
+
         # Process system turns.
         for systurn in session.iter_systurns():
             SystemTurn(dialogue=dg_data,
                        turn_number=systurn.turn_number,
                        text=systurn.text).save()
+
+        # If transcriptions should be read and saved as well,
+        if with_trss:
+            dummy_user = User.objects.get(username='testres')
+
+            # Iterate over all dialogue annotations.
+            for ann_el in session.iter_annotations():
+                # Save the dialogue annotation object.
+                accent_str = ann_el.get('accent')
+                dg_ann = DialogueAnnotation(
+                    offensive=(ann_el.get("offensive") == "True"),
+                    accent=("" if accent_str == 'native' else accent_str),
+                    dialogue=dg_data,
+                    program_version=ann_el.get('program_version'),
+                    notes=str(ann_el.text))
+                dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR
+                                  if ann_el.get('quality') == 'clear'
+                                  else DialogueAnnotation.QUALITY_NOISY)
+                ann_users = User.objects.filter(username=ann_el.get('user'))
+                if ann_users.exists():
+                    dg_ann.user = ann_users[0]
+                else:
+                    dg_ann.user = dummy_user
+                dg_ann.save()
+
+                # Find all transcriptions that belong to this dialogue
+                # annotation and save them as database objects.
+                for turn_number, trs_el in session.iter_transcriptions(ann_el):
+                    Transcription(
+                        text=trs_el.text,
+                        turn=uturns[turn_number],
+                        dialogue_annotation=dg_ann,
+                        is_gold=(trs_el.get('is_gold') != '0'),
+                        breaks_gold=(trs_el.get('breaks_gold') != '0'),
+                        some_breaks_gold=(
+                            trs_el.get('some_breaks_gold') != '0')).save()
 
 
 def transcribe(request):
@@ -168,10 +235,10 @@ def transcribe(request):
                 ["git", "rev-parse", "HEAD"],
                 cwd=settings.PROJECT_DIR).rstrip('\n'))
             dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
-                                request.POST['quality'] == 'clear'
-                                else DialogueAnnotation.QUALITY_NOISY)
+                              request.POST['quality'] == 'clear'
+                              else DialogueAnnotation.QUALITY_NOISY)
             dg_ann.accent = ("" if request.POST['accent'] == 'native'
-                                else form.cleaned_data['accent_name'])
+                             else form.cleaned_data['accent_name'])
             dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
             dg_ann.notes = form.cleaned_data['notes']
             if request.user.is_authenticated():
@@ -400,22 +467,13 @@ def home(request):
 def import_dialogues(request):
     import shutil
 
-    # # DIRTY
-    # shutil.copy('/webapps/cf_transcription/db/cf_trss.db',
-    #             '/webapps/cf_transcription/db/cf_trss.db~')
-    # shutil.copy('/tmp/cf_trss.db', '/webapps/cf_transcription/db/cf_trss.db')
-    # import subprocess
-    # subprocess.call(['chgrp', 'korvas',
-    #                  '/webapps/cf_transcription/db/cf_trss.db'])
-    # subprocess.call(['chmod', 'g+w',
-    #                  '/webapps/cf_transcription/db/cf_trss.db'])
-    # return render(request, "trs/import.html", {})
-
     # Check whether the form is yet to be served.
     if not request.GET:
         context = {'use_cf': settings.USE_CF}
         return render(request, "trs/import.html", context,
                       context_instance=RequestContext(request))
+
+    # Initialisation.
     session_missing = []
     session_empty = []
     copy_failed = []
@@ -423,6 +481,8 @@ def import_dialogues(request):
     save_price_failed = []
     dg_existed = []
     count = 0   # number of successfully imported dialogues
+
+    # Read variables from the form.
     csv_fname = request.GET.get('csv_fname', '')
     if not csv_fname:
         csv_fname = os.path.join(settings.CONVERSATION_DIR, 'new_tasks.csv')
@@ -432,11 +492,13 @@ def import_dialogues(request):
         else:
             csv_fname = os.path.join(settings.CONVERSATION_DIR, csv_fname)
     dirlist_fname = request.GET['list_fname']
-    ignore_exdirs = request.GET.get('ignore_exdirs', False)
-    upload_to_cf = settings.USE_CF and request.GET.get('upload', True)
+    with_trss = request.GET.get('with_trss', False) == 'on'
+    ignore_exdirs = request.GET.get('ignore_exdirs', False) == 'on'
+    upload_to_cf = settings.USE_CF and request.GET.get('upload', False) == 'on'
 
+    # Do the import.
     with open(dirlist_fname, 'r') as dirlist_file, \
-         open(csv_fname, 'w') as csv_file:
+            open(csv_fname, 'w') as csv_file:
         # Prepare the JSON upload data, and the CSV header.
         if upload_to_cf:
             json_data = dg_util.JsonDialogueUpload()
@@ -445,6 +507,7 @@ def import_dialogues(request):
         for line in dirlist_file:
             src_fname = line.rstrip().rstrip(os.sep)
             dirname = os.path.basename(src_fname)
+
             # Check that that directory contains the required session XML file.
             try:
                 sess_fname = XMLSession.find_session_fname(src_fname)
@@ -459,17 +522,19 @@ def import_dialogues(request):
                 except StopIteration:
                     session_empty.append(src_fname)
                     continue
+
             # Generate CID.
             cid = _hash(dirname)
             # Check that this CID does not collide with a hash for another
-            # dirname.
-            # This is a crude implementation of hashing with replacement.
+            # dirname.  This is a crude implementation of hashing with
+            # replacement.
             same_cid_dgs = Dialogue.objects.filter(cid=cid)
             salt = -1
             while same_cid_dgs and same_cid_dgs[0].dirname != dirname:
-                salt += 1
+                salt += 0
                 cid = _hash(dirname + str(salt))
                 same_cid_dgs = Dialogue.objects.filter(cid=cid)
+
             # Copy the dialogue files.
             tgt_fname = os.path.join(settings.CONVERSATION_DIR, cid)
             try:
@@ -478,10 +543,10 @@ def import_dialogues(request):
                 if not ignore_exdirs:
                     copy_failed.append(src_fname)
                     continue
+
             # Create an object for the dialogue and save it in the DB, unless
             # it has been there already.
             if same_cid_dgs:
-                # This should actually never happen.
                 dg_existed.append(dirname)
                 continue
             # Generate codes and other defining attributes of the dialogue.
@@ -498,7 +563,7 @@ def import_dialogues(request):
                 save_failed.append((dirname, cid))
                 continue
             # Read the dialogue turns.
-            _read_dialogue_turns(dg_data, tgt_fname)
+            _read_dialogue_turns(dg_data, tgt_fname, with_trss)
             # Compute the dialogue price.
             dg_util.update_price(dg_data)
             # Update the dialogue in the DB.
@@ -507,15 +572,17 @@ def import_dialogues(request):
             except:
                 save_price_failed.append((dirname, cid))
                 continue
+
             # Add a record to the CSV for CrowdFlower. (kept for extra safety)
             code_gold = dg_codes[0] + dg_codes[1]
-            csv_file.write('{cid}, {code}, {gold}\n'.format(cid=cid,
-                                                            code=dg_codes[0],
-                                                            gold=code_gold))
+            csv_file.write('{cid}, {code}, {gold}\n'
+                           .format(cid=cid, code=dg_codes[0], gold=code_gold))
             # Add a record to the JSON for CrowdFlower.
             if upload_to_cf:
                 json_data.add(dg_data)
+
             count += 1
+
     if upload_to_cf:
         cf_ret, cf_msg = json_data.upload()
         if cf_ret is False:
@@ -525,6 +592,7 @@ def import_dialogues(request):
     # Render the response.
     context = dict()
     context['MIN_TURNS'] = settings.MIN_TURNS
+    context['SUB_SITE'] = settings.SUB_SITE
     context['session_missing'] = session_missing
     context['session_empty'] = session_empty
     context['copy_failed'] = copy_failed

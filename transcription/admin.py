@@ -46,7 +46,6 @@ class UTurnInline(admin.TabularInline):
 
 
 class DialogueAdmin(admin.ModelAdmin):
-    add_form_template = 'trs/import.html'
     list_display = ['dirname', 'cid', 'transcription_price', 'code',
                     'code_corr', 'code_incorr']
     formfield_overrides = {
@@ -57,6 +56,15 @@ class DialogueAdmin(admin.ModelAdmin):
     inlines = [DgAnnInline, UTurnInline]
     search_fields = ['cid', 'code', 'dirname']
     list_filter = ['list_filename']
+
+    add_form_template = 'trs/import.html'
+
+    def add_view(self, request, form_url="", extra_context=None):
+        if extra_context is None:
+            extra_context = dict()
+        extra_context['use_cf'] = settings.USE_CF
+        return super(DialogueAdmin, self).add_view(
+            request, form_url, extra_context)
 
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
@@ -146,7 +154,9 @@ class TranscriptionAdmin(admin.ModelAdmin):
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
     search_fields = ['text']
-    list_filter = ['dialogue_annotation__user__username',
+    list_filter = ['is_gold',
+                   'breaks_gold',
+                   'dialogue_annotation__user__username',
                    'dialogue_annotation__dialogue__list_filename',
                    'dialogue_annotation__date_saved',
                    'dialogue_annotation__date_paid']

@@ -130,6 +130,8 @@ class XMLSession(object):
         return self.sess_xml.find(trs_path)
 
     def add_transcription(self, trs):
+
+        # Find the appropriate place for the transcription in the XML tree.
         dg_ann = trs.dialogue_annotation
         user_turns = self.sess_xml.findall(self.USERTURN_PATH)
         turn_xml = filter(
@@ -149,6 +151,8 @@ class XMLSession(object):
                 turn_xml.insert(insert_idx, trss_xml)
         else:
             trss_xml = turn_xml
+
+        # Create the XML element for the transcription.
         trs_xml = etree.Element(
             self.TRANSCRIPTION_ELEM,
             annotation=str(dg_ann.pk),
@@ -160,6 +164,8 @@ class XMLSession(object):
         trs_xml.set(self.DATE_ATTR,
                     self.format_datetime(dg_ann.date_saved))
         trs_xml.text = trs.text
+
+        # Insert the new XML element at its place, and return it.
         if self.TRANSCRIPTION_BEFORE:
             trs_left_sib = trss_xml.find(self.TRANSCRIPTION_BEFORE)
         else:
@@ -178,20 +184,63 @@ class XMLSession(object):
         else:
             return trs_xml
 
-    def add_annotation(self, dg_ann):
+    def find_annotations(self):
         anns_above = self.sess_xml.find(self.ANNOTATIONS_ABOVE)
         anns_after = anns_above.find(self.ANNOTATIONS_AFTER)
         anns_after_idx = (anns_above.index(anns_after)
                           if anns_after is not None
                           else len(anns_above))
-        found_anns = False
         if anns_after_idx > 0:
             anns_el = anns_above[anns_after_idx - 1]
             if anns_el.tag == self.ANNOTATIONS_ELEM:
-                found_anns = True
-        if not found_anns:
+                return anns_above, anns_el
+        return anns_above, None
+
+    def find_or_create_annotations(self):
+        anns_above, anns_el = self.find_annotations()
+        if anns_el is None:
             anns_el = etree.Element(self.ANNOTATIONS_ELEM)
             anns_above.insert(anns_after_idx, anns_el)
+        return anns_el
+
+    def iter_annotations(self):
+        anns_above, anns_el = self.find_annotations()
+        if anns_el is not None:
+            for ann_el in anns_el:
+                yield ann_el
+
+    def iter_transcriptions(self, annotation):
+        """
+        Iterates `transcription' elements that belong to the given dialogue
+        annotation.
+
+        Arguments:
+            annotation -- the annotation XML element
+
+        Yields: tuples (turn_number, transcription) where turn_number is an
+        integer and transcription an XML element.
+
+        """
+
+        # Prepare for iteration.
+        ann_id = annotation.get('id')
+        trs_subpath = ".{trss}/{trs}[@{ann_attr}='{ann}']".format(
+            trss=self.SLASH_TRANSCRIPTIONS_ELEM,
+            trs=self.TRANSCRIPTION_ELEM,
+            ann_attr="annotation",  # hard-wired in views.py, too
+            ann=ann_id)
+
+        # Iterate user turns and yield their respective transcriptions.
+        for uturn_el in self.sess_xml.iterfind(self.USERTURN_PATH):
+            turn_number = int(uturn_el.get(self.TURNNUMBER_ATTR))
+            # Find transcriptions in this turn (assumably, there will be
+            # one, but there may be none).
+            for trs in uturn_el.iterfind(trs_subpath):
+                yield turn_number, trs
+
+    def add_annotation(self, dg_ann):
+        # First, get the embedding element for all annotations.
+        anns_el = self.find_or_create_annotations()
         # Second, create an appropriate element for the new annotation.
         etree.SubElement(
             anns_el,
@@ -212,7 +261,7 @@ class XMLSession(object):
             if rec is not None:
                 rec = rec.attrib[self.REC_FNAME_ATTR]
             try:
-                turn_number = uturn_xml.attrib[self.TURNNUMBER_ATTR]
+                turn_number = int(uturn_xml.attrib[self.TURNNUMBER_ATTR])
             except KeyError as er:  # There may be a turn with no turn number.
                 pass
             else:
