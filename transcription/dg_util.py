@@ -118,7 +118,8 @@ if settings.USE_CF:
             # XML elements.
             dg_ann_el = anns_unlabeled[-1]
             # Set all the desired attributes.
-            dg_ann_el.set('worker_id', str(judgment_data["worker_id"]))
+            if 'worker_id' not in settings.LOGGED_JOB_DATA:
+                dg_ann_el.set('worker_id', str(judgment_data["worker_id"]))
             for json_key, att_name in settings.LOGGED_JOB_DATA:
                 att_val = judgment_data.get(json_key, None)
                 if att_val is not None:

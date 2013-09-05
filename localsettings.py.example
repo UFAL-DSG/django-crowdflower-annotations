@@ -47,6 +47,33 @@ SESSION_EXPIRED = datetime.timedelta(hours=12)
 # tolerated.
 MAX_CHAR_ER = 0.07
 
+# What all information about a finalized job should be stored in the XML
+# session file?
+#
+# Format: [ (Crowdflower JSON key, target XML attribute) ]
+LOGGED_JOB_DATA = [
+#     ("webhook_sent_at", "webhook_sent_at"),
+#     ("city", "city"),
+#     ("region", "region"),
+#     ("created_at", "created_at"),
+#     ("unit_id", "unit_id"),
+#     ("unit_state", "unit_state"),
+    ("country", "country"),
+    ("worker_trust", "worker_trust"),
+#     ("judgment", "judgment"),
+#     ("tainted", "tainted"),
+#     ("trust", "trust"),
+#     ("id", "cf_id"),
+    ("external_type", "channel"),
+#     ("reviewed", "reviewed"),
+#     ("worker_id", "worker_id"),  # This is always logged.
+#     ("missed", "missed"),
+#     ("started_at", "started_at"),
+#     ("golden", "golden"),
+#     ("job_id", "job_id"),
+#     ("rejected", "rejected"),
+]
+
 XML_COMMON = {
     'ANNOTATIONS_ABOVE': ".",
     'ANNOTATIONS_AFTER': "turn",  # This has to point to a direct child of
