@@ -95,21 +95,21 @@ if settings.USE_CF:
         with open(sess_fname, 'r+') as sess_file:
             sess_xml = etree.parse(sess_file)
             # Find the relevant dialogue annotation element.
-            anns_above = sess_xml.find(settings.XML_ANNOTATIONS_ABOVE)
-            anns_after = anns_above.find(settings.XML_ANNOTATIONS_AFTER)
+            anns_above = sess_xml.find(settings.XML_COMMON['ANNOTATIONS_ABOVE'])
+            anns_after = anns_above.find(settings.XML_COMMON['ANNOTATIONS_AFTER'])
             anns_after_idx = (anns_above.index(anns_after)
                               if anns_after is not None
                               else len(anns_above))
             found_anns = False
             if anns_after_idx > 0:
                 anns_el = anns_above[anns_after_idx - 1]
-                if anns_el.tag == settings.XML_ANNOTATIONS_ELEM:
+                if anns_el.tag == settings.XML_COMMON['ANNOTATIONS_ELEM']:
                     found_anns = True
             if not found_anns:
                 raise ValueError()
             anns_from_dummy = anns_el.findall(
                 "./{ann_el}[@user='testres']".format(
-                    ann_el=settings.XML_ANNOTATION_ELEM))
+                    ann_el=settings.XML_COMMON['ANNOTATION_ELEM']))
             anns_unlabeled = filter(lambda el: 'worker_id' not in el.attrib,
                                     anns_from_dummy)
             if not anns_unlabeled:
@@ -117,13 +117,12 @@ if settings.USE_CF:
             # Heuristic: take the last one of the potential dialogue annotation
             # XML elements.
             dg_ann_el = anns_unlabeled[-1]
+            # Set all the desired attributes.
             dg_ann_el.set('worker_id', str(judgment_data["worker_id"]))
-            country = judgment_data.get('country', None)
-            if country is not None:
-                dg_ann_el.set('country', country)
-            channel = judgment_data.get('external_type', None)
-            if channel is not None:
-                dg_ann_el.set('channel', channel)
+            for json_key, att_name in settings.LOGGED_JOB_DATA:
+                att_val = judgment_data.get(json_key, None)
+                if att_val is not None:
+                    dg_ann_el.set(att_name, unicode(att_val))
         # Write the XML session file.
         with open(sess_fname, 'w') as sess_file:
             sess_file.write(etree.tostring(sess_xml,

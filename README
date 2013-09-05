@@ -79,6 +79,10 @@ How to set up transcription via Crowdflower:
 	get logs of the work done, and worker IDs logged in XML logs, set the 
 	webhook to <app_url>/log-work for your jobs. For this, the application 
 	assumes each job page contains only one work item.
+# If fully annotated transcription elements are desired also for gold 
+	units, remember to GET 
+	https://api.crowdflower.com/v1/jobs/{job_id}/golds/fire_webhooks
+	when finished with the job.
 
 
 How to import dialogues:
