@@ -79,8 +79,8 @@ if settings.USE_CF:
         dg_is_gold = is_gold(dg)
         if dg_is_gold != (unit['state'] == 'golden'):
             success, errors = update_unit(
-                job_id, unit_id, 'unit[state]={state}'.format(
-                    state='golden' if dg_is_gold else 'new'))
+                job_id, unit_id,
+                (('unit[state]', 'golden' if dg_is_gold else 'new'), ))
             if not success:
                 return False, errors
         return True, None

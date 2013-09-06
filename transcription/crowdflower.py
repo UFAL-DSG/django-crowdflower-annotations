@@ -1,11 +1,16 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 # TODO: Reimplement without backing off to using the external program curl.
+from __future__ import unicode_literals
+
+import httplib
 import json
 from lru_cache import lru_cache
-import shutil
-from subprocess import call
-from tempfile import TemporaryFile
+import os.path
+# import shutil
+# from subprocess import call
+# from tempfile import TemporaryFile
+from urllib import urlencode
 
 import settings
 from util import get_log_path
@@ -13,7 +18,7 @@ from util import get_log_path
 CF_URL_START = "https://api.crowdflower.com/v1/"
 
 
-def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
+def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
                 log=settings.LOG_CURL):
     """
     Note that specifying both `data' and `json_str' is not supported and the
@@ -36,57 +41,93 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
         error_msgs += [error_msg]
         logfile = None
 
-    # Create a file for the response from CF.
-    try:
-        upload_outfile = TemporaryFile()
-    except Exception as er:
-        error_msg = "Output from `curl' could not be obtained.\n"
-        error_msg += 'The original exception said: "{er}".\n'.format(er=er)
-        error_msgs += [error_msg]
-        upload_outfile = None
-        serious_errors = True
+    # # Create a file for the response from CF.
+    # try:
+    #     upload_outfile = TemporaryFile()
+    # except Exception as er:
+    #     error_msg = "Output from `curl' could not be obtained.\n"
+    #     error_msg += 'The original exception said: "{er}".\n'.format(er=er)
+    #     error_msgs += [error_msg]
+    #     upload_outfile = None
+    #     serious_errors = True
 
-    # Build the curl command line.
-    cf_url = '{start}{arg}.json?key={key}'.format(start=CF_URL_START,
-                                                  arg=cf_url_part,
-                                                  key=settings.CF_KEY)
+    # Build the HTTP params.
     if json_str is None:
-        if data is not None:
-            curl_args = ['curl', '-X', verb, '-d', data, cf_url]
+        headers = dict()
+        # headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        if params is not None:
+            params_str = urlencode(params)
         else:
-            curl_args = ['curl', '-X', verb, cf_url]
+            params_str = ''
     else:
-        curl_args = ['curl', '-X', verb, '-d', json_str, '-H',
-                     'Content-Type: application/json', cf_url]
+        headers = {'Content-Type': 'application/json; charset=UTF-8'}
+        params_str = json_str
+    cf_url = '/v1/{start}.json?key={key}'.format(start=cf_url_part,
+                                                 key=settings.CF_KEY)
+    # # Build the curl command line.
+    # cf_url = '{start}{arg}.json?key={key}'.format(start=CF_URL_START,
+    #                                               arg=cf_url_part,
+    #                                               key=settings.CF_KEY)
+    # if json_str is None:
+    #     if data is not None:
+    #         curl_args = ['curl', '-X', verb, '-d', data, cf_url]
+    #     else:
+    #         curl_args = ['curl', '-X', verb, cf_url]
+    # else:
+    #     curl_args = ['curl', '-X', verb, '-d', json_str, '-H',
+    #                  'Content-Type: application/json', cf_url]
 
-    # Call the command.
+    # Make the connection, retrieve results.
+    try:
+        cf_conn = httplib.HTTPSConnection('api.crowdflower.com')
+    except:
+        cf_conn = httplib.HTTPConnection('api.crowdflower.com')
+    try:
+        cf_conn.request(verb, cf_url, params_str, headers)
+        cf_res = cf_conn.getresponse()
+        try:
+            cf_out = cf_res.read().decode('UTF-8')
+        except:
+            cf_out = None
+    finally:
+        cf_conn.close()
+
+    # Log.
     if log and logfile:
-        logfile.write('Command: {cmd}\n----\nReturned: \n'
-                      .format(cmd=' '.join(
-                          map(lambda arg: arg if ' ' not in arg else
-                              "'{arg}'".format(arg=arg), curl_args))))
-    cf_retcode = call(curl_args, stdout=upload_outfile, stderr=None)
-    if log and logfile:
-        if upload_outfile:
-            upload_outfile.seek(0)
-            logfile.write(upload_outfile.read())
-        logfile.write('\n----\nReturn code: {code}\n'.format(code=cf_retcode))
+        headers_str = '; '.join('{key}: {val}'.format(key=key, val=val)
+                                for key, val in headers.iteritems())
+        logfile.write(("Call \"request('{verb}', '{url}', '{params}', "
+                       "'{headers}')\"\n----\nResponse: {status} {reason}\n"
+                       "----\nReturned:\n{data}\n").format(
+                      verb=verb, url=cf_url, params=params_str,
+                      headers=headers_str, status=cf_res.status,
+                      reason=cf_res.reason,
+                      data=cf_out).encode('UTF-8'))
+
+    # # Call the command.
+    # if log and logfile:
+    #     logfile.write('Command: {cmd}\n----\nReturned: \n'
+    #                   .format(cmd=' '.join(
+    #                       map(lambda arg: arg if ' ' not in arg else
+    #                           "'{arg}'".format(arg=arg), curl_args))))
+    # cf_retcode = call(curl_args, stdout=upload_outfile, stderr=None)
+    # if log and logfile:
+    #     if upload_outfile:
+    #         upload_outfile.seek(0)
+    #         logfile.write(upload_outfile.read())
+    #     logfile.write('\n----\nReturn code: {code}\n'.format(
+    #         code=cf_retcode))
 
     # Check for errors.
-    cf_outobj = None
-    if upload_outfile is not None:
-        upload_outfile.seek(0)
-        try:
-            cf_outobj = json.load(upload_outfile)
-        except ValueError:
-            cf_outobj = None
-            upload_outfile.seek(0)
-            error_msgs += ['Unexpected reply from CF: """{body}"""\n'.format(
-                           body=upload_outfile.read())]
-            serious_errors = True
-        finally:
-            upload_outfile.close()
-    if cf_retcode != 0 or serious_errors:
+    try:
+        cf_outobj = json.loads(cf_out) if cf_out else ''
+    except ValueError:
+        cf_outobj = None
+        error_msgs += ['Unexpected reply from CF: """{cf_out}"""\n'
+                       .format(cf_out=cf_out)]
+        serious_errors = True
+    # TODO Check whether `cf_res.status' did not indicate failure.
+    if serious_errors:
         if cf_outobj is not None:
             try:
                 error_msgs.append(cf_outobj['error']['message'])
@@ -96,6 +137,31 @@ def _contact_cf(cf_url_part, data=None, json_str=None, verb='POST',
             error_msgs.append('(no message)')
         # In case of lack of success, return also the error messages.
         return False, cf_outobj, error_msgs
+
+    # # Check for errors.
+    # cf_outobj = None
+    # if upload_outfile is not None:
+    #     upload_outfile.seek(0)
+    #     try:
+    #         cf_outobj = json.load(upload_outfile)
+    #     except ValueError:
+    #         cf_outobj = None
+    #         upload_outfile.seek(0)
+    #         error_msgs += ['Unexpected reply from CF: """{body}"""\n'.format(
+    #                        body=upload_outfile.read())]
+    #         serious_errors = True
+    #     finally:
+    #         upload_outfile.close()
+    # if cf_retcode != 0 or serious_errors:
+    #     if cf_outobj is not None:
+    #         try:
+    #             error_msgs.append(cf_outobj['error']['message'])
+    #         except KeyError:
+    #             error_msgs.append('(no message)')
+    #     else:
+    #         error_msgs.append('(no message)')
+    #     # In case of lack of success, return also the error messages.
+    #     return False, cf_outobj, error_msgs
 
     # Return the returned object in case of success.
     return True, cf_outobj, error_msgs
@@ -178,10 +244,79 @@ def unit_id_from_cid(job_id, cid):
 
 def update_unit(job_id, unit_id, params):
     cf_url = 'jobs/{jobid}/units/{unitid}'.format(jobid=job_id, unitid=unit_id)
-    success, msg, error_msgs = _contact_cf(cf_url, verb='PUT', data=params)
+    success, msg, error_msgs = _contact_cf(cf_url, verb='PUT', params=params)
     if success:
         return True, None
     else:
         lead = 'job {jobid}, unit {unitid}: '.format(jobid=job_id,
                                                      unitit=unit_id)
         return False, (lead + error_msgs)
+
+
+def create_job(cents_per_unit,
+               judgments_per_unit=1,
+               units_per_assignment=4,
+               pages_per_assignment=4,
+               gold_per_assignment=1,
+               job_cml_path=None, **kwargs):
+    # Interpret arguments.
+    if job_cml_path is None:
+        job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
+                                    'crowdflower', 'job.cml')
+    # Build all the params.
+    job_params = dict()
+    params = {'job': job_params}
+    with open(job_cml_path) as job_file:
+        job_params['cml'] = job_file.read()
+    job_params['confidence_fields'] = '["code"]'
+    job_params['title'] = 'Dialogue transcription – {price}c'.format(
+        price=units_per_assignment * cents_per_unit)
+    job_params['judgments_per_unit'] = judgments_per_unit
+    job_params['units_per_assignment'] = units_per_assignment
+    job_params['pages_per_assignment'] = pages_per_assignment
+    job_params['language'] = 'en'
+    # FIXME The following needs to be less than units_per_assignment. Check it,
+    # potentially complaining about wrong arguments.
+    job_params['gold_per_assignment'] = gold_per_assignment
+    # XXX This does not seem to work with Crowdflower.
+#     job_params['included_countries'] = ('[{"code":"AU", "name":"Australia"},'
+#                                     '{"code":"CA", "name":"Canada"},'
+#                                     '{"code":"GB", "name":"United Kingdom"},'
+#                                     '{"code":"IE", "name":"Ireland"},'
+#                                     '{"code":"IM", "name":"Isle of Man"},'
+#                                     '{"code":"NZ", "name":"New Zealand"},'
+#                                     '{"code":"US", "name":"United States"}]')
+    job_params['instructions'] = """\
+        Please, write down what is said in the provided recordings. The
+        recordings capture a dialogue between a human and a computer. The
+        computer utterances are known, so only the human's utterances need to
+        be transcribed."""
+    # webhook
+    job_params['webhook_uri'] = '{domain}{site}log-work'.format(
+        domain=settings.DOMAIN_URL,
+        site=settings.SUB_SITE)
+    # XXX This does not seem to work with Crowdflower.
+    # job_params['minimum_requirements'] = ('{"priority":1,'
+    #                                   '"skill_scores":{"bronze_v1":1},'
+    #                                   '"min_score":1}')
+    job_params.update(kwargs)
+
+#     # Parameter names are required to be like 'job[param]' by CF. Do that.
+#     params = {'job[{key}]'.format(key=key): val
+#               for key, val in params.iteritems()}
+
+    # Create the job.
+    cf_url = 'jobs'
+#     success, msg, error_msgs = _contact_cf(cf_url, verb='POST', params=params)
+    success, msg, error_msgs = _contact_cf(
+        cf_url, verb='POST', json_str=json.dumps(params))
+#         json_str=json.dumps({'job': {'title': 'JSON title'}}))
+    if success:
+        return True, msg
+    else:
+        lead = 'Error when creating new job: '
+        return False, (lead + ' ||| '.join(error_msgs))
+
+#     # Set up the gold field.
+#     cf_url = 'jobs/{jobid}/gold'.format(jobid=job_id)
+#     params = 'reset=1' if reset else 'check=code'

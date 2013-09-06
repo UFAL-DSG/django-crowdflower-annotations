@@ -17,8 +17,7 @@ CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
 
 USE_CF = localsettings.USE_CF
-for name in ('CF_URL_START', 'CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN',
-             'PRICE_PER_TURN'):
+for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
     try:
         setattr(_module, name, getattr(localsettings, name))
     except AttributeError as er:

@@ -5,6 +5,7 @@
 
 from __future__ import unicode_literals
 
+import codecs
 from datetime import datetime
 import hashlib
 import os
@@ -20,7 +21,7 @@ from django.shortcuts import render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
-from crowdflower import fire_gold_hooks
+from crowdflower import create_job, fire_gold_hooks
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -635,6 +636,19 @@ if settings.USE_CF:
         for job_id in job_ids:
             fire_gold_hooks(job_id)
         context = {'n_jobs': len(job_ids)}
+        return render(request, "trs/hooks-fired.html", context)
+
+
+    @login_required
+    @user_passes_test(lambda u: u.is_staff)
+    def create_job_view(request):
+        import json
+        success, msg = create_job(41)
+        log_path = get_log_path(settings.WORKLOGS_DIR)
+        with codecs.open(log_path, 'w', encoding='UTF-8') as log_file:
+            log_file.write(str(success) + '\n')
+            log_file.write(json.dumps(msg))
+        context = {'n_jobs': msg}
         return render(request, "trs/hooks-fired.html", context)
 
 
