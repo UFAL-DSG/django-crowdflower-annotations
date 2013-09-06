@@ -83,7 +83,7 @@
 <div id="embedded"></div>
 <p>
 For technical reasons, we have to ask you to complete the job at
-<a target="_blank" href="http://vystadial.ms.mff.cuni.cz/apps/cir_transcription/transcribe?cid={{cid}}">this site</a>. When you submit the form there, you will be given a code that needs to be entered below.
+<a target="_blank" href="http://vystadial.ms.mff.cuni.cz/apps/cir_transcription/transcribe?cid={% templatetag openvariable %}cid{% templatetag closevariable %}">this site</a>. When you submit the form there, you will be given a code that needs to be entered below.
 </p>
 
 <!-- <p>
