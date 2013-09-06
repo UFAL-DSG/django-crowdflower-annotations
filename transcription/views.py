@@ -155,35 +155,44 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False):
 
             # Iterate over all dialogue annotations.
             for ann_el in session.iter_annotations():
-                # Save the dialogue annotation object.
+                # Retrieve all properties of the dialogue annotation object.
                 accent_str = ann_el.get('accent')
-                dg_ann = DialogueAnnotation(
-                    offensive=(ann_el.get("offensive") == "True"),
-                    accent=("" if accent_str == 'native' else accent_str),
-                    dialogue=dg_data,
-                    program_version=ann_el.get('program_version'),
-                    notes=str(ann_el.text))
-                dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR
-                                  if ann_el.get('quality') == 'clear'
-                                  else DialogueAnnotation.QUALITY_NOISY)
+                accent = ("" if accent_str == 'native' else accent_str)
+                notes = ('' if ann_el.text is None else ann_el.text.strip())
+                offensive = (ann_el.get("offensive") == "True")
+                program_version = ann_el.get('program_version')
+                quality = (DialogueAnnotation.QUALITY_CLEAR
+                           if ann_el.get('quality') == 'clear'
+                           else DialogueAnnotation.QUALITY_NOISY)
                 ann_users = User.objects.filter(username=ann_el.get('user'))
                 if ann_users.exists():
-                    dg_ann.user = ann_users[0]
+                    ann_user = ann_users[0]
                 else:
-                    dg_ann.user = dummy_user
-                dg_ann.save()
+                    ann_user = dummy_user
+                # Check whether this object has been imported already.
+                ann_props = {'accent': accent,
+                             'dialogue': dg_data,
+                             'notes': notes,
+                             'offensive': offensive,
+                             'quality': quality,
+                             'user': ann_user,
+                             'program_version': program_version}
+                if not DialogueAnnotation.objects.filter(**ann_props):
+                    # Save the dialogue annotation.
+                    dg_ann = DialogueAnnotation(**ann_props)
+                    dg_ann.save()
 
-                # Find all transcriptions that belong to this dialogue
-                # annotation and save them as database objects.
-                for turn_number, trs_el in session.iter_transcriptions(ann_el):
-                    Transcription(
-                        text=trs_el.text,
-                        turn=uturns[turn_number],
-                        dialogue_annotation=dg_ann,
-                        is_gold=(trs_el.get('is_gold') != '0'),
-                        breaks_gold=(trs_el.get('breaks_gold') != '0'),
-                        some_breaks_gold=(
-                            trs_el.get('some_breaks_gold') != '0')).save()
+                    # Find all transcriptions that belong to this dialogue
+                    # annotation and save them as database objects.
+                    for turnnum, trs_el in session.iter_transcriptions(ann_el):
+                        Transcription(
+                            text=trs_el.text,
+                            turn=uturns[turnnum],
+                            dialogue_annotation=dg_ann,
+                            is_gold=(trs_el.get('is_gold') != '0'),
+                            breaks_gold=(trs_el.get('breaks_gold') != '0'),
+                            some_breaks_gold=(
+                                trs_el.get('some_breaks_gold') != '0')).save()
 
 
 def transcribe(request):
