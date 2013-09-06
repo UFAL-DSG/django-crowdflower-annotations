@@ -118,6 +118,15 @@ def list_units(job_id):
         return False, errors
 
 
+def fire_gold_hooks(job_id):
+    cf_url = 'jobs/{job_id}/golds/fire_webhooks'.format(job_id=job_id)
+    success, cf_outobj, errors = _contact_cf(cf_url, verb='GET')
+    if success:
+        return True, cf_outobj
+    else:
+        return False, errors
+
+
 def upload_units(job_id, json_str):
     # Communicate the new data to CrowdFlower via the CF API.
     cf_url = 'jobs/{jobid}/upload'.format(jobid=job_id)

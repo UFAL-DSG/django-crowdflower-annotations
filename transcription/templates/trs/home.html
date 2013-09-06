@@ -1,10 +1,15 @@
 {% extends "base.html" %}
 
 {% block content %}
+<h1>Main menu</h1>
+
 <ul>
 <li><a href="{% url transcribe %}">Start/continue transcribing</a></li>
 {% if user.is_superuser or user.is_staff %}
 <li><a href="{% url import_dialogues %}">Import dialogues</a></li>
+{% if USE_CF %}
+<li><a href="{% url fire_hooks %}">Fire hooks for gold items</a></li>
+{% endif %}
 <li><a href="{% url admin:index %}">Admin</a></li>
 </ul>
 {% endif %}

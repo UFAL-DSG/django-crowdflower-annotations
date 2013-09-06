@@ -2,11 +2,15 @@
 # -*- coding: UTF-8 -*-
 #
 # TODO: User.objects.get_or_create(dummy_user) where appropriate.
+
+from __future__ import unicode_literals
+
 from datetime import datetime
 import hashlib
 import os
 import random
 from subprocess import check_output
+
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
@@ -16,16 +20,17 @@ from django.shortcuts import render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
+from crowdflower import fire_gold_hooks
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
-from util import get_log_path
 # XXX: Beware, this imports the settings from within the `transcription'
 # directory. That means that PROJECT_DIR will be
 # /webapps/cf_transcription/transcription, not just /webapps/cf_transcription.
 from tr_normalisation import trss_match
 from transcription.models import Transcription, DialogueAnnotation, \
     Dialogue, UserTurn, SystemTurn
+from util import get_log_path
 
 
 def group_by(objects, attrs):
@@ -468,7 +473,8 @@ def transcribe(request):
 
 @login_required
 def home(request):
-    return render(request, "trs/home.html")
+    context = {'USE_CF': settings.USE_CF}
+    return render(request, "trs/home.html", context)
 
 
 @login_required
@@ -622,13 +628,24 @@ def import_dialogues(request):
 
 
 if settings.USE_CF:
+    @login_required
+    @user_passes_test(lambda u: u.is_staff)
+    def fire_hooks(request):
+        job_ids = dg_util.get_job_ids()
+        for job_id in job_ids:
+            fire_gold_hooks(job_id)
+        context = {'n_jobs': len(job_ids)}
+        return render(request, "trs/hooks-fired.html", context)
+
+
     @csrf_exempt
     def log_work(request):
         try:
+            signal = request.POST.get(u'signal', None)
             # Try: be robust
             # a.k.a. Pokemon exception handling: catch 'em all
             try:
-                if request.POST.get(u'signal', None) == u'unit_complete':
+                if signal in ('job_complete', 'unit_complete'):
                     # Save the request data to a log.
                     log_path = get_log_path(settings.WORKLOGS_DIR)
                     with open(log_path, 'w') as log_file:
@@ -637,7 +654,14 @@ if settings.USE_CF:
             except Exception:
                 pass
             # Record the request to a session XML file.
-            dg_util.record_worker(request)
+            if signal == 'unit_complete':
+                dg_util.record_worker(request)
+            elif signal == 'job_complete':
+                # TODO: The line below is a best guess at the structure of JSON
+                # received from CF. Check what it actually looks like and
+                # update this once we received some such JSONs from CF.
+                job_id = request.POST['payload']['job_data']['id']
+                fire_gold_hooks(job_id)
         finally:
             from django.http import HttpResponse
             return HttpResponse(status=200)

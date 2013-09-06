@@ -62,6 +62,12 @@ if settings.USE_CF:
             return price_classes[price_cat]
 
 
+    def get_job_ids():
+        """Returns IDs of all Crowdflower jobs configured."""
+        return ([settings.CF_JOB_ID] if price_classes is None
+                else price_classes.viewvalues())
+
+
     def update_gold(dg):
         """Updates the gold status of `dg' on Crowdflower."""
         job_id = get_job_id(dg)

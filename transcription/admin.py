@@ -56,6 +56,7 @@ class DialogueAdmin(admin.ModelAdmin):
     inlines = [DgAnnInline, UTurnInline]
     search_fields = ['cid', 'code', 'dirname']
     list_filter = ['list_filename']
+    # TODO Filter by price ranges paid for transcription.
 
     add_form_template = 'trs/import.html'
 
@@ -124,7 +125,10 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     }
     inlines = [TranscriptionInline]
     search_fields = ['dialogue__cid', 'dialogue__code', 'dialogue__dirname']
-    list_filter = ['user__username']
+    list_filter = ['user__username',
+                   'finished',
+                   'offensive',
+                   'accent']
 
     date_hierarchy = 'date_saved'
 
