@@ -67,8 +67,7 @@ class DialogueAnnotation(models.Model):
         return ('(u: {u}; saved: {ds}; q: {q}; acc: {acc}; off: {off}; dg: '
                 '{dg})').format(u=self.user.username,
                                 ds=self.date_saved,
-                                q=DialogueAnnotation.QUALITY_CHOICES[
-                                    int(self.quality)][1],
+                                q=self.get_quality_display(),
                                 acc=(self.accent or "native"),
                                 off=self.offensive,
                                 dg=self.dialogue.cid)
