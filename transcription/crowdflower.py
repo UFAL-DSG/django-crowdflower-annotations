@@ -54,7 +54,7 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
     # Build the HTTP params.
     if json_str is None:
         headers = dict()
-        # headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         if params is not None:
             params_str = urlencode(params)
         else:
@@ -268,9 +268,9 @@ def create_job(cents_per_unit,
     params = {'job': job_params}
     with open(job_cml_path) as job_file:
         job_params['cml'] = job_file.read()
-    job_params['confidence_fields'] = '["code"]'
+    job_params['confidence_fields'] = ["code"]
     job_params['title'] = 'Dialogue transcription – {price}c'.format(
-        price=units_per_assignment * cents_per_unit)
+        price=((units_per_assignment * cents_per_unit) / units_per_assignment))
     job_params['judgments_per_unit'] = judgments_per_unit
     job_params['units_per_assignment'] = units_per_assignment
     job_params['pages_per_assignment'] = pages_per_assignment
@@ -295,28 +295,32 @@ def create_job(cents_per_unit,
     job_params['webhook_uri'] = '{domain}{site}log-work'.format(
         domain=settings.DOMAIN_URL,
         site=settings.SUB_SITE)
-    # XXX This does not seem to work with Crowdflower.
-    # job_params['minimum_requirements'] = ('{"priority":1,'
-    #                                   '"skill_scores":{"bronze_v1":1},'
-    #                                   '"min_score":1}')
+    # skills
+    job_params['minimum_requirements'] = {"priority": 1,
+                                          "skill_scores":
+                                            {"bronze_v1": 1},
+                                          "min_score": 1}
     job_params.update(kwargs)
-
-#     # Parameter names are required to be like 'job[param]' by CF. Do that.
-#     params = {'job[{key}]'.format(key=key): val
-#               for key, val in params.iteritems()}
 
     # Create the job.
     cf_url = 'jobs'
-#     success, msg, error_msgs = _contact_cf(cf_url, verb='POST', params=params)
-    success, msg, error_msgs = _contact_cf(
-        cf_url, verb='POST', json_str=json.dumps(params))
-#         json_str=json.dumps({'job': {'title': 'JSON title'}}))
+    success, msg, error_msgs = _contact_cf(cf_url, verb='POST',
+                                           json_str=json.dumps(params))
     if success:
+        job_id = msg['id']
+        # Set up the workers' countries included.
+        params = [('job[included_countries][]', country)
+                  for country in ("AU", "CA", "GB", "IE", "IM", "NZ", "US")]
+        # Set up the gold field.
+        params.append(('check', 'code'))
+        cf_url = 'jobs/{jobid}'.format(jobid=job_id)
+        update_success, update_out, update_msgs = _contact_cf(
+            cf_url, verb='PUT', params=params)
+        if not update_success:
+            lead = ('Error when updating parameters of the new job (job ID: '
+                    '{jobid}: ').format(jobid=job_id)
+            return False, (lead + ' ||| '.join(update_msgs))
         return True, msg
     else:
         lead = 'Error when creating new job: '
         return False, (lead + ' ||| '.join(error_msgs))
-
-#     # Set up the gold field.
-#     cf_url = 'jobs/{jobid}/gold'.format(jobid=job_id)
-#     params = 'reset=1' if reset else 'check=code'

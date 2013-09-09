@@ -647,7 +647,10 @@ if settings.USE_CF:
         log_path = get_log_path(settings.WORKLOGS_DIR)
         with codecs.open(log_path, 'w', encoding='UTF-8') as log_file:
             log_file.write(str(success) + '\n')
-            log_file.write(json.dumps(msg))
+            if success:
+                log_file.write(json.dumps(msg))
+            else:
+                log_file.write(msg)
         context = {'n_jobs': msg}
         return render(request, "trs/hooks-fired.html", context)
 
