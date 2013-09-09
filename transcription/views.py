@@ -643,34 +643,58 @@ if settings.USE_CF:
 
 
     class CreateJobForm(forms.Form):
+        """A form for creating Crowdflower jobs."""
+
         class CountriesField(forms.Field):
+            """Form field for entering country codes."""
             def to_python(self, value):
                 "Normalize data to a list of strings."
                 # Return None if no input was given.
                 if not value:
-                    return None
-                return value.split(',')
+                    return list()
+                return sorted(set(map(unicode.strip, value.split(','))))
 
             def validate(self, value):
                 "Check if value consists only of two-letter codes."
-
                 # Use the parent's handling of required fields, etc.
                 super(CreateJobForm.CountriesField, self).validate(value)
-                wrong_codes = list()
-                good_codes = list()
+                wrong_codes = set()
                 for code in value:
                     if len(code) != 2 or not code.isupper():
-                        wrong_codes.append(code)
-                    else:
-                        good_codes.append(code)
+                        wrong_codes.add(code)
                 if wrong_codes:
                     codes_list = ', '.join('"{code}"'.format(code=code)
-                                           for code in wrong_codes)
+                                           for code in sorted(wrong_codes))
                     msg = ('Following are definitely not valid country codes: '
                            '{codes}.').format(codes=codes_list)
                     raise forms.ValidationError(msg)
+
+        class PricesField(forms.Field):
+            """Form field for entering a list of integers."""
+            def to_python(self, value):
+                "Normalize data to a list of integers."
+                # Return None if no input was given.
+                if not value:
+                    return list()
+
+                # Otherwise, check all input values whether they can be coerced
+                # to ints.
+                string_list = set(map(unicode.strip, value.split(',')))
+                wrong_ints = set()
+                good_ints = set()
+                for int_str in string_list:
+                    try:
+                        good_ints.add(int(int_str))
+                    except ValueError:
+                        wrong_ints.add(int_str)
+                if wrong_ints:
+                    ints_list = ', '.join('"{int_}"'.format(int_=int_)
+                                          for int_ in wrong_ints)
+                    msg = ('Following are not valid integers: {ints}.'
+                           .format(ints=ints_list))
+                    raise forms.ValidationError(msg)
                 else:
-                    return good_codes
+                    return list(sorted(good_ints))
 
         # Constants.
         default_countries = ",".join(("AU", "CA", "GB", "IE", "IM", "NZ",
@@ -685,13 +709,23 @@ if settings.USE_CF:
         fixedWidthTextInput = forms.TextInput(attrs={'size': inputWidth})
 
         # Fields.
-        cents_per_unit = forms.IntegerField(initial=41,
-                                            widget=fixedWidthTextInput)
-        store_job_id = forms.BooleanField(initial=True)
+        cents_per_unit = PricesField(
+            initial='5, 10, 15, 20, 25, 30, 35, 40',
+            widget=fixedWidthTextInput,
+            help_text=('Specify desired price per dialogue in cents. This can '
+                       'be a comma-separated list of integers. A job will be '
+                       'created for each price specified here.'))
+        store_job_id = forms.BooleanField(
+            initial=True,
+            help_text=('Should job IDs be written to a job ID list file? '
+                       '(Leave this checked if you want to upload dialogues '
+                       'for this job.)'))
         job_cml_path = forms.FilePathField(
             path=os.path.dirname(default_job_cml_path),
             initial=default_job_cml_path,
-            label="Path to the job CML file")
+            label="Path to the job CML file",
+            help_text=('Select the file that defines the body of the '
+                       'Crowdflower unit.'))
         judgments_per_unit = forms.IntegerField(initial=1,
                                                 widget=fixedWidthTextInput)
         units_per_assignment = forms.IntegerField(initial=4,
@@ -700,14 +734,23 @@ if settings.USE_CF:
                                                   widget=fixedWidthTextInput)
         gold_per_assignment = forms.IntegerField(initial=1,
                                                  widget=fixedWidthTextInput)
-        title = forms.CharField(initial=default_title,
-                                widget=fixedWidthTextInput)
+        title = forms.CharField(
+            initial=default_title, widget=fixedWidthTextInput,
+            help_text=('Specify title for the job. "{price}" will be '
+                       'substituted with the Crowdflower job price in cents.'))
         instructions = forms.CharField(
             initial=default_instructions,
-            widget=forms.Textarea(attrs={'rows': 3, 'cols': 64}))
-        bronze = forms.BooleanField(initial=True)
-        included_countries = CountriesField(initial=default_countries,
-                                            widget=fixedWidthTextInput)
+            widget=forms.Textarea(attrs={'rows': 3, 'cols': 64}),
+            help_text='Specify instructions for the Crowdflower job in HTML.')
+        bronze = forms.BooleanField(
+            initial=True,
+            help_text=('Require bronze classification from workers to work on '
+                       'this job?'))
+        included_countries = CountriesField(
+            initial=default_countries, widget=fixedWidthTextInput,
+            help_text=('Specify countries which workers have to reside in '
+                       'in order to qualify for working on this job. '
+                       'Use two-letter country codes.'))
 
 
     @login_required
@@ -719,18 +762,38 @@ if settings.USE_CF:
         if request.method == "POST":
             form = CreateJobForm(request.POST)
             if form.is_valid():
-                price = form.cleaned_data['cents_per_unit']
-                success, msg = create_job(cents_per_unit=price)
-                log_path = get_log_path(settings.WORKLOGS_DIR)
-                with codecs.open(log_path, 'w', encoding='UTF-8') as log_file:
-                    log_file.write(str(success) + '\n')
-                    if success:
-                        log_file.write(json.dumps(msg))
-                    else:
-                        log_file.write(msg)
-                context = {'n_jobs': msg}
-                context['form'] = form
-                return render(request, "trs/hooks-fired.html", context)
+                prices = form.cleaned_data['cents_per_unit']
+                job_creation_failed = dict()  # :: {price -> ?creation_failed}
+                msgs = dict()  # :: {price -> message}
+                for price in prices:
+                    try:
+                        success, msg = create_job(cents_per_unit=price)
+                    except Exception as ex:
+                        success = False
+                        msg = str(ex)
+                    # Remember whether job creation was successful for this job
+                    # price.
+                    job_creation_failed[price] = not success
+                    msgs[price] = 'OK' if success else msg
+                    # Log the communication with Crowdflower from job creation.
+                    log_path = get_log_path(settings.WORKLOGS_DIR)
+                    with codecs.open(log_path, 'w',
+                                     encoding='UTF-8') as log_file:
+                        log_file.write(str(success) + '\n')
+                        if success:
+                            log_file.write(json.dumps(msg))
+                        else:
+                            log_file.write(msg)
+
+                # Build and render the response.
+                n_successful = (len(prices)
+                                - sum(job_creation_failed.viewvalues()))
+                context = {'n_jobs': n_successful,
+                           'had_errors': any(job_creation_failed.itervalues()),
+                           'msgs': msgs,
+                           'form': form,
+                           }
+                return render(request, "trs/jobs-created.html", context)
 
             # If the form data were invalid,
             else:

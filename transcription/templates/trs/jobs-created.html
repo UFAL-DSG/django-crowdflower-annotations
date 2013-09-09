@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Job creation report</h1>
+
+<p>
+A total of <strong>{{ n_jobs }}</strong> Crowdflower jobs have been
+successfully created.
+{% if had_errors %}
+The table below shows reports for each of the jobs individually.
+{% endif %}
+</p>
+
+{% if had_errors %}
+<table>
+  <tr>
+    <th>job ID</th>
+    <th>message</th>
+  </tr>
+  {% for jobid, msg in msgs.items %}
+  <tr>
+    <td>{% if job_creation_failed.jobid %}<strong>{% endif %}
+        {{ jobid }}
+        {% if job_creation_failed.jobid %}</strong>{% endif %}
+    </td>
+    <td>{% if job_creation_failed.jobid %}<strong>{% endif %}
+        {{ msg }}
+        {% if job_creation_failed.jobid %}</strong>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+{% endif %}
+
+<p>
+Go back <a href="{% url home %}">home</a>.
+</p>
+
+{% endblock %}

@@ -303,6 +303,9 @@ def _load_price_classes():
             job_ids = dict()
             with open(settings.CF_JOBS_FNAME) as jobs_file:
                 for line in jobs_file:
+                    line = line.strip()
+                    if not line:
+                        continue
                     try:
                         price_str, job_id_str = line.strip().split('\t')
                         job_ids[float(price_str)] = job_id_str

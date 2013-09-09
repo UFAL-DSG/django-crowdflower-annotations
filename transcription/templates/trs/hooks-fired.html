@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Hooks fired</h1>
+
+<p>
+Hooks for all the annotated gold items, a total of
+<strong>{{ n_jobs }}</strong> jobs, were fired.
+</p>
+
+<p>
+Go back <a href="{% url home %}">home</a>.
+</p>
+
+{% endblock %}
