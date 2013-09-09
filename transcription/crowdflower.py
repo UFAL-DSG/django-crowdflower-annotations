@@ -6,16 +6,21 @@ from __future__ import unicode_literals
 import httplib
 import json
 from lru_cache import lru_cache
+from lxml import etree
 import os.path
-# import shutil
-# from subprocess import call
-# from tempfile import TemporaryFile
+import re
 from urllib import urlencode
 
+from dg_util import is_gold
 import settings
+from settings import SettingsException
+from transcription.models import UserTurn
 from util import get_log_path
 
 CF_URL_START = "https://api.crowdflower.com/v1/"
+
+default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
+                                    'crowdflower', 'job.cml')
 
 
 def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
@@ -41,16 +46,6 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
         error_msgs += [error_msg]
         logfile = None
 
-    # # Create a file for the response from CF.
-    # try:
-    #     upload_outfile = TemporaryFile()
-    # except Exception as er:
-    #     error_msg = "Output from `curl' could not be obtained.\n"
-    #     error_msg += 'The original exception said: "{er}".\n'.format(er=er)
-    #     error_msgs += [error_msg]
-    #     upload_outfile = None
-    #     serious_errors = True
-
     # Build the HTTP params.
     if json_str is None:
         headers = dict()
@@ -64,18 +59,6 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
         params_str = json_str
     cf_url = '/v1/{start}.json?key={key}'.format(start=cf_url_part,
                                                  key=settings.CF_KEY)
-    # # Build the curl command line.
-    # cf_url = '{start}{arg}.json?key={key}'.format(start=CF_URL_START,
-    #                                               arg=cf_url_part,
-    #                                               key=settings.CF_KEY)
-    # if json_str is None:
-    #     if data is not None:
-    #         curl_args = ['curl', '-X', verb, '-d', data, cf_url]
-    #     else:
-    #         curl_args = ['curl', '-X', verb, cf_url]
-    # else:
-    #     curl_args = ['curl', '-X', verb, '-d', json_str, '-H',
-    #                  'Content-Type: application/json', cf_url]
 
     # Make the connection, retrieve results.
     try:
@@ -104,20 +87,6 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
                       reason=cf_res.reason,
                       data=cf_out).encode('UTF-8'))
 
-    # # Call the command.
-    # if log and logfile:
-    #     logfile.write('Command: {cmd}\n----\nReturned: \n'
-    #                   .format(cmd=' '.join(
-    #                       map(lambda arg: arg if ' ' not in arg else
-    #                           "'{arg}'".format(arg=arg), curl_args))))
-    # cf_retcode = call(curl_args, stdout=upload_outfile, stderr=None)
-    # if log and logfile:
-    #     if upload_outfile:
-    #         upload_outfile.seek(0)
-    #         logfile.write(upload_outfile.read())
-    #     logfile.write('\n----\nReturn code: {code}\n'.format(
-    #         code=cf_retcode))
-
     # Check for errors.
     try:
         cf_outobj = json.loads(cf_out) if cf_out else ''
@@ -137,31 +106,6 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
             error_msgs.append('(no message)')
         # In case of lack of success, return also the error messages.
         return False, cf_outobj, error_msgs
-
-    # # Check for errors.
-    # cf_outobj = None
-    # if upload_outfile is not None:
-    #     upload_outfile.seek(0)
-    #     try:
-    #         cf_outobj = json.load(upload_outfile)
-    #     except ValueError:
-    #         cf_outobj = None
-    #         upload_outfile.seek(0)
-    #         error_msgs += ['Unexpected reply from CF: """{body}"""\n'.format(
-    #                        body=upload_outfile.read())]
-    #         serious_errors = True
-    #     finally:
-    #         upload_outfile.close()
-    # if cf_retcode != 0 or serious_errors:
-    #     if cf_outobj is not None:
-    #         try:
-    #             error_msgs.append(cf_outobj['error']['message'])
-    #         except KeyError:
-    #             error_msgs.append('(no message)')
-    #     else:
-    #         error_msgs.append('(no message)')
-    #     # In case of lack of success, return also the error messages.
-    #     return False, cf_outobj, error_msgs
 
     # Return the returned object in case of success.
     return True, cf_outobj, error_msgs
@@ -254,23 +198,39 @@ def update_unit(job_id, unit_id, params):
 
 
 def create_job(cents_per_unit,
+               store_job_id=True,
                judgments_per_unit=1,
                units_per_assignment=4,
                pages_per_assignment=4,
                gold_per_assignment=1,
-               job_cml_path=None, **kwargs):
+               job_cml_path=None,
+               title=None,
+               instructions=None,
+               bronze=True,
+               included_countries=None,
+               **kwargs):
     # Interpret arguments.
     if job_cml_path is None:
-        job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
-                                    'crowdflower', 'job.cml')
+        job_cml_path = default_job_cml_path
+    job_price = (units_per_assignment * cents_per_unit) / units_per_assignment
+    if title is None:
+        title = 'Dialogue transcription – {price}c'.format(price=job_price)
+    if instructions is None:
+        instructions = re.sub(' +', ' ', """\
+            Please, write down what is said in the provided recordings. The
+            recordings capture a dialogue between a human and a computer. The
+            computer utterances are known, so only the human's utterances need
+            to be transcribed.""").strip().replace('\n ', '\n')
+    if included_countries is None:
+        included_countries = ("AU", "CA", "GB", "IE", "IM", "NZ", "US")
+
     # Build all the params.
     job_params = dict()
     params = {'job': job_params}
     with open(job_cml_path) as job_file:
         job_params['cml'] = job_file.read()
     job_params['confidence_fields'] = ["code"]
-    job_params['title'] = 'Dialogue transcription – {price}c'.format(
-        price=((units_per_assignment * cents_per_unit) / units_per_assignment))
+    job_params['title'] = title
     job_params['judgments_per_unit'] = judgments_per_unit
     job_params['units_per_assignment'] = units_per_assignment
     job_params['pages_per_assignment'] = pages_per_assignment
@@ -278,41 +238,38 @@ def create_job(cents_per_unit,
     # FIXME The following needs to be less than units_per_assignment. Check it,
     # potentially complaining about wrong arguments.
     job_params['gold_per_assignment'] = gold_per_assignment
-    # XXX This does not seem to work with Crowdflower.
-#     job_params['included_countries'] = ('[{"code":"AU", "name":"Australia"},'
-#                                     '{"code":"CA", "name":"Canada"},'
-#                                     '{"code":"GB", "name":"United Kingdom"},'
-#                                     '{"code":"IE", "name":"Ireland"},'
-#                                     '{"code":"IM", "name":"Isle of Man"},'
-#                                     '{"code":"NZ", "name":"New Zealand"},'
-#                                     '{"code":"US", "name":"United States"}]')
-    job_params['instructions'] = """\
-        Please, write down what is said in the provided recordings. The
-        recordings capture a dialogue between a human and a computer. The
-        computer utterances are known, so only the human's utterances need to
-        be transcribed."""
+    job_params['instructions'] = instructions
     # webhook
     job_params['webhook_uri'] = '{domain}{site}log-work'.format(
         domain=settings.DOMAIN_URL,
         site=settings.SUB_SITE)
     # skills
-    job_params['minimum_requirements'] = {"priority": 1,
-                                          "skill_scores":
-                                            {"bronze_v1": 1},
-                                          "min_score": 1}
+    # (copied from a JSON retrieved from Crowdflower for a manually set up job)
+    if bronze:
+        job_params['minimum_requirements'] = {"priority": 1,
+                                              "skill_scores": {"bronze_v1": 1},
+                                              "min_score": 1}
     job_params.update(kwargs)
 
     # Create the job.
     cf_url = 'jobs'
-    success, msg, error_msgs = _contact_cf(cf_url, verb='POST',
-                                           json_str=json.dumps(params))
+    success, cf_out, error_msgs = _contact_cf(cf_url, verb='POST',
+                                              json_str=json.dumps(params))
+
+    # If the job was successfully created,
     if success:
-        job_id = msg['id']
+        job_id = cf_out['id']
+
+        # Modify some more parameters. This has not been done above as it seems
+        # to not work with Content-Type: application/json, whereas some of the
+        # above, on the contrary, seemed to require exactly that format.
+        #
         # Set up the workers' countries included.
         params = [('job[included_countries][]', country)
                   for country in ("AU", "CA", "GB", "IE", "IM", "NZ", "US")]
         # Set up the gold field.
         params.append(('check', 'code'))
+        # Make the request and check the response.
         cf_url = 'jobs/{jobid}'.format(jobid=job_id)
         update_success, update_out, update_msgs = _contact_cf(
             cf_url, verb='PUT', params=params)
@@ -320,7 +277,312 @@ def create_job(cents_per_unit,
             lead = ('Error when updating parameters of the new job (job ID: '
                     '{jobid}: ').format(jobid=job_id)
             return False, (lead + ' ||| '.join(update_msgs))
-        return True, msg
+
+        # If everything has gone alright and the new job's ID should be stored,
+        if store_job_id:
+            _store_job_id(job_id, job_price)
+
+        return True, update_out
+
+    # If the creation of the job itself was unsuccessful,
     else:
         lead = 'Error when creating new job: '
         return False, (lead + ' ||| '.join(error_msgs))
+
+
+############################
+# ORIGINALLY IN dg_util.py #
+############################
+
+def _load_price_classes():
+    global _price_classes_changed, _price_classes
+
+    # If the price classes are to be stored in a file,
+    if hasattr(settings, 'CF_JOBS_FNAME'):
+        if os.path.exists(settings.CF_JOBS_FNAME):
+            job_ids = dict()
+            with open(settings.CF_JOBS_FNAME) as jobs_file:
+                for line in jobs_file:
+                    try:
+                        price_str, job_id_str = line.strip().split('\t')
+                        job_ids[float(price_str)] = job_id_str
+                    except:
+                        raise Exception(
+                            'Wrong format of the job IDs file {fname}.'
+                            .format(fname=settings.CF_JOBS_FNAME))
+            _price_classes = job_ids
+        else:
+            # If the job IDs file has not been created yet, trust that it
+            # will be created yet in time.  Do not complain.
+            _price_classes = None
+    elif hasattr(settings, 'CF_JOB_IDS'):
+        _price_classes = settings.CF_JOB_IDS
+    else:
+        if not hasattr(settings, 'CF_JOB_ID'):
+            msg = ('At least one of CF_JOB_ID, CF_JOB_IDS or '
+                   'CF_JOBS_FNAME has to be set.')
+            raise SettingsException(msg)
+        _price_classes = None
+
+    # Mark price classes up to date.
+    _price_classes_changed = False
+
+
+def _store_job_id(job_id, price, outfname=None):
+    """Stores the ID of a Crowdflower job with the given price.
+
+    Arguments:
+        job_id -- the ID of the job used by Crowdflower
+        price -- price of this job in cents
+        outfname -- path towards the file where the job ID should be stored
+            (default: settings.CF_JOBS_FNAME)
+
+    """
+    global _price_classes_changed
+
+    # Figure out the `outfname'.
+    if outfname is None:
+        try:
+            outfname = settings.CF_JOBS_FNAME
+        except AttributeError:
+            msg = ('Cannot store job ID to a file: "CF_JOBS_FNAME" has '
+                   'not been configured.')
+            raise SettingsException(msg)
+
+    # Create the file's parent dirs if they did not exist.
+    out_dirname = os.path.dirname(os.path.abspath(outfname))
+    if not os.path.exists(out_dirname):
+        try:
+            os.makedirs(outfname)
+        except os.error:
+            msg = ('Cannot store job ID to the file "{fname}": the '
+                   'directories in the path could not be created.'
+                   ).format(fname=outfname)
+            raise Exception(msg)
+
+    # Write the job ID.
+    with open(outfname, 'a+') as outfile:
+        outfile.write('{price}\t{id_}\n'.format(price=price, id_=job_id))
+    _price_classes_changed = True
+
+# Check whether dialogues should be split into several CF jobs based on
+# their price.
+_price_classes_changed = None
+_price_classes = None
+_load_price_classes()
+
+
+def get_job_id(dg):
+    """
+    Returns the Crowdflower job ID (a string) for the job where a given
+    dialogue would fit.
+
+    Arguments:
+        dg -- a Django dialogue object
+
+    """
+
+    if _price_classes_changed:
+        _load_price_classes()
+
+    # If no price classes are distinguished,
+    if _price_classes is None:
+        # That should mean that all dialogues go to a single job.
+        try:
+            return settings.CF_JOB_ID
+        # Otherwise, we apparently relied on the job IDs file, and it is
+        # not there.
+        except AttributeError:
+            msg = ('Cannot get the Crowdflower job ID for the dialogue: '
+                   'price classes could not be loaded from '
+                   'the "settings.CF_JOBS_FNAME" file.')
+            raise SettingsException(msg)
+    # If several price classes are distinguished,
+    else:
+        try:
+            # This selects the nearest lower price step.
+            price_cat = max(filter(
+                lambda step: step <= dg.transcription_price,
+                _price_classes))
+        except ValueError:
+            # Or, in case no price step is lower, the lowest price step
+            # absolute.
+            price_cat = min(_price_classes)
+        return _price_classes[price_cat]
+
+
+def get_job_ids():
+    """Returns IDs of all Crowdflower jobs configured."""
+
+    if _price_classes_changed:
+        _load_price_classes()
+
+    if _price_classes is None:
+        try:
+            return [settings.CF_JOB_ID]
+        except AttributeError:
+            msg = ('Cannot get the Crowdflower job ID for the dialogue: '
+                   'price classes could not be loaded from '
+                   'the "settings.CF_JOBS_FNAME" file.')
+            raise SettingsException(msg)
+    else:
+        return _price_classes.viewvalues()
+
+
+def update_gold(dg):
+    """Updates the gold status of `dg' on Crowdflower."""
+    job_id = get_job_id(dg)
+    success, unit_pair = unit_pair_from_cid(job_id, dg.cid)
+    if not success:
+        msg = unit_pair
+        return False, msg
+    unit_id, unit = unit_pair
+    dg_is_gold = is_gold(dg)
+    if dg_is_gold != (unit['state'] == 'golden'):
+        success, errors = update_unit(
+            job_id, unit_id,
+            (('unit[state]', 'golden' if dg_is_gold else 'new'), ))
+        if not success:
+            return False, errors
+    return True, None
+
+
+def record_worker(request):
+    """
+    Records worker information to the corresponding session XML file based
+    on POST data from CrowdFlower.
+
+    """
+    cf_data = json.loads(request.POST[u'payload'])
+    judgment_data = cf_data["results"]["judgments"][0]
+    cid = judgment_data["unit_data"]["cid"]
+    # Read the XML session file.
+    dg_dir = os.path.join(settings.CONVERSATION_DIR, cid)
+    sess_fname = os.path.join(dg_dir, settings.SESSION_FNAME)
+    with open(sess_fname, 'r+') as sess_file:
+        sess_xml = etree.parse(sess_file)
+        # Find the relevant dialogue annotation element.
+        anns_above = sess_xml.find(
+            settings.XML_COMMON['ANNOTATIONS_ABOVE'])
+        anns_after = anns_above.find(
+            settings.XML_COMMON['ANNOTATIONS_AFTER'])
+        anns_after_idx = (anns_above.index(anns_after)
+                          if anns_after is not None
+                          else len(anns_above))
+        found_anns = False
+        if anns_after_idx > 0:
+            anns_el = anns_above[anns_after_idx - 1]
+            if anns_el.tag == settings.XML_COMMON['ANNOTATIONS_ELEM']:
+                found_anns = True
+        if not found_anns:
+            raise ValueError()
+        anns_from_dummy = anns_el.findall(
+            "./{ann_el}[@user='testres']".format(
+                ann_el=settings.XML_COMMON['ANNOTATION_ELEM']))
+        anns_unlabeled = filter(lambda el: 'worker_id' not in el.attrib,
+                                anns_from_dummy)
+        if not anns_unlabeled:
+            raise ValueError()
+        # Heuristic: take the last one of the potential dialogue annotation
+        # XML elements.
+        dg_ann_el = anns_unlabeled[-1]
+        # Set all the desired attributes.
+        if 'worker_id' not in settings.LOGGED_JOB_DATA:
+            dg_ann_el.set('worker_id', str(judgment_data["worker_id"]))
+        for json_key, att_name in settings.LOGGED_JOB_DATA:
+            att_val = judgment_data.get(json_key, None)
+            if att_val is not None:
+                dg_ann_el.set(att_name, unicode(att_val))
+    # Write the XML session file.
+    with open(sess_fname, 'w') as sess_file:
+        sess_file.write(etree.tostring(sess_xml,
+                                       pretty_print=True,
+                                       xml_declaration=True,
+                                       encoding='UTF-8'))
+
+
+def create_dialogue_json(dg):
+    """Creates a JSON describing a dialogue for purposes of Crowdflower.
+
+    Arguments:
+        dg -- a Django dialogue object
+
+    """
+    json_str = ('{{"cid":"{cid}","code":"{code}","code_gold":"{gold}"}}'
+                .format(cid=dg.cid,
+                        code=dg.code,
+                        gold=dg.get_code_gold()))
+    return json_str
+
+
+class JsonDialogueUpload(object):
+    """
+    A container for dialogues to be uploaded to CrowdFlower. The container
+    is single-use only -- once uploaded, it can be disposed of.
+
+    """
+    # TODO: Implementing __len__ might be helpful...
+
+    def __init__(self, dg_datas=None):
+        """
+        Creates a new JSON object to be uploaded to Crowdflower as job data
+        for a dialogue.
+
+        """
+        self._uploaded = False
+        self.data = dict()
+        if dg_datas is not None:
+            self.extend(dg_datas)
+
+    def add(self, dg):
+        uturns = UserTurn.objects.filter(dialogue=dg)
+        if len(uturns) >= settings.MIN_TURNS:
+            self.data.setdefault(get_job_id(dg), []).append(dg)
+
+    def extend(self, dg_datas):
+        for dg in dg_datas:
+            self.add(dg)
+
+    def upload(self, force=False, check_existing=True):
+        # TODO Change the interface such that the return value implies also
+        # how many dialogues have been successfully uploaded.
+        if self._uploaded and not force:
+            msg = 'Internal error: attempted to upload the data twice.'
+            return False, msg
+            # FIXME: Make these strange return tuples into exceptions.
+
+        error_msgs = list()
+        for job_id in self.data:
+            # Check what units are currently uploaded for the job.
+            success, cur_units = list_units(job_id)
+            if success:
+                cur_cids = tuple(unit[u'cid']
+                                 for unit in cur_units.values())
+            else:
+                error_msgs.append('Could not retrieve existing units for '
+                                  'job ID {jobid}.'.format(jobid=job_id))
+                continue
+            # Build the JSON string describing the units.
+            json_str = ''.join(create_dialogue_json(dg)
+                               for dg in self.data[job_id]
+                               if dg.cid not in cur_cids)
+            # Upload to CF.
+            if not json_str:
+                # If there are no dialogues to upload (all have already
+                # been uploaded before), take it as a success.
+                success = True
+            else:
+                success, msg = upload_units(job_id, json_str)
+                if success:
+                    for dg in self.data[job_id]:
+                        success, msg = update_gold(dg)
+                        if not success:
+                            error_msgs.append(msg)
+            if not success:
+                error_msgs.append(msg)
+
+        if error_msgs:
+            return False, '\n'.join(error_msgs)
+        else:
+            self._uploaded = True
+            return True, None

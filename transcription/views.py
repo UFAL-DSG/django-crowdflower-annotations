@@ -9,7 +9,9 @@ import codecs
 from datetime import datetime
 import hashlib
 import os
+import os.path
 import random
+import re
 from subprocess import check_output
 
 from django import forms
@@ -21,7 +23,8 @@ from django.shortcuts import render
 from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
-from crowdflower import create_job, fire_gold_hooks
+from crowdflower import create_job, default_job_cml_path, fire_gold_hooks, \
+    get_job_ids, JsonDialogueUpload, record_worker
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -517,7 +520,7 @@ def import_dialogues(request):
             open(csv_fname, 'w') as csv_file:
         # Prepare the JSON upload data, and the CSV header.
         if upload_to_cf:
-            json_data = dg_util.JsonDialogueUpload()
+            json_data = JsonDialogueUpload()
         csv_file.write('cid, code, code_gold\n')
         # Process the dialogue files.
         for line in dirlist_file:
@@ -632,27 +635,120 @@ if settings.USE_CF:
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def fire_hooks(request):
-        job_ids = dg_util.get_job_ids()
+        job_ids = get_job_ids()
         for job_id in job_ids:
             fire_gold_hooks(job_id)
         context = {'n_jobs': len(job_ids)}
         return render(request, "trs/hooks-fired.html", context)
 
 
+    class CreateJobForm(forms.Form):
+        class CountriesField(forms.Field):
+            def to_python(self, value):
+                "Normalize data to a list of strings."
+                # Return None if no input was given.
+                if not value:
+                    return None
+                return value.split(',')
+
+            def validate(self, value):
+                "Check if value consists only of two-letter codes."
+
+                # Use the parent's handling of required fields, etc.
+                super(CreateJobForm.CountriesField, self).validate(value)
+                wrong_codes = list()
+                good_codes = list()
+                for code in value:
+                    if len(code) != 2 or not code.isupper():
+                        wrong_codes.append(code)
+                    else:
+                        good_codes.append(code)
+                if wrong_codes:
+                    codes_list = ', '.join('"{code}"'.format(code=code)
+                                           for code in wrong_codes)
+                    msg = ('Following are definitely not valid country codes: '
+                           '{codes}.').format(codes=codes_list)
+                    raise forms.ValidationError(msg)
+                else:
+                    return good_codes
+
+        # Constants.
+        default_countries = ",".join(("AU", "CA", "GB", "IE", "IM", "NZ",
+                                      "US"))
+        default_title = 'Dialogue transcription – {price}c'
+        default_instructions = re.sub(' +', ' ', """\
+            Please, write down what is said in the provided recordings. The
+            recordings capture a dialogue between a human and a computer. The
+            computer utterances are known, so only the human's utterances need
+            to be transcribed.""").strip().replace('\n ', '\n')
+        inputWidth = len(default_title)
+        fixedWidthTextInput = forms.TextInput(attrs={'size': inputWidth})
+
+        # Fields.
+        cents_per_unit = forms.IntegerField(initial=41,
+                                            widget=fixedWidthTextInput)
+        store_job_id = forms.BooleanField(initial=True)
+        job_cml_path = forms.FilePathField(
+            path=os.path.dirname(default_job_cml_path),
+            initial=default_job_cml_path,
+            label="Path to the job CML file")
+        judgments_per_unit = forms.IntegerField(initial=1,
+                                                widget=fixedWidthTextInput)
+        units_per_assignment = forms.IntegerField(initial=4,
+                                                  widget=fixedWidthTextInput)
+        pages_per_assignment = forms.IntegerField(initial=4,
+                                                  widget=fixedWidthTextInput)
+        gold_per_assignment = forms.IntegerField(initial=1,
+                                                 widget=fixedWidthTextInput)
+        title = forms.CharField(initial=default_title,
+                                widget=fixedWidthTextInput)
+        instructions = forms.CharField(
+            initial=default_instructions,
+            widget=forms.Textarea(attrs={'rows': 3, 'cols': 64}))
+        bronze = forms.BooleanField(initial=True)
+        included_countries = CountriesField(initial=default_countries,
+                                            widget=fixedWidthTextInput)
+
+
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def create_job_view(request):
         import json
-        success, msg = create_job(41)
-        log_path = get_log_path(settings.WORKLOGS_DIR)
-        with codecs.open(log_path, 'w', encoding='UTF-8') as log_file:
-            log_file.write(str(success) + '\n')
-            if success:
-                log_file.write(json.dumps(msg))
+
+        # If the form has been submitted,
+        if request.method == "POST":
+            form = CreateJobForm(request.POST)
+            if form.is_valid():
+                price = form.cleaned_data['cents_per_unit']
+                success, msg = create_job(cents_per_unit=price)
+                log_path = get_log_path(settings.WORKLOGS_DIR)
+                with codecs.open(log_path, 'w', encoding='UTF-8') as log_file:
+                    log_file.write(str(success) + '\n')
+                    if success:
+                        log_file.write(json.dumps(msg))
+                    else:
+                        log_file.write(msg)
+                context = {'n_jobs': msg}
+                context['form'] = form
+                return render(request, "trs/hooks-fired.html", context)
+
+            # If the form data were invalid,
             else:
-                log_file.write(msg)
-        context = {'n_jobs': msg}
-        return render(request, "trs/hooks-fired.html", context)
+                # Populate context with data from the previous form.
+                context = {'form': form}
+                response = render(
+                    request, "trs/create-job.html", context,
+                    context_instance=RequestContext(request))
+                return response
+
+        # If a new form is to be served,
+        else:
+            context = {'form': CreateJobForm()}
+            response = render(
+                request, "trs/create-job.html", context,
+                context_instance=RequestContext(request))
+            return response
+
 
 
     @csrf_exempt
@@ -672,7 +768,7 @@ if settings.USE_CF:
                 pass
             # Record the request to a session XML file.
             if signal == 'unit_complete':
-                dg_util.record_worker(request)
+                record_worker(request)
             elif signal == 'job_complete':
                 # TODO: The line below is a best guess at the structure of JSON
                 # received from CF. Check what it actually looks like and

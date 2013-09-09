@@ -26,7 +26,7 @@ for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
 # For the CF_JOB_ID and CF_JOB_IDS configuration variables, if USE_CF is in
 # force, at least one of them has to be set.
 _cf_ids_set = False
-for name in ('CF_JOB_IDS', 'CF_JOB_ID'):
+for name in ('CF_JOB_IDS', 'CF_JOB_ID', 'CF_JOBS_FNAME'):
     try:
         setattr(_module, name, getattr(localsettings, name))
     except AttributeError as er:
@@ -34,27 +34,14 @@ for name in ('CF_JOB_IDS', 'CF_JOB_ID'):
     else:
         _cf_ids_set = True
 if USE_CF and not _cf_ids_set:
-    raise AttributeError('USE_CF == True but neither CF_JOB_IDS or CF_JOB_ID '
-                         'is set.')
+    raise AttributeError('USE_CF == True but none of CF_JOB_IDS, CF_JOB_ID or '
+                         'CF_JOBS_FNAME is set.')
 del _cf_ids_set
 
 MAX_CHAR_ER = localsettings.MAX_CHAR_ER
 
 XML_COMMON = localsettings.XML_COMMON
 XML_SCHEMES = localsettings.XML_SCHEMES
-# XML_USERTURN_PATH = localsettings.XML_USERTURN_PATH
-# XML_SYSTURN_PATH = localsettings.XML_SYSTURN_PATH
-# XML_TURNNUMBER_ATTR = localsettings.XML_TURNNUMBER_ATTR
-# XML_REC_SUBPATH = localsettings.XML_REC_SUBPATH
-# XML_REC_FNAME_ATTR = localsettings.XML_REC_FNAME_ATTR
-# XML_SYSTEXT_SUBPATH = localsettings.XML_SYSTEXT_SUBPATH
-# XML_TRANSCRIPTIONS_BEFORE = localsettings.XML_TRANSCRIPTIONS_BEFORE
-# XML_TRANSCRIPTIONS_ELEM = localsettings.XML_TRANSCRIPTIONS_ELEM
-# XML_TRANSCRIPTION_BEFORE = localsettings.XML_TRANSCRIPTION_BEFORE
-# XML_TRANSCRIPTION_ELEM = localsettings.XML_TRANSCRIPTION_ELEM
-# XML_AUTHOR_ATTR = localsettings.XML_AUTHOR_ATTR
-# XML_DATE_ATTR = localsettings.XML_DATE_ATTR
-# XML_DATE_FORMAT = localsettings.XML_DATE_FORMAT
 
 # Django settings for the `transcription' project.
 
@@ -224,3 +211,7 @@ LOGIN_URL="/apps/cir_transcription/accounts/login/"
 # LOGIN_URL="/accounts/login/"
 # STATICFILES_STORAGE="/apps/cir_transcription"
 LOGIN_REDIRECT_URL=SUB_SITE
+
+
+class SettingsException(Exception):
+    pass

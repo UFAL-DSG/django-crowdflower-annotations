@@ -10,8 +10,9 @@ from django.shortcuts import render
 
 from session_xml import XMLSession
 import settings
+from transcription.crowdflower import JsonDialogueUpload, update_gold
 from transcription.db_fields import SizedTextField, ROCharField
-from transcription.dg_util import JsonDialogueUpload, update_gold, update_price
+from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
 from transcription.models import Dialogue, DialogueAnnotation, \
     Transcription, UserTurn
