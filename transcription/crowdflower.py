@@ -9,6 +9,7 @@ from lxml import etree
 import os
 import os.path
 import re
+import time
 from urllib import urlencode
 
 from dg_util import is_gold
@@ -23,8 +24,8 @@ default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
                                     'crowdflower', 'job-linked.cml')
 
 
-def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
-                log=settings.LOG_CURL):
+def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
+                verb='POST', log=settings.LOG_CURL, headers=None):
     """
     Note that specifying both `data' and `json_str' is not supported and the
     `data' argument will be silently ignored in such a case.
@@ -47,16 +48,21 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
         logfile = None
 
     # Build the HTTP params.
-    if json_str is None:
-        headers = dict()
-        headers = {'Content-Type': 'application/x-www-form-urlencoded'}
+    if csv_str is not None:
+        headers_final = {'Content-Type': 'text/csv; charset=UTF-8'}
+        params_str = csv_str
+    elif json_str is not None:
+        headers_final = {'Content-Type': 'application/json; charset=UTF-8'}
+        params_str = json_str
+    else:
+        headers_final = {'Content-Type': 'application/x-www-form-urlencoded'}
         if params is not None:
             params_str = urlencode(params)
         else:
             params_str = ''
-    else:
-        headers = {'Content-Type': 'application/json; charset=UTF-8'}
-        params_str = json_str
+    # Update with the extra headers supplied.
+    if headers is not None:
+        headers_final.update(headers)
     cf_url = '/v1/{start}.json?key={key}'.format(start=cf_url_part,
                                                  key=settings.CF_KEY)
 
@@ -66,7 +72,7 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
     except:
         cf_conn = httplib.HTTPConnection('api.crowdflower.com')
     try:
-        cf_conn.request(verb, cf_url, params_str, headers)
+        cf_conn.request(verb, cf_url, params_str, headers_final)
         cf_res = cf_conn.getresponse()
         try:
             cf_out = cf_res.read().decode('UTF-8')
@@ -78,7 +84,7 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
     # Log.
     if log and logfile:
         headers_str = '; '.join('{key}: {val}'.format(key=key, val=val)
-                                for key, val in headers.iteritems())
+                                for key, val in headers_final.iteritems())
         logfile.write(("Call \"request('{verb}', '{url}', '{params}', "
                        "'{headers}')\"\n----\nResponse: {status} {reason}\n"
                        "----\nReturned:\n{data}\n").format(
@@ -144,7 +150,7 @@ def fire_gold_hooks(job_id):
         return False, errors
 
 
-def upload_units(job_id, json_str):
+def upload_units(job_id, json_str=None, csv_str=None):
     """Uploads new units to Crowdflower to the job specified.
 
     Arguments:
@@ -153,9 +159,21 @@ def upload_units(job_id, json_str):
 
     """
 
+    # Check the arguments.
+    if json_str is not None:
+        kwargs = {'json_str': json_str}
+        extra_headers = {'Content-Type': 'text/json'}
+    elif csv_str is not None:
+        kwargs = {'csv_str': csv_str}
+        extra_headers = {'Content-Type': 'text/csv'}
+    else:
+        raise ValueError('One of "csv_str" and "json_str" has to be specified '
+                         'and other than None.')
+
     # Communicate the new data to CrowdFlower via the CF API.
     cf_url = 'jobs/{jobid}/upload'.format(jobid=job_id)
-    success, msg, error_msgs = _contact_cf(cf_url, json_str=json_str)
+    success, msg, error_msgs = _contact_cf(cf_url, headers=extra_headers,
+                                           **kwargs)
 
     # Check the results.
     if success:
@@ -396,6 +414,27 @@ def create_dialogue_json(dg):
     return json_str
 
 
+def create_csv_header():
+    """Creates a CSV header row for dialogue upload to Crowdflower.
+
+    Arguments:
+        dg -- a Django dialogue object
+
+    """
+    return 'cid, code, gold'
+
+
+def create_dialogue_csv(dg):
+    """Creates a CSV row describing a dialogue for purposes of Crowdflower.
+
+    Arguments:
+        dg -- a Django dialogue object
+
+    """
+    return '{cid}, {code}, {gold}'.format(cid=dg.cid, code=dg.code,
+                                          gold=dg.get_code_gold())
+
+
 class JsonDialogueUpload(object):
     """
     A container for dialogues to be uploaded to CrowdFlower. The container
@@ -426,14 +465,19 @@ class JsonDialogueUpload(object):
             self.add(dg)
 
     def upload(self, force=False, check_existing=True):
-        # TODO Change the interface such that the return value implies also
-        # how many dialogues have been successfully uploaded.
+        """
+        In case of success returns the number of dialogues that have been
+        successfully uploaded (although there is a small chance more dialogues
+        were uploaded if only some for one job ID were successful).
+        """
+
         if self._uploaded and not force:
             msg = 'Internal error: attempted to upload the data twice.'
             return False, msg
             # FIXME: Make these strange return tuples into exceptions.
 
         error_msgs = list()
+        num_dgs_successful = 0
         for job_id in self.data:
             # Check what units are currently uploaded for the job.
             success, cur_units = list_units(job_id)
@@ -444,18 +488,30 @@ class JsonDialogueUpload(object):
                 error_msgs.append('Could not retrieve existing units for '
                                   'job ID {jobid}.'.format(jobid=job_id))
                 continue
-            # Build the JSON string describing the units.
-            json_str = ''.join(create_dialogue_json(dg)
-                               for dg in self.data[job_id]
-                               if dg.cid not in cur_cids)
+            # Collect the dialogues that need to be uploaded.
+            dgs_to_upload = [dg for dg in self.data[job_id]
+                             if dg.cid not in cur_cids]
+            # JSON ceased to function, although it is still the recommended
+            # method according to Crowdflower's API docs.
+            # # Build the JSON string describing the units.
+            # json_str = ''.join(create_dialogue_json(dg)
+            #                    for dg in dgs_to_upload)
+            # Build the CSV string describing the units.
+            csv_str = (create_csv_header() + '\n' +
+                       '\n'.join(create_dialogue_csv(dg)
+                                 for dg in dgs_to_upload))
             # Upload to CF.
-            if not json_str:
+            if not csv_str:
                 # If there are no dialogues to upload (all have already
                 # been uploaded before), take it as a success.
                 success = True
             else:
-                success, msg = upload_units(job_id, json_str)
+                success, msg = upload_units(job_id, csv_str=csv_str)
                 if success:
+                    num_dgs_successful += len(dgs_to_upload)
+                    # Wait for CF to update its records.
+                    time.sleep(1)
+
                     for dg in self.data[job_id]:
                         success, msg = update_gold(dg)
                         if not success:
@@ -467,7 +523,7 @@ class JsonDialogueUpload(object):
             return False, '\n'.join(error_msgs)
         else:
             self._uploaded = True
-            return True, None
+            return True, num_dgs_successful
 
 
 class _PriceClassHandler(object):

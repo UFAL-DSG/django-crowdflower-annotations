@@ -162,7 +162,9 @@ class DialogueAdmin(admin.ModelAdmin):
             success, msg = JsonDialogueUpload(queryset).upload()
             if success:
                 modeladmin.message_user(
-                    request, 'Dialogues have been uploaded to Crowdflower.')
+                    request,
+                    '{num} dialogues have been successfully uploaded to '
+                    'Crowdflower.'.format(num=msg))
             else:
                 messages.error(request,
                                ('Failed to upload the dialogues: {msg}'
