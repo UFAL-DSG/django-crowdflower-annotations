@@ -247,7 +247,10 @@ def create_job(cents_per_unit,
     # Interpret arguments.
     if job_cml_path is None:
         job_cml_path = default_job_cml_path
-    job_price = (units_per_assignment * cents_per_unit) / units_per_assignment
+    # It seems to make more sense to call the job by the price per assignment,
+    # not per unit.
+    # job_price = (units_per_assignment * cents_per_unit) / units_per_assignment
+    job_price = units_per_assignment * cents_per_unit
     if title is None:
         title = 'Dialogue transcription – {price}c'.format(price=job_price)
     if instructions is None:
@@ -421,7 +424,7 @@ def create_csv_header():
         dg -- a Django dialogue object
 
     """
-    return 'cid, code, gold'
+    return 'cid,code,gold'
 
 
 def create_dialogue_csv(dg):
@@ -431,7 +434,7 @@ def create_dialogue_csv(dg):
         dg -- a Django dialogue object
 
     """
-    return '{cid}, {code}, {gold}'.format(cid=dg.cid, code=dg.code,
+    return '{cid},{code},{gold}'.format(cid=dg.cid, code=dg.code,
                                           gold=dg.get_code_gold())
 
 
@@ -510,7 +513,7 @@ class JsonDialogueUpload(object):
                 if success:
                     num_dgs_successful += len(dgs_to_upload)
                     # Wait for CF to update its records.
-                    time.sleep(1)
+                    time.sleep(settings.CF_WAIT_SECS)
 
                     for dg in self.data[job_id]:
                         success, msg = update_gold(dg)

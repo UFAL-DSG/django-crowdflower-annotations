@@ -194,17 +194,17 @@ class XMLSession(object):
             anns_el = anns_above[anns_after_idx - 1]
             if anns_el.tag == self.ANNOTATIONS_ELEM:
                 return anns_above, anns_el
-        return anns_above, None
+        return anns_above, anns_after_idx, None
 
     def find_or_create_annotations(self):
-        anns_above, anns_el = self.find_annotations()
+        anns_above, anns_after_idx, anns_el = self.find_annotations()
         if anns_el is None:
             anns_el = etree.Element(self.ANNOTATIONS_ELEM)
             anns_above.insert(anns_after_idx, anns_el)
         return anns_el
 
     def iter_annotations(self):
-        anns_above, anns_el = self.find_annotations()
+        anns_above, anns_after_idx, anns_el = self.find_annotations()
         if anns_el is not None:
             for ann_el in anns_el:
                 yield ann_el

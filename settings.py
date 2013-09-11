@@ -26,7 +26,7 @@ for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
 # For the CF_JOB_ID and CF_JOB_IDS configuration variables, if USE_CF is in
 # force, at least one of them has to be set.
 _cf_ids_set = False
-for name in ('CF_JOB_IDS', 'CF_JOB_ID', 'CF_JOBS_FNAME'):
+for name in ('CF_JOB_IDS', 'CF_JOB_ID', 'CF_JOBS_FNAME', 'CF_WAIT_SECS'):
     try:
         setattr(_module, name, getattr(localsettings, name))
     except AttributeError as er:
