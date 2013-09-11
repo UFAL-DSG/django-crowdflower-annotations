@@ -4,7 +4,7 @@ import os.path
 import shutil
 
 from django import forms
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db import models
 from django.shortcuts import render
 
@@ -118,6 +118,8 @@ class DialogueAdmin(admin.ModelAdmin):
         for dg in queryset:
             update_price(dg)
             dg.save()
+        modeladmin.message_user(request,
+                          'Price for dialogue shas been successfully updated.')
 
     update_price_action.short_description = "Update dialogue price"
 
@@ -145,14 +147,25 @@ class DialogueAdmin(admin.ModelAdmin):
         def update_gold_action(modeladmin, request, queryset):
             for dg in queryset:
                 success, msg = update_gold(dg)
-                if not success:
+                if success:
+                    modeladmin.message_user(
+                        request,
+                        'Gold dialogues have been updated to Crowdflower.')
+                else:
                     raise ValueError()
 
         update_gold_action.short_description = (
             "Update dialogue gold status on CF")
 
         def upload_to_crowdflower(modeladmin, request, queryset):
-            JsonDialogueUpload(queryset).upload()
+            success, msg = JsonDialogueUpload(queryset).upload()
+            if success:
+                modeladmin.message_user(
+                    request, 'Dialogues have been uploaded to Crowdflower.')
+            else:
+                messages.error(request,
+                               ('Failed to upload the dialogues: {msg}'
+                                .format(msg=msg)))
 
         upload_to_crowdflower.short_description = (
             'Upload to CrowdFlower (only those dialogues that have not been '

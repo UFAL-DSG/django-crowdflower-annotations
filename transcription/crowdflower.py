@@ -95,15 +95,22 @@ def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
         error_msgs += ['Unexpected reply from CF: """{cf_out}"""\n'
                        .format(cf_out=cf_out)]
         serious_errors = True
-    # TODO Check whether `cf_res.status' did not indicate failure.
+    # Check whether `cf_res.status' did not indicate failure.
+    serious_errors |= (str(cf_res.status) != '200')
     if serious_errors:
         if cf_outobj is not None:
             try:
                 error_msgs.append(cf_outobj['error']['message'])
             except KeyError:
                 error_msgs.append('(no message)')
-        else:
-            error_msgs.append('(no message)')
+        msg = ('Complete message from Crowdflower:\n'
+               'Response {code} ({reason})\n'
+               '<pre>\n'
+               '{msg}\n'
+               '</pre>').format(code=cf_res.status,
+                                reason=cf_res.reason,
+                                msg=cf_out or '')
+        error_msgs.append(msg)
         # In case of lack of success, return also the error messages.
         return False, cf_outobj, error_msgs
 
