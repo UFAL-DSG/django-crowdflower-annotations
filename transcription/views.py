@@ -24,7 +24,7 @@ from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
 from crowdflower import create_job, default_job_cml_path, fire_gold_hooks, \
-    get_job_ids, JsonDialogueUpload, record_worker
+    price_class_handler, JsonDialogueUpload, record_worker
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -631,11 +631,17 @@ def import_dialogues(request):
     return render(request, "trs/imported.html", context)
 
 
+def temp_test(request):
+    from crowdflower import *
+    # Set up whatever variables you are interested in dumping here.
+    assert False
+
+
 if settings.USE_CF:
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def fire_hooks(request):
-        job_ids = get_job_ids()
+        job_ids = price_class_handler.get_job_ids()
         for job_id in job_ids:
             fire_gold_hooks(job_id)
         context = {'n_jobs': len(job_ids)}

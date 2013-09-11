@@ -1,6 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-# TODO: Reimplement without backing off to using the external program curl.
 from __future__ import unicode_literals
 
 import httplib
@@ -280,7 +279,7 @@ def create_job(cents_per_unit,
 
         # If everything has gone alright and the new job's ID should be stored,
         if store_job_id:
-            _store_job_id(job_id, job_price)
+            price_class_handler.store_job_id(job_id, job_price)
 
         return True, update_out
 
@@ -293,148 +292,9 @@ def create_job(cents_per_unit,
 ############################
 # ORIGINALLY IN dg_util.py #
 ############################
-
-def _load_price_classes():
-    global _price_classes_changed, _price_classes
-
-    # If the price classes are to be stored in a file,
-    if hasattr(settings, 'CF_JOBS_FNAME'):
-        if os.path.exists(settings.CF_JOBS_FNAME):
-            job_ids = dict()
-            with open(settings.CF_JOBS_FNAME) as jobs_file:
-                for line in jobs_file:
-                    line = line.strip()
-                    if not line:
-                        continue
-                    try:
-                        price_str, job_id_str = line.strip().split('\t')
-                        job_ids[float(price_str)] = job_id_str
-                    except:
-                        raise Exception(
-                            'Wrong format of the job IDs file {fname}.'
-                            .format(fname=settings.CF_JOBS_FNAME))
-            _price_classes = job_ids
-        else:
-            # If the job IDs file has not been created yet, trust that it
-            # will be created yet in time.  Do not complain.
-            _price_classes = None
-    elif hasattr(settings, 'CF_JOB_IDS'):
-        _price_classes = settings.CF_JOB_IDS
-    else:
-        if not hasattr(settings, 'CF_JOB_ID'):
-            msg = ('At least one of CF_JOB_ID, CF_JOB_IDS or '
-                   'CF_JOBS_FNAME has to be set.')
-            raise SettingsException(msg)
-        _price_classes = None
-
-    # Mark price classes up to date.
-    _price_classes_changed = False
-
-
-def _store_job_id(job_id, price, outfname=None):
-    """Stores the ID of a Crowdflower job with the given price.
-
-    Arguments:
-        job_id -- the ID of the job used by Crowdflower
-        price -- price of this job in cents
-        outfname -- path towards the file where the job ID should be stored
-            (default: settings.CF_JOBS_FNAME)
-
-    """
-    global _price_classes_changed
-
-    # Figure out the `outfname'.
-    if outfname is None:
-        try:
-            outfname = settings.CF_JOBS_FNAME
-        except AttributeError:
-            msg = ('Cannot store job ID to a file: "CF_JOBS_FNAME" has '
-                   'not been configured.')
-            raise SettingsException(msg)
-
-    # Create the file's parent dirs if they did not exist.
-    out_dirname = os.path.dirname(os.path.abspath(outfname))
-    if not os.path.exists(out_dirname):
-        try:
-            os.makedirs(outfname)
-        except os.error:
-            msg = ('Cannot store job ID to the file "{fname}": the '
-                   'directories in the path could not be created.'
-                   ).format(fname=outfname)
-            raise Exception(msg)
-
-    # Write the job ID.
-    with open(outfname, 'a+') as outfile:
-        outfile.write('{price}\t{id_}\n'.format(price=price, id_=job_id))
-    _price_classes_changed = True
-
-# Check whether dialogues should be split into several CF jobs based on
-# their price.
-_price_classes_changed = None
-_price_classes = None
-_load_price_classes()
-
-
-def get_job_id(dg):
-    """
-    Returns the Crowdflower job ID (a string) for the job where a given
-    dialogue would fit.
-
-    Arguments:
-        dg -- a Django dialogue object
-
-    """
-
-    if _price_classes_changed:
-        _load_price_classes()
-
-    # If no price classes are distinguished,
-    if _price_classes is None:
-        # That should mean that all dialogues go to a single job.
-        try:
-            return settings.CF_JOB_ID
-        # Otherwise, we apparently relied on the job IDs file, and it is
-        # not there.
-        except AttributeError:
-            msg = ('Cannot get the Crowdflower job ID for the dialogue: '
-                   'price classes could not be loaded from '
-                   'the "settings.CF_JOBS_FNAME" file.')
-            raise SettingsException(msg)
-    # If several price classes are distinguished,
-    else:
-        try:
-            # This selects the nearest lower price step.
-            price_cat = max(filter(
-                lambda step: step <= dg.transcription_price,
-                _price_classes))
-        except ValueError:
-            # Or, in case no price step is lower, the lowest price step
-            # absolute.
-            price_cat = min(_price_classes)
-        return _price_classes[price_cat]
-
-
-def get_job_ids():
-    """Returns IDs of all Crowdflower jobs configured."""
-
-    if _price_classes_changed:
-        _load_price_classes()
-
-    if _price_classes is None:
-        try:
-            return [settings.CF_JOB_ID]
-        except AttributeError:
-            msg = ('Cannot get the Crowdflower job ID for the dialogue: '
-                   'price classes could not be loaded from '
-                   'the "settings.CF_JOBS_FNAME" file.')
-            raise SettingsException(msg)
-    else:
-        return _price_classes.viewvalues()
-
-
 def update_gold(dg):
     """Updates the gold status of `dg' on Crowdflower."""
-    job_id = get_job_id(dg)
+    job_id = price_class_handler.get_job_id(dg)
     success, unit_pair = unit_pair_from_cid(job_id, dg.cid)
     if not success:
         msg = unit_pair
@@ -540,7 +400,8 @@ class JsonDialogueUpload(object):
     def add(self, dg):
         uturns = UserTurn.objects.filter(dialogue=dg)
         if len(uturns) >= settings.MIN_TURNS:
-            self.data.setdefault(get_job_id(dg), []).append(dg)
+            self.data.setdefault(price_class_handler.get_job_id(dg),
+                                 []).append(dg)
 
     def extend(self, dg_datas):
         for dg in dg_datas:
@@ -589,3 +450,161 @@ class JsonDialogueUpload(object):
         else:
             self._uploaded = True
             return True, None
+
+
+class _PriceClassHandler(object):
+    """The only object of this class tracks the job price classes defined."""
+    _inst = None  # the singleton instance
+
+    @staticmethod
+    def __new__(cls, settings):
+        if cls._inst is not None:
+            raise ValueError('This singleton has already been created.')
+        cls._inst = super(_PriceClassHandler, cls).__new__(cls)
+        return cls._inst
+
+    def __init__(self, settings):
+        # Store the settings.
+        self._settings = settings
+        # Check whether dialogues should be split into several CF jobs based on
+        # their price.
+        self.load_price_classes()
+
+    @property
+    def price_classes(self):
+        if self._price_classes_valid:
+            return self._price_classes
+        else:
+            msg = ('Price classes should be read from a file '
+                   '(settings.CF_JOBS_FNAME="{fname}") but it contains no '
+                   'valid records.').format(fname=self._settings.CF_JOBS_FNAME)
+            raise Exception(msg)
+
+    @property
+    def price_ranges(self):
+        """Returns a list of tuples (price range floor, price range ceiling).
+
+        The first price range's floor is -float('inf'), the last one's ceiling
+        is float('inf').
+        """
+        inner_steps = sorted(self.price_classes.viewkeys()) or list()
+        all_steps = [-float('inf')] + inner_steps + [float('inf')]
+        return zip(all_steps[:-1], all_steps[1:])
+
+    def load_price_classes(self):
+        self._price_classes_valid = True
+        # If the price classes are to be stored in a file,
+        if hasattr(self._settings, 'CF_JOBS_FNAME'):
+            if os.path.exists(self._settings.CF_JOBS_FNAME):
+                job_ids = dict()
+                with open(self._settings.CF_JOBS_FNAME) as jobs_file:
+                    for line in jobs_file:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            price_str, job_id_str = line.strip().split('\t')
+                            job_ids[int(price_str)] = job_id_str
+                        except:
+                            raise Exception(
+                                'Wrong format of the job IDs file {fname}.'
+                                .format(fname=self._settings.CF_JOBS_FNAME))
+                self._price_classes = job_ids
+            else:
+                # If the job IDs file has not been created yet, trust that it
+                # will be created yet in time.  Do not complain.
+                self._price_classes = None
+                self._price_classes_valid = False
+        elif hasattr(self._settings, 'CF_JOB_IDS'):
+            self._price_classes = self._settings.CF_JOB_IDS
+        else:
+            if not hasattr(self._settings, 'CF_JOB_ID'):
+                msg = ('At least one of CF_JOB_ID, CF_JOB_IDS or '
+                       'CF_JOBS_FNAME has to be set.')
+                raise SettingsException(msg)
+            self._price_classes = None
+
+    def store_job_id(self, job_id, price, outfname=None):
+        """Stores the ID of a Crowdflower job with the given price.
+
+        Arguments:
+            job_id -- the ID of the job used by Crowdflower
+            price -- price of this job in cents
+            outfname -- path towards the file where the job ID should be stored
+                (default: settings.CF_JOBS_FNAME)
+
+        """
+
+        # Figure out the `outfname'.
+        if outfname is None:
+            try:
+                outfname = self._settings.CF_JOBS_FNAME
+            except AttributeError:
+                msg = ('Cannot store job ID to a file: "CF_JOBS_FNAME" has '
+                       'not been configured.')
+                raise SettingsException(msg)
+
+        # Create the file's parent dirs if they did not exist.
+        out_dirname = os.path.dirname(os.path.abspath(outfname))
+        if not os.path.exists(out_dirname):
+            try:
+                os.makedirs(outfname)
+            except os.error:
+                msg = ('Cannot store job ID to the file "{fname}": the '
+                       'directories in the path could not be created.'
+                       ).format(fname=outfname)
+                raise Exception(msg)
+
+        # Write the job ID.
+        with open(outfname, 'a+') as outfile:
+            outfile.write('{price}\t{id_}\n'.format(price=price, id_=job_id))
+
+        # Update the dict of price classes.
+        self._price_classes[price] = job_id
+
+    def get_job_id(self, dg):
+        """
+        Returns the Crowdflower job ID (a string) for the job where a given
+        dialogue would fit.
+
+        Arguments:
+            dg -- a Django dialogue object
+
+        """
+
+        # Get the price classes defined. This can throw an exception, in which
+        # case we let it propagate.
+        price_classes = self.price_classes
+
+        # If no price classes are distinguished,
+        if price_classes is None:
+            # This means that all dialogues go to a single job.
+            return self._settings.CF_JOB_ID
+        # If several price classes are distinguished,
+        else:
+            try:
+                # This selects the nearest lower price step.
+                price_cat = max(filter(
+                    lambda step: step <= dg.transcription_price,
+                    price_classes))
+            except ValueError:
+                # Or, in case no price step is lower, the lowest price step
+                # absolute.
+                price_cat = min(price_classes)
+            return price_classes[price_cat]
+
+    def get_job_ids(self):
+        """Returns IDs of all Crowdflower jobs configured."""
+
+        # Get the price classes defined. This can throw an exception, in which
+        # case we let it propagate.
+        price_classes = self.price_classes
+
+        if price_classes is None:
+            return [settings.CF_JOB_ID]
+        else:
+            return price_classes.viewvalues()
+
+
+# Create the singleton instance of _PriceClassHandler.
+price_class_handler = _PriceClassHandler(settings)

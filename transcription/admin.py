@@ -10,7 +10,8 @@ from django.shortcuts import render
 
 from session_xml import XMLSession
 import settings
-from transcription.crowdflower import JsonDialogueUpload, update_gold
+from transcription.crowdflower import JsonDialogueUpload, \
+    price_class_handler, update_gold
 from transcription.db_fields import SizedTextField, ROCharField
 from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
@@ -56,9 +57,48 @@ class DialogueAdmin(admin.ModelAdmin):
     }
     inlines = [DgAnnInline, UTurnInline]
     search_fields = ['cid', 'code', 'dirname']
-    list_filter = ['list_filename']
-    # TODO Filter by price ranges paid for transcription.
 
+    # Filters #
+    ###########
+    class PriceBinListFilter(admin.SimpleListFilter):
+        title = 'price bin'
+        parameter_name = 'price_bin'
+
+        def lookups(self, request, model_admin):
+            price_ranges = price_class_handler.price_ranges
+            if len(price_ranges) == 1:
+                return (('all', 'all'), )
+            else:
+                readable = ['{start}-{end}'.format(
+                                start=('' if low == -float('inf')
+                                       else '{0}c'.format(low)),
+                                end=('' if high == float('inf')
+                                     else '{0}c'.format(high)))
+                            for low, high in price_ranges]
+                return [(readable_mem, readable_mem)
+                        for readable_mem in readable]
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val or val == 'all':
+                return queryset
+            else:
+                new_set = queryset
+                start, end = val.split('-', 1)
+                if start:
+                    # strip the trailing 'c', convert to dollars
+                    start = float(start[:-1]) / 100.
+                    new_set = new_set.filter(transcription_price__gte=start)
+                if end:
+                    # strip the trailing 'c', convert to dollars
+                    end = float(end[:-1]) / 100.
+                    new_set = new_set.filter(transcription_price__lt=end)
+                return new_set
+
+    list_filter = ('list_filename', PriceBinListFilter)
+
+    # Add view #
+    ############
     add_form_template = 'trs/import.html'
 
     def add_view(self, request, form_url="", extra_context=None):
@@ -68,6 +108,8 @@ class DialogueAdmin(admin.ModelAdmin):
         return super(DialogueAdmin, self).add_view(
             request, form_url, extra_context)
 
+    # Actions #
+    ###########
     def update_price_action(modeladmin, request, queryset):
         for dg in queryset:
             update_price(dg)

@@ -19,9 +19,9 @@ pattern_args = ['',
                     'transcription.views.import_dialogues',
                     name="import_dialogues"),
 
-#                 url(r'^temp-test$',
-#                     'transcription.views.temp_test',
-#                     name="temp_test"),
+                url(r'^test-view$',
+                    'transcription.views.temp_test',
+                    name="test_view"),
                ]
 if settings.USE_CF:
     cf_pattern_args = [url('^log-work$',
