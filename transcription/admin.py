@@ -66,8 +66,10 @@ class DialogueAdmin(admin.ModelAdmin):
 
         def lookups(self, request, model_admin):
             price_ranges = price_class_handler.price_ranges
+            # If there are no price ranges to distinguish,
             if len(price_ranges) == 1:
-                return (('all', 'all'), )
+                # Do not use this filter at all.
+                return None
             else:
                 readable = ['{start}-{end}'.format(
                                 start=('' if low == -float('inf')
@@ -85,10 +87,12 @@ class DialogueAdmin(admin.ModelAdmin):
             else:
                 new_set = queryset
                 start, end = val.split('-', 1)
+                # Filter by lower bound on the price (inclusive).
                 if start:
                     # strip the trailing 'c', convert to dollars
                     start = float(start[:-1]) / 100.
                     new_set = new_set.filter(transcription_price__gte=start)
+                # Filter by upper bound on the price (exclusive).
                 if end:
                     # strip the trailing 'c', convert to dollars
                     end = float(end[:-1]) / 100.

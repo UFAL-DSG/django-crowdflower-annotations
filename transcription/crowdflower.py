@@ -6,6 +6,7 @@ import httplib
 import json
 from lru_cache import lru_cache
 from lxml import etree
+import os
 import os.path
 import re
 from urllib import urlencode
@@ -468,10 +469,17 @@ class _PriceClassHandler(object):
         self._settings = settings
         # Check whether dialogues should be split into several CF jobs based on
         # their price.
+        self._last_read = 0.  # timestamp when we last read the jobs file
         self.load_price_classes()
 
     @property
     def price_classes(self):
+        # Read again the jobs file if it was updated without us reading it.
+        if (hasattr(self._settings, 'CF_JOBS_FNAME') and
+            self._last_read < os.stat(
+                self._settings.CF_JOBS_FNAME).st_mtime):
+            self.load_price_classes()
+
         if self._price_classes_valid:
             return self._price_classes
         else:
@@ -495,9 +503,10 @@ class _PriceClassHandler(object):
         self._price_classes_valid = True
         # If the price classes are to be stored in a file,
         if hasattr(self._settings, 'CF_JOBS_FNAME'):
-            if os.path.exists(self._settings.CF_JOBS_FNAME):
+            jobs_fname = self._settings.CF_JOBS_FNAME
+            if os.path.exists(jobs_fname):
                 job_ids = dict()
-                with open(self._settings.CF_JOBS_FNAME) as jobs_file:
+                with open(jobs_fname) as jobs_file:
                     for line in jobs_file:
                         line = line.strip()
                         if not line:
@@ -508,7 +517,8 @@ class _PriceClassHandler(object):
                         except:
                             raise Exception(
                                 'Wrong format of the job IDs file {fname}.'
-                                .format(fname=self._settings.CF_JOBS_FNAME))
+                                .format(fname=jobs_fname))
+                self._last_read = os.stat(jobs_fname).st_mtime
                 self._price_classes = job_ids
             else:
                 # If the job IDs file has not been created yet, trust that it
@@ -536,13 +546,18 @@ class _PriceClassHandler(object):
         """
 
         # Figure out the `outfname'.
+        jobs_fname = None
         if outfname is None:
             try:
-                outfname = self._settings.CF_JOBS_FNAME
+                outfname = jobs_fname = self._settings.CF_JOBS_FNAME
+                default_out = True
             except AttributeError:
                 msg = ('Cannot store job ID to a file: "CF_JOBS_FNAME" has '
                        'not been configured.')
                 raise SettingsException(msg)
+        else:
+            default_out = (os.path.abspath(outfname)
+                           == os.path.abspath(jobs_fname))
 
         # Create the file's parent dirs if they did not exist.
         out_dirname = os.path.dirname(os.path.abspath(outfname))
@@ -555,12 +570,28 @@ class _PriceClassHandler(object):
                        ).format(fname=outfname)
                 raise Exception(msg)
 
+        # If writing to the default jobs file,
+        if default_out:
+            # Remember when this was last modified.
+            last_modified = os.stat(outfname).st_mtime
+
         # Write the job ID.
         with open(outfname, 'a+') as outfile:
             outfile.write('{price}\t{id_}\n'.format(price=price, id_=job_id))
 
         # Update the dict of price classes.
-        self._price_classes[price] = job_id
+        if default_out:
+            # If we saw the file after it was last modified (before the current
+            # method was called),
+            if self._last_read >= last_modified:
+                # Just enter the new price class to the dictionary.
+                self._price_classes[price] = job_id
+                # Remember we know the jobs file contents as of now.
+                self._last_read = os.stat(jobs_fname).st_mtime
+            # If the file was modified in the meantime,
+            else:
+                # Read the whole file.
+                self.load_price_classes()
 
     def get_job_id(self, dg):
         """
