@@ -89,8 +89,19 @@ How to import dialogues:
 ------------------------
 
 # Make the dialogue log directories available at the server's filesystem.
+	If the dialogue logs are on a remote filesystem, you can use the
+	fetch_dgdir.sh script (from the `scripts' directory) to achieve this. The
+	script also creates a list of imported dialogues for you, so you can then
+	skip the next step.
+	
+	For using the `fetch_dgdir.sh' script, you need to:
+		1. create a directory with dialogue logs as its immediate children at
+			 the remote filesystem;
+		2. (optional) pack the directory;
+		3. run the script at the target server; run the script without
+			 arguments for usage message.
 # Create a text file listing paths towards the log directories, one per 
-	line (preferrably in localsettings.LISTS_DIR, although whether you put it 
+	line (preferably in localsettings.LISTS_DIR, although whether you put it
 	in this directory or elsewhere, probably has no impact).
 # Open the web interface of your application and navigate to dialogue 
 	import (through an option in the menu at the first page after login, or 
