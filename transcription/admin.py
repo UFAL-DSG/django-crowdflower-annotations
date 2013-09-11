@@ -71,11 +71,12 @@ class DialogueAdmin(admin.ModelAdmin):
                 # Do not use this filter at all.
                 return None
             else:
-                readable = ['{start}-{end}'.format(
-                                start=('' if low == -float('inf')
-                                       else '{0}c'.format(low)),
-                                end=('' if high == float('inf')
-                                     else '{0}c'.format(high)))
+                def format_cents(price_usd):
+                    return ('' if abs(price_usd) == float('inf')
+                            else '{0}c'.format(int(100 * price_usd)))
+
+                readable = ['{start}-{end}'.format(start=format_cents(low),
+                                                   end=format_cents(high))
                             for low, high in price_ranges]
                 return [(readable_mem, readable_mem)
                         for readable_mem in readable]

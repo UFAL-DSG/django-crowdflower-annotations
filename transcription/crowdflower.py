@@ -145,9 +145,19 @@ def fire_gold_hooks(job_id):
 
 
 def upload_units(job_id, json_str):
+    """Uploads new units to Crowdflower to the job specified.
+
+    Arguments:
+        job_id -- ID of the Crowdflower job
+        json_str -- JSON string describing the unit data
+
+    """
+
     # Communicate the new data to CrowdFlower via the CF API.
     cf_url = 'jobs/{jobid}/upload'.format(jobid=job_id)
     success, msg, error_msgs = _contact_cf(cf_url, json_str=json_str)
+
+    # Check the results.
     if success:
         list_units.cache_clear()
         unit_id_from_cid.cache_clear()
@@ -408,8 +418,8 @@ class JsonDialogueUpload(object):
     def add(self, dg):
         uturns = UserTurn.objects.filter(dialogue=dg)
         if len(uturns) >= settings.MIN_TURNS:
-            self.data.setdefault(price_class_handler.get_job_id(dg),
-                                 []).append(dg)
+            job_id = price_class_handler.get_job_id(dg)
+            self.data.setdefault(job_id, []).append(dg)
 
     def extend(self, dg_datas):
         for dg in dg_datas:
@@ -428,7 +438,7 @@ class JsonDialogueUpload(object):
             # Check what units are currently uploaded for the job.
             success, cur_units = list_units(job_id)
             if success:
-                cur_cids = tuple(unit[u'cid']
+                cur_cids = tuple(unit['cid']
                                  for unit in cur_units.values())
             else:
                 error_msgs.append('Could not retrieve existing units for '
@@ -481,6 +491,13 @@ class _PriceClassHandler(object):
 
     @property
     def price_classes(self):
+        """Returns job IDs for price classes configured.
+
+        In case there is just one job, configured using CF_JOB_ID, this returns
+        None.  Otherwise, the return value is a mapping {price_usd: job_id}.
+
+        """
+
         # Read again the jobs file if it was updated without us reading it.
         if (hasattr(self._settings, 'CF_JOBS_FNAME') and
             self._last_read < os.stat(
@@ -500,13 +517,15 @@ class _PriceClassHandler(object):
         """Returns a list of tuples (price range floor, price range ceiling).
 
         The first price range's floor is -float('inf'), the last one's ceiling
-        is float('inf').
+        is float('inf').  Prices are in dollars.
         """
         inner_steps = sorted(self.price_classes.viewkeys()) or list()
         all_steps = [-float('inf')] + inner_steps + [float('inf')]
         return zip(all_steps[:-1], all_steps[1:])
 
     def load_price_classes(self):
+        """Loads price classes configured, reading cents, outputting dollars.
+        """
         self._price_classes_valid = True
         # If the price classes are to be stored in a file,
         if hasattr(self._settings, 'CF_JOBS_FNAME'):
@@ -520,7 +539,7 @@ class _PriceClassHandler(object):
                             continue
                         try:
                             price_str, job_id_str = line.strip().split('\t')
-                            job_ids[int(price_str)] = job_id_str
+                            job_ids[float(price_str) / 100.] = job_id_str
                         except:
                             raise Exception(
                                 'Wrong format of the job IDs file {fname}.'
@@ -533,7 +552,9 @@ class _PriceClassHandler(object):
                 self._price_classes = None
                 self._price_classes_valid = False
         elif hasattr(self._settings, 'CF_JOB_IDS'):
-            self._price_classes = self._settings.CF_JOB_IDS
+            self._price_classes = {
+                float(price) / 100.: job_id
+                for price, job_id in self._settings.CF_JOB_IDS}
         else:
             if not hasattr(self._settings, 'CF_JOB_ID'):
                 msg = ('At least one of CF_JOB_ID, CF_JOB_IDS or '
@@ -541,12 +562,12 @@ class _PriceClassHandler(object):
                 raise SettingsException(msg)
             self._price_classes = None
 
-    def store_job_id(self, job_id, price, outfname=None):
+    def store_job_id(self, job_id, cents, outfname=None):
         """Stores the ID of a Crowdflower job with the given price.
 
         Arguments:
             job_id -- the ID of the job used by Crowdflower
-            price -- price of this job in cents
+            cents -- price of this job in cents
             outfname -- path towards the file where the job ID should be stored
                 (default: settings.CF_JOBS_FNAME)
 
@@ -584,7 +605,7 @@ class _PriceClassHandler(object):
 
         # Write the job ID.
         with open(outfname, 'a+') as outfile:
-            outfile.write('{price}\t{id_}\n'.format(price=price, id_=job_id))
+            outfile.write('{price}\t{id_}\n'.format(price=cents, id_=job_id))
 
         # Update the dict of price classes.
         if default_out:
@@ -592,7 +613,7 @@ class _PriceClassHandler(object):
             # method was called),
             if self._last_read >= last_modified:
                 # Just enter the new price class to the dictionary.
-                self._price_classes[price] = job_id
+                self._price_classes[cents] = job_id
                 # Remember we know the jobs file contents as of now.
                 self._last_read = os.stat(jobs_fname).st_mtime
             # If the file was modified in the meantime,
