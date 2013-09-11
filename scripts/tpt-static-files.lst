@@ -9,4 +9,6 @@
 # Templates will get instantiated using the Django templating mechanism, 
 # getting the settings module as an additional context in the 'settings' 
 # key.
-../transcription/crowdflower/job.cml.tpt	../transcription/crowdflower/job.cml
+../transcription/crowdflower/job-linked.cml.tpt	../transcription/crowdflower/job-linked.cml
+../transcription/crowdflower/job-easyxdm.cml.tpt	../transcription/crowdflower/job-easyxdm.cml
+../transcription/crowdflower/job-iframe.cml.tpt	../transcription/crowdflower/job-iframe.cml

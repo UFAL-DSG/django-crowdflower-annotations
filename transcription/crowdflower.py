@@ -20,7 +20,7 @@ from util import get_log_path
 CF_URL_START = "https://api.crowdflower.com/v1/"
 
 default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
-                                    'crowdflower', 'job.cml')
+                                    'crowdflower', 'job-linked.cml')
 
 
 def _contact_cf(cf_url_part, params=None, json_str=None, verb='POST',
