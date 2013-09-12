@@ -8,6 +8,7 @@ from django.contrib import admin, messages
 from django.db import models
 from django.shortcuts import render
 
+from dg_util import is_gold
 from session_xml import XMLSession
 import settings
 from transcription.crowdflower import JsonDialogueUpload, \
@@ -100,7 +101,23 @@ class DialogueAdmin(admin.ModelAdmin):
                     new_set = new_set.filter(transcription_price__lt=end)
                 return new_set
 
-    list_filter = ('list_filename', PriceBinListFilter)
+    class GoldListFilter(admin.SimpleListFilter):
+        title = 'is gold'
+        parameter_name = 'gold'
+
+        def lookups(self, request, model_admin):
+            return (('1', 'true'), ('0', 'false'))
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val:
+                return queryset
+
+            val = bool(int(val))
+            return queryset.filter(
+                dialogueannotation__transcription__is_gold=True).distinct()
+
+    list_filter = ('list_filename', GoldListFilter, PriceBinListFilter)
 
     # Add view #
     ############
@@ -191,7 +208,26 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     }
     inlines = [TranscriptionInline]
     search_fields = ['dialogue__cid', 'dialogue__code', 'dialogue__dirname']
-    list_filter = ['user__username',
+
+    # Filters #
+    ###########
+    class GoldListFilter(admin.SimpleListFilter):
+        title = 'is gold'
+        parameter_name = 'gold'
+
+        def lookups(self, request, model_admin):
+            return (('1', 'true'), ('0', 'false'))
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val:
+                return queryset
+
+            val = bool(int(val))
+            return queryset.filter(transcription__is_gold=True).distinct()
+
+    list_filter = [GoldListFilter,
+                   'user__username',
                    'finished',
                    'offensive',
                    'accent']

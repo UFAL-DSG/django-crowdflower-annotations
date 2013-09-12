@@ -316,7 +316,7 @@ def create_job(cents_per_unit,
 
         # If everything has gone alright and the new job's ID should be stored,
         if store_job_id:
-            price_class_handler.store_job_id(job_id, job_price)
+            price_class_handler.store_job_id(job_id, cents_per_unit)
 
         return True, update_out
 
@@ -718,7 +718,7 @@ class _PriceClassHandler(object):
 
         Arguments:
             job_id -- the ID of the job used by Crowdflower
-            cents -- price of this job in cents
+            cents -- price of each dialogue in this job in cents
             outfname -- path towards the file where the job ID should be stored
                 (default: settings.CF_JOBS_FNAME)
 
