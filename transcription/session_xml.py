@@ -193,7 +193,7 @@ class XMLSession(object):
         if anns_after_idx > 0:
             anns_el = anns_above[anns_after_idx - 1]
             if anns_el.tag == self.ANNOTATIONS_ELEM:
-                return anns_above, anns_el
+                return anns_above, anns_after_idx, anns_el
         return anns_above, anns_after_idx, None
 
     def find_or_create_annotations(self):

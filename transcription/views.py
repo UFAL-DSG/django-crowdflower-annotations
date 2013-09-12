@@ -728,10 +728,13 @@ if settings.USE_CF:
                        'for this job.)'))
         job_cml_path = forms.FilePathField(
             path=os.path.dirname(default_job_cml_path),
+            match='\.cml$',
             initial=default_job_cml_path,
             label="Path to the job CML file",
             help_text=('Select the file that defines the body of the '
-                       'Crowdflower unit.'))
+                       'Crowdflower unit.\n'
+                       'If you see no choices here, you might need to run '
+                       'the scripts/inst_templates.py script yet.'))
         judgments_per_unit = forms.IntegerField(initial=1,
                                                 widget=fixedWidthTextInput)
         units_per_assignment = forms.IntegerField(initial=4,
