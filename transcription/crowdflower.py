@@ -111,11 +111,9 @@ def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
                 error_msgs.append('(no message)')
         msg = ('Complete message from Crowdflower:\n'
                'Response {code} ({reason})\n'
-               '<pre>\n'
-               '{msg}\n'
-               '</pre>').format(code=cf_res.status,
-                                reason=cf_res.reason,
-                                msg=cf_out or '')
+               '{msg}').format(code=cf_res.status,
+                               reason=cf_res.reason,
+                               msg=cf_out or '')
         error_msgs.append(msg)
         # In case of lack of success, return also the error messages.
         return False, cf_outobj, error_msgs
@@ -210,7 +208,7 @@ def unit_id_from_cid(job_id, cid):
     else:
         ret = None
         for unit_id, unit in msg.iteritems():
-            if unit[u'cid'] == cid:
+            if unit['cid'] == cid:
                 ret = unit_id
                 break
         if ret is None:
@@ -252,7 +250,7 @@ def create_job(cents_per_unit,
     # job_price = (units_per_assignment * cents_per_unit) / units_per_assignment
     job_price = units_per_assignment * cents_per_unit
     if title is None:
-        title = 'Dialogue transcription – {price}c'.format(price=job_price)
+        title = 'Dialogue transcription – {price}c'
     if instructions is None:
         instructions = re.sub(' +', ' ', """\
             Please, write down what is said in the provided recordings. The
@@ -268,7 +266,7 @@ def create_job(cents_per_unit,
     with open(job_cml_path) as job_file:
         job_params['cml'] = job_file.read()
     job_params['confidence_fields'] = ["code"]
-    job_params['title'] = title
+    job_params['title'] = title.format(price=job_price)
     job_params['judgments_per_unit'] = judgments_per_unit
     job_params['units_per_assignment'] = units_per_assignment
     job_params['pages_per_assignment'] = pages_per_assignment
@@ -326,6 +324,39 @@ def create_job(cents_per_unit,
     else:
         lead = 'Error when creating new job: '
         return False, (lead + ' ||| '.join(error_msgs))
+
+
+def cancel_job(jobid):
+    cf_url = 'jobs/{jobid}/cancel'.format(jobid=jobid)
+    success, out, msgs = _contact_cf(cf_url, verb='GET')
+    return success, '\n'.join(msgs)
+
+
+def delete_job(jobid, force_delete_from_file=True):
+    # Make sure the job is not running.
+    success, msgs = cancel_job(jobid)
+    if not success:
+        return False, msgs
+
+    time.sleep(settings.CF_WAIT_SECS)
+
+    # Delete the job from Crowdflower.
+    cf_url = 'jobs/{jobid}'.format(jobid=jobid)
+    success, out, msgs = _contact_cf(cf_url, verb='DELETE')
+
+    # Delete job from the job IDs file.
+    if success or force_delete_from_file:
+        try:
+            price_class_handler.remove_price_class(jobid)
+        except SettingsException as sex:
+            success = False
+            msgs.append(unicode(sex))
+
+    # Return.
+    if success:
+        return True, out
+    else:
+        return False, '\n'.join(msgs)
 
 
 ############################
@@ -515,7 +546,7 @@ class JsonDialogueUpload(object):
                     # Wait for CF to update its records.
                     time.sleep(settings.CF_WAIT_SECS)
 
-                    for dg in self.data[job_id]:
+                    for dg in filter(is_gold, self.data[job_id]):
                         success, msg = update_gold(dg)
                         if not success:
                             error_msgs.append(msg)
@@ -549,6 +580,10 @@ class _PriceClassHandler(object):
         self.load_price_classes()
 
     @property
+    def uses_jobfile(self):
+        return self._uses_jobfile
+
+    @property
     def price_classes(self):
         """Returns job IDs for price classes configured.
 
@@ -558,7 +593,7 @@ class _PriceClassHandler(object):
         """
 
         # Read again the jobs file if it was updated without us reading it.
-        if (hasattr(self._settings, 'CF_JOBS_FNAME') and
+        if (self._uses_jobfile and
             self._last_read < os.stat(
                 self._settings.CF_JOBS_FNAME).st_mtime):
             self.load_price_classes()
@@ -570,6 +605,18 @@ class _PriceClassHandler(object):
                    '(settings.CF_JOBS_FNAME="{fname}") but it contains no '
                    'valid records.').format(fname=self._settings.CF_JOBS_FNAME)
             raise Exception(msg)
+
+    @property
+    def old_price_classes(self):
+        """Returns a list of (price_usd, job_id) for jobs not used anymore."""
+        if not self._uses_jobfile:
+            return list()
+
+        # Read again the jobs file if it was updated without us reading it.
+        if self._last_read < os.stat(self._settings.CF_JOBS_FNAME).st_mtime:
+            self.load_price_classes()
+
+        return self._old_price_classes
 
     @property
     def price_ranges(self):
@@ -586,8 +633,10 @@ class _PriceClassHandler(object):
         """Loads price classes configured, reading cents, outputting dollars.
         """
         self._price_classes_valid = True
+        self._old_price_classes = list()  # price classes not in use anymore
         # If the price classes are to be stored in a file,
-        if hasattr(self._settings, 'CF_JOBS_FNAME'):
+        self._uses_jobfile = hasattr(self._settings, 'CF_JOBS_FNAME')
+        if self._uses_jobfile:
             jobs_fname = self._settings.CF_JOBS_FNAME
             if os.path.exists(jobs_fname):
                 job_ids = dict()
@@ -598,7 +647,13 @@ class _PriceClassHandler(object):
                             continue
                         try:
                             price_str, job_id_str = line.strip().split('\t')
-                            job_ids[float(price_str) / 100.] = job_id_str
+                            dollars = float(price_str) / 100.
+                            # If a job for this price was defined before,
+                            if dollars in job_ids:
+                                # Store it as an old price class.
+                                self._old_price_classes.append(
+                                    (dollars, job_ids[dollars]))
+                            job_ids[dollars] = job_id_str
                         except:
                             raise Exception(
                                 'Wrong format of the job IDs file {fname}.'
@@ -612,7 +667,7 @@ class _PriceClassHandler(object):
                 self._price_classes_valid = False
         elif hasattr(self._settings, 'CF_JOB_IDS'):
             self._price_classes = {
-                float(price) / 100.: job_id
+                float(price) / 100.: str(job_id)
                 for price, job_id in self._settings.CF_JOB_IDS}
         else:
             if not hasattr(self._settings, 'CF_JOB_ID'):
@@ -620,6 +675,43 @@ class _PriceClassHandler(object):
                        'CF_JOBS_FNAME has to be set.')
                 raise SettingsException(msg)
             self._price_classes = None
+
+    @classmethod
+    def _line_matches_jobid(cls, line, job_id):
+        rec = line.split('\t', 1)
+        return len(rec) > 1 and rec[1].strip() == str(job_id)
+
+    def remove_price_class(self, job_id):
+        if not self._uses_jobfile:
+            raise SettingsException('Cannot alter price classes when not '
+                                    'using the job IDs file.')
+
+        # Update the job IDs file.
+        with open(self._settings.CF_JOBS_FNAME, 'r+') as jobs_file:
+            lines = filter(lambda line: not self._line_matches_jobid(line,
+                                                                     job_id),
+                           jobs_file.readlines())
+            jobs_file.seek(0)
+            jobs_file.truncate()
+            jobs_file.write(''.join(lines))
+
+        # Update the price classes structures.
+        job_price = None
+        for price, known_job_id in self._price_classes.iteritems():
+            if known_job_id == job_id:
+                job_price = price
+                break
+        if job_price is not None:
+            del self._price_classes[job_price]
+        else:
+            job_idx = None
+            for idx, (price, known_job_id) in enumerate(
+                    self._old_price_classes):
+                if known_job_id == job_id:
+                    job_idx = idx
+                    break
+            if job_idx is not None:
+                del self._old_price_classes[job_idx]
 
     def store_job_id(self, job_id, cents, outfname=None):
         """Stores the ID of a Crowdflower job with the given price.
@@ -631,6 +723,8 @@ class _PriceClassHandler(object):
                 (default: settings.CF_JOBS_FNAME)
 
         """
+
+        job_id = str(job_id)
 
         # Figure out the `outfname'.
         jobs_fname = None

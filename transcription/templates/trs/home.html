@@ -8,7 +8,10 @@
 {% if user.is_superuser or user.is_staff %}
 <li><a href="{% url import_dialogues %}">Import dialogues</a></li>
 {% if USE_CF %}
-<li><a href="{% url create_job %}">Create new Crowdflower jobs</a></li>
+{% if USE_JOBFILE %}
+<li><a href="{% url create_jobs %}">Create new Crowdflower jobs</a></li>
+<li><a href="{% url delete_jobs %}">Delete Crowdflower jobs</a></li>
+{% endif %}
 <li><a href="{% url fire_hooks %}">Fire hooks for gold items</a></li>
 {% endif %}
 <li><a href="{% url admin:index %}">Admin</a></li>

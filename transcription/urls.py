@@ -1,6 +1,7 @@
 from django.conf.urls.defaults import patterns, url
 
 import settings
+from crowdflower import price_class_handler
 
 pattern_args = ['',
                 url('^transcribe$',
@@ -27,13 +28,19 @@ if settings.USE_CF:
     cf_pattern_args = [url('^log-work$',
                            'transcription.views.log_work',
                            name="log_work"),
-                       url('^create-job$',
-                           'transcription.views.create_job_view',
-                           name="create_job"),
                        url('^fire-hooks$',
                            'transcription.views.fire_hooks',
                            name="fire_hooks"),
                        ]
+    if price_class_handler.uses_jobfile:
+        cf_pattern_args.extend([
+            url('^create-jobs$',
+                'transcription.views.create_job_view',
+                name="create_jobs"),
+            url('^delete-jobs$',
+                'transcription.views.delete_job_view',
+                name="delete_jobs"),
+            ])
     pattern_args.extend(cf_pattern_args)
 pattern_args.append(url(r'^',
                         'transcription.views.home',

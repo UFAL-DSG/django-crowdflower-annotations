@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Deleting Crowdflower jobs</h1>
+
+<form action="" method="POST">
+  {% csrf_token %}
+	{{ form.gen_html_parts }}
+	{% if form.has_old_job_ids %}
+	<h2>Old jobs</h2>
+		{{ form.old_jobs_html }}
+	{% endif %}
+	{% if form.has_active_job_ids %}
+	<h2>Active jobs</h2>
+		<table>
+			{{ form.active_jobs_html }}
+		</table>
+	{% endif %}
+  <table>
+		{{ form.hidden_html }}
+		<tr>
+			<td>
+				<input id="submit" type="submit" name="send" value="Delete jobs">
+			</td>
+		</tr>
+  </table>
+</form>
+
+{% endblock %}

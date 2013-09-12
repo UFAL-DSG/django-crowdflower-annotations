@@ -8,6 +8,7 @@ from __future__ import unicode_literals
 import codecs
 from datetime import datetime
 import hashlib
+from itertools import chain
 import os
 import os.path
 import random
@@ -21,10 +22,11 @@ from django.db.models import Count
 from django.http import HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
+from django.utils.datastructures import SortedDict
 from django.views.decorators.csrf import csrf_exempt
 
-from crowdflower import create_job, default_job_cml_path, fire_gold_hooks, \
-    price_class_handler, JsonDialogueUpload, record_worker
+from crowdflower import create_job, delete_job, default_job_cml_path, \
+    fire_gold_hooks, price_class_handler, JsonDialogueUpload, record_worker
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -59,7 +61,7 @@ class TranscriptionForm(forms.Form):
     quality = forms.CharField()
     accent = forms.CharField()
     accent_name = forms.CharField(required=False)
-    offensive = forms.BooleanField()
+    offensive = forms.BooleanField(required=False)
     notes = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
@@ -477,7 +479,8 @@ def transcribe(request):
 
 @login_required
 def home(request):
-    context = {'USE_CF': settings.USE_CF}
+    context = {'USE_CF': settings.USE_CF,
+               'USE_JOBFILE': price_class_handler.uses_jobfile}
     return render(request, "trs/home.html", context)
 
 
@@ -638,6 +641,8 @@ def temp_test(request):
 
 
 if settings.USE_CF:
+    import json
+
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def fire_hooks(request):
@@ -648,18 +653,26 @@ if settings.USE_CF:
         return render(request, "trs/hooks-fired.html", context)
 
 
+    class ListField(forms.Field):
+        def to_python(self, value):
+            "Normalize data to a list of strings."
+            # Return None if no input was given.
+            if not value:
+                return list()
+            return sorted(set(map(unicode.strip, value.split(','))))
+
+
+    class CustomFieldsForm(forms.Form):
+        def __init__(self, fields, data=None):
+            super(CustomFieldsForm, self).__init__(data)
+            self.fields.update(fields)
+
+
     class CreateJobForm(forms.Form):
         """A form for creating Crowdflower jobs."""
 
-        class CountriesField(forms.Field):
+        class CountriesField(ListField):
             """Form field for entering country codes."""
-            def to_python(self, value):
-                "Normalize data to a list of strings."
-                # Return None if no input was given.
-                if not value:
-                    return list()
-                return sorted(set(map(unicode.strip, value.split(','))))
-
             def validate(self, value):
                 "Check if value consists only of two-letter codes."
                 # Use the parent's handling of required fields, etc.
@@ -723,9 +736,11 @@ if settings.USE_CF:
                        'created for each price specified here.'))
         store_job_id = forms.BooleanField(
             initial=True,
+            label='Store job ID',
             help_text=('Should job IDs be written to a job ID list file? '
                        '(Leave this checked if you want to upload dialogues '
-                       'for this job.)'))
+                       'for this job.)'),
+            required=False)
         job_cml_path = forms.FilePathField(
             path=os.path.dirname(default_job_cml_path),
             match='\.cml$',
@@ -735,18 +750,26 @@ if settings.USE_CF:
                        'Crowdflower unit.\n'
                        'If you see no choices here, you might need to run '
                        'the scripts/inst_templates.py script yet.'))
-        judgments_per_unit = forms.IntegerField(initial=1,
-                                                widget=fixedWidthTextInput)
-        units_per_assignment = forms.IntegerField(initial=4,
-                                                  widget=fixedWidthTextInput)
-        pages_per_assignment = forms.IntegerField(initial=4,
-                                                  widget=fixedWidthTextInput)
-        gold_per_assignment = forms.IntegerField(initial=1,
-                                                 widget=fixedWidthTextInput)
+        judgments_per_unit = forms.IntegerField(
+            initial=1,
+            widget=fixedWidthTextInput,
+            help_text='How many times do you want each dialogue transcribed?')
+        units_per_assignment = forms.IntegerField(
+            initial=2,
+            widget=fixedWidthTextInput,
+            help_text='How many dialogues in a HIT?')
+        pages_per_assignment = forms.IntegerField(
+            initial=1,
+            widget=fixedWidthTextInput,
+            help_text='How many visual pages to split each HIT into?')
+        gold_per_assignment = forms.IntegerField(
+            initial=1,
+            widget=fixedWidthTextInput,
+            help_text='How many gold dialogues per HIT?')
         title = forms.CharField(
             initial=default_title, widget=fixedWidthTextInput,
-            help_text=('Specify title for the job. "{price}" will be '
-                       'substituted with the Crowdflower job price in cents.'))
+            help_text=('Title for the job. "{price}" will be substituted '
+                       'with the HIT price in cents.'))
         instructions = forms.CharField(
             initial=default_instructions,
             widget=forms.Textarea(attrs={'rows': 3, 'cols': 64}),
@@ -754,7 +777,8 @@ if settings.USE_CF:
         bronze = forms.BooleanField(
             initial=True,
             help_text=('Require bronze classification from workers to work on '
-                       'this job?'))
+                       'this job?'),
+            required=False)
         included_countries = CountriesField(
             initial=default_countries, widget=fixedWidthTextInput,
             help_text=('Specify countries which workers have to reside in '
@@ -762,11 +786,159 @@ if settings.USE_CF:
                        'Use two-letter country codes.'))
 
 
+    class DeleteJobForm(forms.Form):
+        """A form for deleting Crowdflower jobs."""
+
+        def __init__(self, data=None):
+            """Creates the form.
+
+            Arguments:
+                data -- request.POST if the form is bound
+
+            """
+
+            super(DeleteJobForm, self).__init__(data)
+
+            # If creating a bound form,
+            if data is not None:
+                # Create hidden fields.
+                fields = dict()
+                # Collect job IDs of the old jobs.
+                if data['old_job_ids']:
+                    old_job_ids = data['old_job_ids'].split(',')
+                else:
+                    old_job_ids = list()
+                self.has_old_job_ids = bool(old_job_ids)
+                fields['old_job_ids'] = ListField(widget=forms.HiddenInput(),
+                                                  required=False)
+                # Collect job IDs of the active jobs.
+                if data['active_job_ids']:
+                    active_job_ids = data['active_job_ids'].split(',')
+                else:
+                    active_job_ids = list()
+                self.has_active_job_ids = bool(active_job_ids)
+                fields['active_job_ids'] = ListField(
+                    widget=forms.HiddenInput(), required=False)
+                # Store the hidden fields and their data.
+                self._hidden_fields = fields
+                self._hidden_data = {key: data[key] for key in fields}
+                self.fields.update(fields)
+
+                # Re-create old job fields.
+                field_items, self._old_data = self._populate_bound_fields(
+                    data, old_job_ids)
+                fields = SortedDict(field_items)
+                self._old_job_fields = fields
+                self.fields.update(fields)
+                # Re-create active job fields.
+                field_items, self._active_data = self._populate_bound_fields(
+                    data, active_job_ids)
+                fields = SortedDict(field_items)
+                self._active_job_fields = fields
+                self.fields.update(fields)
+
+            # If creating a new form,
+            else:
+                fields = dict()
+                # Collect job IDs of the old jobs.
+                old_price_classes = price_class_handler.old_price_classes
+                old_job_ids = [job_id for price, job_id in old_price_classes]
+                old_job_ids_str = ','.join(sorted(old_job_ids))
+                # Remember what all old job IDs we have.
+                self.has_old_job_ids = bool(old_job_ids)
+                fields['old_job_ids'] = ListField(
+                    widget=forms.HiddenInput(),
+                    initial=old_job_ids_str,
+                    required=False)
+
+                # Collect job IDs of the active jobs.
+                price_classes = price_class_handler.price_classes.viewitems()
+                active_job_ids = [job_id for price, job_id in price_classes]
+                active_job_ids_str = ','.join(sorted(active_job_ids))
+                # Remember what all active job IDs we have.
+                self.has_active_job_ids = bool(active_job_ids)
+                fields['active_job_ids'] = ListField(
+                    widget=forms.HiddenInput(),
+                    initial=active_job_ids_str,
+                    required=False)
+
+                # Store the hidden fields.
+                self._hidden_fields = fields
+                self._hidden_data = {'old_job_ids': old_job_ids_str,
+                                     'active_job_ids': active_job_ids_str}
+                self.fields.update(fields)
+
+                # Create old job fields.
+                field_items = self._populate_unbound_fields(old_price_classes)
+                fields = SortedDict(field_items)
+                self._old_data = None
+                self._old_job_fields = fields
+                self.fields.update(fields)
+                # Create active job fields.
+                field_items = self._populate_unbound_fields(price_classes)
+                fields = SortedDict(field_items)
+                self._active_data = None
+                self._active_job_fields = fields
+                self.fields.update(fields)
+
+        def _populate_bound_fields(self, data, job_ids):
+            field_items = list()
+            my_data = dict()
+            for job_id in job_ids:
+                # Find the field's label.
+                label_field_name = '{job_id}-label'.format(job_id=job_id)
+                label = data[label_field_name]
+                # Create the field itself and its label field.
+                field = forms.BooleanField(label=label, required=False)
+                field_items.append((job_id, field))
+                field = forms.CharField(widget=forms.HiddenInput())
+                field_items.append((label_field_name, field))
+                # Copy the data items used.
+                my_data[label_field_name] = data[label_field_name]
+                my_data[job_id] = job_id in data
+            return field_items, my_data
+
+        def _populate_unbound_fields(self, price_classes):
+            field_items = list()
+            for price, job_id in sorted(price_classes):
+                # Create the field itself.
+                label = '{job_id} ({cents}c)'.format(
+                    cents=int(100 * price), job_id=job_id)
+                field = forms.BooleanField(initial=True, label=label,
+                                           required=False)
+                field_items.append((job_id, field))
+                # Remember the label for the field.
+                label_field = forms.CharField(widget=forms.HiddenInput(),
+                                              initial=label)
+                label_field_name = '{job_id}-label'.format(job_id=job_id)
+                field_items.append((label_field_name, label_field))
+            return field_items
+
+        def gen_html_parts(self):
+            # Generate the hidden HTML.
+            hidden_form = CustomFieldsForm(self._hidden_fields,
+                                           self._hidden_data)
+            self.hidden_html = hidden_form.as_table()
+
+            # Generate HTML for the old jobs part.
+            old_jobs_form = CustomFieldsForm(self._old_job_fields,
+                                             self._old_data)
+            old_jobs_form.is_valid()
+            self.old_jobs_html = old_jobs_form.as_table()
+
+            # Generate HTML for the active jobs part.
+            active_jobs_form = CustomFieldsForm(self._active_job_fields,
+                                                self._active_data)
+            active_jobs_form.is_valid()
+            self.active_jobs_html = active_jobs_form.as_table()
+
+            # Return an empty string, so that this method can be called from
+            # within a template.
+            return ''
+
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def create_job_view(request):
-        import json
-
         # If the form has been submitted,
         if request.method == "POST":
             form = CreateJobForm(request.POST)
@@ -774,9 +946,16 @@ if settings.USE_CF:
                 prices = form.cleaned_data['cents_per_unit']
                 job_creation_failed = dict()  # :: {price -> ?creation_failed}
                 msgs = dict()  # :: {price -> message}
+
+                # Copy and alter the form data dictionary.
+                form_data = {key: val for key, val in
+                             form.cleaned_data.iteritems()}
+                del form_data['cents_per_unit']
+
                 for price in prices:
                     try:
-                        success, msg = create_job(cents_per_unit=price)
+                        success, msg = create_job(cents_per_unit=price,
+                                                  **form_data)
                     except Exception as ex:
                         success = False
                         msg = str(ex)
@@ -809,7 +988,7 @@ if settings.USE_CF:
                 # Populate context with data from the previous form.
                 context = {'form': form}
                 response = render(
-                    request, "trs/create-job.html", context,
+                    request, "trs/create-jobs.html", context,
                     context_instance=RequestContext(request))
                 return response
 
@@ -817,10 +996,9 @@ if settings.USE_CF:
         else:
             context = {'form': CreateJobForm()}
             response = render(
-                request, "trs/create-job.html", context,
+                request, "trs/create-jobs.html", context,
                 context_instance=RequestContext(request))
             return response
-
 
 
     @csrf_exempt
@@ -850,3 +1028,61 @@ if settings.USE_CF:
         finally:
             from django.http import HttpResponse
             return HttpResponse(status=200)
+
+
+    @login_required
+    @user_passes_test(lambda u: u.is_staff)
+    def delete_job_view(request):
+        # If the form has been submitted,
+        if request.method == "POST":
+            form = DeleteJobForm(request.POST)
+            if form.is_valid():
+                # Process the form data.
+                old_job_ids = form.cleaned_data['old_job_ids']
+                active_job_ids = form.cleaned_data['active_job_ids']
+
+                job_deletion_failed = dict()  # :: {jobid -> ?deletion_failed}
+                msgs = dict()  # :: {jobid -> message}
+                n_successful = 0
+                for job_id in chain(old_job_ids, active_job_ids):
+                    if not form.cleaned_data[job_id]:
+                        continue
+                    success, msg = delete_job(job_id)
+                    n_successful += success
+                    # Remember whether this job was successfully deleted.
+                    job_deletion_failed[job_id] = not success
+                    msgs[job_id] = 'OK' if success else msg
+                    # Log the communication with Crowdflower from job deletion.
+                    log_path = get_log_path(settings.WORKLOGS_DIR)
+                    with codecs.open(log_path, 'w',
+                                     encoding='UTF-8') as log_file:
+                        log_file.write(str(success) + '\n')
+                        if success:
+                            log_file.write(json.dumps(msg))
+                        else:
+                            log_file.write(msg)
+
+                # Build and render the response.
+                context = {'n_jobs': n_successful,
+                           'had_errors': any(job_deletion_failed.itervalues()),
+                           'msgs': msgs,
+                           'form': form,
+                           }
+                return render(request, "trs/jobs-deleted.html", context)
+
+            # If the form data were invalid,
+            else:
+                # Populate context with data from the previous form.
+                context = {'form': form}
+                response = render(
+                    request, "trs/delete-jobs.html", context,
+                    context_instance=RequestContext(request))
+                return response
+
+        # If a new form is to be served,
+        else:
+            context = {'form': DeleteJobForm()}
+            response = render(
+                request, "trs/delete-jobs.html", context,
+                context_instance=RequestContext(request))
+            return response
