@@ -766,7 +766,8 @@ class _PriceClassHandler(object):
             # method was called),
             if self._last_read >= last_modified:
                 # Just enter the new price class to the dictionary.
-                self._price_classes[cents] = job_id
+                dollars = float(cents) / 100.
+                self._price_classes[dollars] = job_id
                 # Remember we know the jobs file contents as of now.
                 self._last_read = os.stat(jobs_fname).st_mtime
             # If the file was modified in the meantime,
