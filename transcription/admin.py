@@ -102,7 +102,7 @@ class DialogueAdmin(admin.ModelAdmin):
                 return new_set
 
     class GoldListFilter(admin.SimpleListFilter):
-        title = 'is gold'
+        title = 'gold status'
         parameter_name = 'gold'
 
         def lookups(self, request, model_admin):
@@ -115,7 +115,7 @@ class DialogueAdmin(admin.ModelAdmin):
 
             val = bool(int(val))
             return queryset.filter(
-                dialogueannotation__transcription__is_gold=True).distinct()
+                dialogueannotation__transcription__is_gold=val).distinct()
 
     list_filter = ('list_filename', GoldListFilter, PriceBinListFilter)
 
@@ -212,7 +212,7 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     # Filters #
     ###########
     class GoldListFilter(admin.SimpleListFilter):
-        title = 'is gold'
+        title = 'gold status'
         parameter_name = 'gold'
 
         def lookups(self, request, model_admin):
@@ -224,7 +224,7 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                 return queryset
 
             val = bool(int(val))
-            return queryset.filter(transcription__is_gold=True).distinct()
+            return queryset.filter(transcription__is_gold=val).distinct()
 
     list_filter = [GoldListFilter,
                    'user__username',
