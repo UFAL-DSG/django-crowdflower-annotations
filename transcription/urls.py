@@ -33,9 +33,6 @@ if settings.USE_CF:
                        url('^fire-hooks$',
                            'transcription.views.fire_hooks',
                            name="fire_hooks"),
-                       url('^finalize-job$',
-                           'transcription.views.finalize_job',
-                           name="finalize_job"),
                        ]
 
     # Only when tracking Crowdflower job IDs using a job IDs file:

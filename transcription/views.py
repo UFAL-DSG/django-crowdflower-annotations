@@ -1027,39 +1027,14 @@ if settings.USE_CF:
             if signal == 'unit_complete':
                 record_worker(request)
             elif signal == 'job_complete':
-                # TODO: The line below is a best guess at the structure of JSON
-                # received from CF. Check what it actually looks like and
-                # update this once we received some such JSONs from CF.
-                job_id = request.POST['payload']['job_data']['id']
+                job_id = request.POST['payload']['id']
                 fire_gold_hooks(job_id)
+                # XXX Following does not work with Crowdflower.  If it starts
+                # working some time, the judgments will need further
+                # processing.
+                # success, msg = collect_judgments(job_id)
         finally:
             return HttpResponse(status=200)
-
-
-    @csrf_exempt
-    def finalize_job(request):
-#         try:
-#             job_id = request.GET['jobid']
-#             # TODO Change to POST.
-#             # job_id = request.POST['jobid']
-#
-#             # fire_gold_hooks(job_id)
-#
-#             success, msg = collect_judgments(job_id)
-#         finally:
-#             context = {'n_jobs': unicode(success) + unicode(msg)}
-#             return render(request, "trs/hooks-fired.html", context)
-# #             return HttpResponse(status=200)
-        job_id = request.GET['jobid']
-        # TODO Change to POST.
-        # job_id = request.POST['jobid']
-
-        # fire_gold_hooks(job_id)
-
-        success, msg = collect_judgments(job_id)
-        context = {'n_jobs': unicode(success) + unicode(msg)}
-        return render(request, "trs/hooks-fired.html", context)
-#             return HttpResponse(status=200)
 
 
     @login_required
