@@ -19,6 +19,7 @@ from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
 from transcription.models import Dialogue, DialogueAnnotation, \
     Transcription, UserTurn
+from transcription.tr_normalisation import trss_match
 from transcription.widgets import ROInput
 
 
@@ -276,6 +277,58 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                    'offensive',
                    'accent']
 
+    # Actions #
+    ###########
+    def update_gold_status_action(modeladmin, request, queryset):
+        n_changed = [0, 0]  # to not breaks, to breaks
+
+        dgs = queryset.values_list('dialogue', flat=True).distinct()
+        for dg in dgs:
+            dg_trss = Transcription.objects.filter(
+                dialogue_annotation__dialogue=dg)
+            gold_trss = dg_trss.filter(is_gold=True)
+            gold_trss_turns = (
+                gold_trss.values_list('turn__turn_number', flat=True)
+                .distinct())
+            plain_trss = dg_trss.filter(dialogue_annotation__in=queryset,
+                                        is_gold=False)
+
+            # Transcriptions for turns with no gold do not break gold.
+            n_changed[0] += plain_trss.filter(breaks_gold=True)\
+                .exclude(turn__turn_number__in=gold_trss_turns)\
+                .update(breaks_gold=False)
+
+            # Transcriptions for turns that have gold need to be checked.
+            to_check_trss = plain_trss.filter(
+                turn__turn_number__in=gold_trss_turns)
+            gold4turn = {turnnum: gold_trss.filter(turn__turn_number=turnnum)
+                         for turnnum in gold_trss_turns}
+
+            for plain_trs in to_check_trss:
+                broke_gold = plain_trs.breaks_gold
+
+                breaks_gold = True
+                for gold_trs in gold4turn[plain_trs.turn.turn_number]:
+                    if trss_match(plain_trs, gold_trs,
+                                  max_char_er=settings.MAX_CHAR_ER):
+                        breaks_gold = False
+                        break
+
+                if breaks_gold != broke_gold:
+                    plain_trs.breaks_gold = breaks_gold
+                    plain_trs.save()
+                    n_changed[breaks_gold] += 1
+
+        msg = ('{n} transcriptions had their gold breaking status changed, '
+               '{good} to OK, {bad} to gold-breaking.').format(
+                   n=n_changed[0] + n_changed[1],
+                   good=n_changed[0],
+                   bad=n_changed[1])
+        modeladmin.message_user(request, msg)
+
+    update_gold_status_action.short_description = (
+        "Update gold breaking statuses")
+
     date_hierarchy = 'date_saved'
 
     if settings.USE_CF:
@@ -289,9 +342,9 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         update_gold_action.short_description = (
             "Update gold status of related dialogues on CF")
 
-        actions = [update_gold_action]
+        actions = (update_gold_action, update_gold_status_action)
     else:
-        actions = list()
+        actions = (update_gold_status_action, )
 
 
 class TranscriptionAdmin(admin.ModelAdmin):

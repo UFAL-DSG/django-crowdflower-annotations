@@ -61,7 +61,7 @@ class DialogueAnnotation(models.Model):
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
     date_paid = models.DateTimeField(null=True, blank=True)
     finished = models.BooleanField(default=True)
-    user = models.ForeignKey(User, null=True)
+    user = models.ForeignKey(User, null=True, blank=True)
 
     def __unicode__(self):
         if self.user is not None:
@@ -133,33 +133,54 @@ class Transcription(models.Model):
         """
         Makes sure that the specified values from the user are consistent.
         """
+        # This transcription being saved.
         trs = kwargs.pop('instance')
+        # Other transcriptions of the same dialogue annotation.
+        this_ann_trss = Transcription.objects.filter(
+            dialogue_annotation=trs.dialogue_annotation)\
+                .exclude(pk=trs.pk)
         # `is_gold = True' shall dictate values for `breaks_gold' and
         # `some_breaks_gold'
-        if trs.is_gold and trs.breaks_gold:
-            # Check whether another transcribed segment from the same
-            # annotation breaks gold too.
-            trss = Transcription.objects.filter(
-                dialogue_annotation=trs.dialogue_annotation)
-            some_breaks_gold = False
-            for ann_trs in trss:
-                if ann_trs == trs:
-                    continue
-                if ann_trs.breaks_gold:
-                    some_breaks_gold = True
-                    break
-            # If no other transcription breaks gold, reset their
-            # `some_breaks_gold' field and update them in the database.
-            if not some_breaks_gold:
-                for ann_trs in trss:
-                    ann_trs.some_breaks_gold = False
-                    ann_trs.breaks_gold = False  # For sure.
-                    if ann_trs != trs:
-                        # NOTE Beware, this could easily cause an infinite
-                        # loop if the code is changed with not enough care.
+        if trs.breaks_gold:
+            if trs.is_gold:
+                # Check whether another transcribed segment from the same
+                # annotation breaks gold too.
+                other_breaks_gold = this_ann_trss.filter(breaks_gold=True)\
+                    .exists()
+                # If no other transcription breaks gold, reset their
+                # `other_breaks_gold' field and update them in the database.
+                if not other_breaks_gold:
+                    # Update this transcription's `breaks_gold' field.
+                    trs.breaks_gold = False
+                    trs.some_breaks_gold = False
+                    for ann_trs in this_ann_trss:
+                        ann_trs.some_breaks_gold = False
                         ann_trs.save()
-            # Update this transcription's `breaks_gold' field.
-            trs.breaks_gold = False
+                # In any case, this is gold, thus breaks not gold.
+                trs.breaks_gold = False
+            # If this transcription breaks gold,
+            else:
+                # make sure all the other in the same dialogue annotation know
+                # about it.
+                this_ann_trss.filter(some_breaks_gold=False)\
+                    .update(some_breaks_gold=True)
+                # Update for self.
+                trs.some_breaks_gold = True
+        # If not trs.breaks_gold,
+        else:
+            # Check that at least one does break gold or all have
+            # some_breaks_gold=False.
+            other_breaks_gold = this_ann_trss.filter(breaks_gold=True)\
+                .exists()
+            if other_breaks_gold:
+                return
+
+            some_breaks_gold = (this_ann_trss.filter(some_breaks_gold=True)
+                                .exists())
+            if some_breaks_gold:
+                this_ann_trss.update(some_breaks_gold=False)
+                trs.some_breaks_gold = False
+
 
     @staticmethod
     def post_save(sender, **kwargs):
