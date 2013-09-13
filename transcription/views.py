@@ -19,14 +19,15 @@ from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.db.models import Count
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
 from django.utils.datastructures import SortedDict
 from django.views.decorators.csrf import csrf_exempt
 
-from crowdflower import create_job, delete_job, default_job_cml_path, \
-    fire_gold_hooks, price_class_handler, JsonDialogueUpload, record_worker
+from crowdflower import collect_judgments, create_job, delete_job, \
+    default_job_cml_path, fire_gold_hooks, price_class_handler, \
+    JsonDialogueUpload, record_worker
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -646,7 +647,13 @@ if settings.USE_CF:
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def fire_hooks(request):
-        job_ids = price_class_handler.get_job_ids()
+        # Allow a specific job to be specified as a GET parameter.
+        if 'jobid' in request.GET:
+            job_ids = [request.GET['jobid']]
+        else:
+            # If no specific job ID was specified, fire hooks for all jobs.
+            job_ids = price_class_handler.get_job_ids()
+
         for job_id in job_ids:
             fire_gold_hooks(job_id)
         context = {'n_jobs': len(job_ids)}
@@ -1004,7 +1011,7 @@ if settings.USE_CF:
     @csrf_exempt
     def log_work(request):
         try:
-            signal = request.POST.get(u'signal', None)
+            signal = request.POST.get('signal', None)
             # Try: be robust
             # a.k.a. Pokemon exception handling: catch 'em all
             try:
@@ -1026,8 +1033,33 @@ if settings.USE_CF:
                 job_id = request.POST['payload']['job_data']['id']
                 fire_gold_hooks(job_id)
         finally:
-            from django.http import HttpResponse
             return HttpResponse(status=200)
+
+
+    @csrf_exempt
+    def finalize_job(request):
+#         try:
+#             job_id = request.GET['jobid']
+#             # TODO Change to POST.
+#             # job_id = request.POST['jobid']
+#
+#             # fire_gold_hooks(job_id)
+#
+#             success, msg = collect_judgments(job_id)
+#         finally:
+#             context = {'n_jobs': unicode(success) + unicode(msg)}
+#             return render(request, "trs/hooks-fired.html", context)
+# #             return HttpResponse(status=200)
+        job_id = request.GET['jobid']
+        # TODO Change to POST.
+        # job_id = request.POST['jobid']
+
+        # fire_gold_hooks(job_id)
+
+        success, msg = collect_judgments(job_id)
+        context = {'n_jobs': unicode(success) + unicode(msg)}
+        return render(request, "trs/hooks-fired.html", context)
+#             return HttpResponse(status=200)
 
 
     @login_required

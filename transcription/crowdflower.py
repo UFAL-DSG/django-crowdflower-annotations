@@ -2,6 +2,8 @@
 # -*- coding: UTF-8 -*-
 from __future__ import unicode_literals
 
+import cStringIO as StringIO
+import csv
 import httplib
 import json
 from lru_cache import lru_cache
@@ -24,11 +26,40 @@ default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
                                     'crowdflower', 'job-linked.cml')
 
 
+class CrowdflowerMessage(object):
+    def __init__(self, status, obj=None, content_type='json'):
+        """
+        Arguments:
+            status -- the HTTP response status
+            obj -- parsed object returned by Crowdflower or None
+            content_type -- either 'json' or 'csv'
+
+        """
+        self.status = status
+        self.obj = obj
+        self.content_type = content_type
+
+
+class CrowdflowerException(Exception):
+    def __init__(self, cf_msg, er_msgs=None):
+        self.cf_msg = cf_msg  # an instance of CrowdflowerMessage
+        if er_msgs is None:
+            self.er_msgs = list()
+        else:
+            self.er_msgs = er_msgs
+
+
 def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
-                verb='POST', log=settings.LOG_CURL, headers=None):
+                content_type='json',
+                verb='POST', log=settings.LOG_CURL,
+                headers=None):
     """
     Note that specifying both `data' and `json_str' is not supported and the
     `data' argument will be silently ignored in such a case.
+
+    Arguments:
+        TODO
+        content_type -- either 'json' or 'csv'
 
     """
 
@@ -63,8 +94,9 @@ def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
     # Update with the extra headers supplied.
     if headers is not None:
         headers_final.update(headers)
-    cf_url = '/v1/{start}.json?key={key}'.format(start=cf_url_part,
-                                                 key=settings.CF_KEY)
+    cf_url = '/v1/{start}.{ext}?key={key}'.format(start=cf_url_part,
+                                                  ext=content_type,
+                                                  key=settings.CF_KEY)
 
     # Make the connection, retrieve results.
     try:
@@ -95,14 +127,28 @@ def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
 
     # Check for errors.
     try:
+        if cf_out:
+            if content_type == 'json':
+                cf_outobj = json.loads(cf_out)
+            elif content_type == 'csv':
+                cf_out_sio = StringIO.StringIO(cf_out)
+                cf_outobj = list(csv.reader(cf_out_sio))
+            else:
+                cf_outobj = cf_out
+                serious_errors = True
+                error_msgs.append('Unknown content type for the Crowdflower '
+                                  'returned object specified: "{ct}".'
+                                  .format(ct=content_type))
         cf_outobj = json.loads(cf_out) if cf_out else ''
     except ValueError:
         cf_outobj = None
-        error_msgs += ['Unexpected reply from CF: """{cf_out}"""\n'
-                       .format(cf_out=cf_out)]
+        error_msgs.append('Unexpected reply from CF: """{cf_out}"""\n'
+                          .format(cf_out=cf_out))
         serious_errors = True
     # Check whether `cf_res.status' did not indicate failure.
-    serious_errors |= (str(cf_res.status) != '200')
+    serious_errors |= (not str(cf_res.status).startswith('2'))
+
+    # Raise or return.
     if serious_errors:
         if cf_outobj is not None:
             try:
@@ -115,37 +161,41 @@ def _contact_cf(cf_url_part, params=None, csv_str=None, json_str=None,
                                reason=cf_res.reason,
                                msg=cf_out or '')
         error_msgs.append(msg)
-        # In case of lack of success, return also the error messages.
-        return False, cf_outobj, error_msgs
+        # In case of lack of success, raise an informative exception.
+        cf_msg = CrowdflowerMessage(status=cf_res.status, obj=cf_outobj)
+        raise CrowdflowerException(cf_msg=cf_msg, er_msgs=error_msgs)
 
     # Return the returned object in case of success.
-    return True, cf_outobj, error_msgs
+    cf_msg = CrowdflowerMessage(status=cf_res.status, obj=cf_outobj)
+    return cf_msg
 
 
 @lru_cache(maxsize=10)
 def list_units(job_id):
     # Check what units are currently uploaded for the job.
     cf_url = 'jobs/{jobid}/units'.format(jobid=job_id)
-    success, cf_outobj, errors = _contact_cf(cf_url, verb='GET')
-    if success:
-        # The `cf_outobj' is expected to be a dictionary of the following
+    try:
+        cf_msg = _contact_cf(cf_url, verb='GET')
+    except CrowdflowerException as cex:
+        return False, cex.er_msgs
+    else:
+        # The `cf_msg.obj' is expected to be a dictionary of the following
         # format:
         # { unit_id -> { u'cid' -> cid,
         #                u'code' -> code,
         #                u'code_gold' -> code_gold },
         #   ... }
-        return True, cf_outobj
-    else:
-        return False, errors
+        return True, cf_msg.obj
 
 
 def fire_gold_hooks(job_id):
     cf_url = 'jobs/{job_id}/golds/fire_webhooks'.format(job_id=job_id)
-    success, cf_outobj, errors = _contact_cf(cf_url, verb='GET')
-    if success:
-        return True, cf_outobj
+    try:
+        cf_msg = _contact_cf(cf_url, verb='GET')
+    except CrowdflowerException as cex:
+        return False, cex.er_msgs
     else:
-        return False, errors
+        return True, cf_msg.obj
 
 
 def upload_units(job_id, json_str=None, csv_str=None):
@@ -170,18 +220,16 @@ def upload_units(job_id, json_str=None, csv_str=None):
 
     # Communicate the new data to CrowdFlower via the CF API.
     cf_url = 'jobs/{jobid}/upload'.format(jobid=job_id)
-    success, msg, error_msgs = _contact_cf(cf_url, headers=extra_headers,
-                                           **kwargs)
-
-    # Check the results.
-    if success:
+    try:
+        cf_msg = _contact_cf(cf_url, headers=extra_headers, **kwargs)
+    except CrowdflowerException as cex:
+        lead = 'job {jobid}: '.format(jobid=job_id)
+        error_msg = '\n'.join((lead + msg) for msg in cex.er_msgs)
+        return False, error_msg
+    else:
         list_units.cache_clear()
         unit_id_from_cid.cache_clear()
         return True, None
-    else:
-        lead = 'job {jobid}: '.format(jobid=job_id)
-        error_msg = '\n'.join((lead + msg) for msg in error_msgs)
-        return False, error_msg
 
 
 def unit_pair_from_cid(job_id, cid):
@@ -191,13 +239,14 @@ def unit_pair_from_cid(job_id, cid):
     else:
         cf_url = 'jobs/{jobid}/units/{unitid}'.format(jobid=job_id,
                                                       unitid=unit_id)
-        success, msg, error_msgs = _contact_cf(cf_url, verb='GET')
-        if success:
-            return True, (unit_id, msg)
-        else:
+        try:
+            cf_msg = _contact_cf(cf_url, verb='GET')
+        except CrowdflowerException as cex:
             return False, ('Detailed unit information could not be retrieved '
                            'from the CrowdFlower job {jobid} for the '
                            'dialogue CID {cid}.').format(cid=cid, jobid=job_id)
+        else:
+            return True, (unit_id, cf_msg.obj)
 
 
 @lru_cache(maxsize=2000)
@@ -221,13 +270,14 @@ def unit_id_from_cid(job_id, cid):
 
 def update_unit(job_id, unit_id, params):
     cf_url = 'jobs/{jobid}/units/{unitid}'.format(jobid=job_id, unitid=unit_id)
-    success, msg, error_msgs = _contact_cf(cf_url, verb='PUT', params=params)
-    if success:
-        return True, None
-    else:
+    try:
+        cf_msg = _contact_cf(cf_url, verb='PUT', params=params)
+    except CrowdflowerException as cex:
         lead = 'job {jobid}, unit {unitid}: '.format(jobid=job_id,
                                                      unitit=unit_id)
-        return False, (lead + error_msgs)
+        return False, (lead + cex.er_msgs)
+    else:
+        return True, None
 
 
 def create_job(cents_per_unit,
@@ -289,12 +339,17 @@ def create_job(cents_per_unit,
 
     # Create the job.
     cf_url = 'jobs'
-    success, cf_out, error_msgs = _contact_cf(cf_url, verb='POST',
-                                              json_str=json.dumps(params))
+    try:
+        cf_msg = _contact_cf(cf_url, verb='POST', json_str=json.dumps(params))
+
+    # If the creation of the job itself was unsuccessful,
+    except CrowdflowerException as cex:
+        lead = 'Error when creating new job: '
+        return False, (lead + ' ||| '.join(cex.er_msgs))
 
     # If the job was successfully created,
-    if success:
-        job_id = cf_out['id']
+    else:
+        job_id = cf_msg.obj['id']
 
         # Modify some more parameters. This has not been done above as it seems
         # to not work with Content-Type: application/json, whereas some of the
@@ -307,29 +362,27 @@ def create_job(cents_per_unit,
         params.append(('check', 'code'))
         # Make the request and check the response.
         cf_url = 'jobs/{jobid}'.format(jobid=job_id)
-        update_success, update_out, update_msgs = _contact_cf(
-            cf_url, verb='PUT', params=params)
-        if not update_success:
+        try:
+            cf_msg = _contact_cf(cf_url, verb='PUT', params=params)
+        except CrowdflowerException as cex:
             lead = ('Error when updating parameters of the new job (job ID: '
                     '{jobid}: ').format(jobid=job_id)
-            return False, (lead + ' ||| '.join(update_msgs))
+            return False, (lead + ' ||| '.join(cex.er_msgs))
 
         # If everything has gone alright and the new job's ID should be stored,
         if store_job_id:
             price_class_handler.store_job_id(job_id, cents_per_unit)
 
-        return True, update_out
-
-    # If the creation of the job itself was unsuccessful,
-    else:
-        lead = 'Error when creating new job: '
-        return False, (lead + ' ||| '.join(error_msgs))
-
+        return True, cf_msg.obj
 
 def cancel_job(jobid):
     cf_url = 'jobs/{jobid}/cancel'.format(jobid=jobid)
-    success, out, msgs = _contact_cf(cf_url, verb='GET')
-    return success, '\n'.join(msgs)
+    try:
+        _contact_cf(cf_url, verb='GET')
+    except CrowdflowerException as cex:
+        return False, '\n'.join(cex.er_msgs)
+    else:
+        return True, ''
 
 
 def delete_job(jobid, force_delete_from_file=True):
@@ -342,7 +395,14 @@ def delete_job(jobid, force_delete_from_file=True):
 
     # Delete the job from Crowdflower.
     cf_url = 'jobs/{jobid}'.format(jobid=jobid)
-    success, out, msgs = _contact_cf(cf_url, verb='DELETE')
+    try:
+        cf_msg = _contact_cf(cf_url, verb='DELETE')
+    except CrowdflowerException as cex:
+        success = False
+        ret_msg = '\n'.join(cex.er_msgs)
+    else:
+        success = True
+        ret_msg = cf_msg.obj
 
     # Delete job from the job IDs file.
     if success or force_delete_from_file:
@@ -353,15 +413,9 @@ def delete_job(jobid, force_delete_from_file=True):
             msgs.append(unicode(sex))
 
     # Return.
-    if success:
-        return True, out
-    else:
-        return False, '\n'.join(msgs)
+    return success, ret_msg
 
 
-############################
-# ORIGINALLY IN dg_util.py #
-############################
 def update_gold(dg):
     """Updates the gold status of `dg' on Crowdflower."""
     job_id = price_class_handler.get_job_id(dg)
@@ -455,7 +509,7 @@ def create_csv_header():
         dg -- a Django dialogue object
 
     """
-    return 'cid,code,gold'
+    return 'cid,code,code_gold'
 
 
 def create_dialogue_csv(dg):
@@ -466,7 +520,27 @@ def create_dialogue_csv(dg):
 
     """
     return '{cid},{code},{gold}'.format(cid=dg.cid, code=dg.code,
-                                          gold=dg.get_code_gold())
+                                        gold=dg.get_code_gold())
+
+
+def collect_judgments(job_id):
+    cf_url = 'jobs/{jobid}'.format(jobid=job_id)
+
+    # Wait for an OK response from CF.
+    while True:
+        try:
+            cf_msg = _contact_cf(cf_url, content_type='csv', verb='GET')
+        except CrowdflowerException as cex:
+            return False, '\n'.join(cex.er_msgs)
+        else:
+            if str(cf_msg.status) != '200':
+                time.sleep(settings.CF_WAIT_SECS)
+                continue
+            else:
+                break
+
+    # TODO Process the response.
+    return True, cf_msg.obj
 
 
 class JsonDialogueUpload(object):

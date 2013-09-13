@@ -24,6 +24,8 @@ pattern_args = ['',
                     'transcription.views.temp_test',
                     name="test_view"),
                ]
+
+# Only when using Crowdflower:
 if settings.USE_CF:
     cf_pattern_args = [url('^log-work$',
                            'transcription.views.log_work',
@@ -31,7 +33,12 @@ if settings.USE_CF:
                        url('^fire-hooks$',
                            'transcription.views.fire_hooks',
                            name="fire_hooks"),
+                       url('^finalize-job$',
+                           'transcription.views.finalize_job',
+                           name="finalize_job"),
                        ]
+
+    # Only when tracking Crowdflower job IDs using a job IDs file:
     if price_class_handler.uses_jobfile:
         cf_pattern_args.extend([
             url('^create-jobs$',

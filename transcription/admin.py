@@ -6,6 +6,7 @@ import shutil
 from django import forms
 from django.contrib import admin, messages
 from django.db import models
+from django.db.models import Count
 from django.shortcuts import render
 
 from dg_util import is_gold
@@ -226,7 +227,32 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
             val = bool(int(val))
             return queryset.filter(transcription__is_gold=val).distinct()
 
+    class TranscriptionCountListFilter(admin.SimpleListFilter):
+        title = 'number of transcriptions'
+        parameter_name = 'trs_count'
+
+        def lookups(self, request, model_admin):
+            trs_counts = set(
+                attrs['num_trss'] for attrs in
+                Transcription.objects.values('dialogue_annotation')
+                    .annotate(num_trss=Count('pk')))
+            if (DialogueAnnotation.objects.annotate(Count('transcription'))
+                    .filter(transcription__count=0).exists()):
+                trs_counts.add('0')
+            return sorted(((cnt, cnt) for cnt in trs_counts),
+                          key=lambda tup: int(tup[0]))
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val:
+                return queryset
+
+            val = int(val)
+            return queryset.annotate(Count('transcription')).filter(
+                transcription__count=val)
+
     list_filter = [GoldListFilter,
+                   TranscriptionCountListFilter,
                    'user__username',
                    'finished',
                    'offensive',

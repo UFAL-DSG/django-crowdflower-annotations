@@ -11,7 +11,9 @@
 	{{ form.gen_html_parts }}
 	{% if form.has_old_job_ids %}
 	<h2>Old jobs</h2>
-		{{ form.old_jobs_html }}
+		<table>
+			{{ form.old_jobs_html }}
+		</table>
 	{% endif %}
 	{% if form.has_active_job_ids %}
 	<h2>Active jobs</h2>
