@@ -61,11 +61,15 @@ class DialogueAnnotation(models.Model):
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
     date_paid = models.DateTimeField(null=True, blank=True)
     finished = models.BooleanField(default=True)
-    user = models.ForeignKey(User)
+    user = models.ForeignKey(User, null=True)
 
     def __unicode__(self):
+        if self.user is not None:
+            username = self.user.username
+        else:
+            username = 'anonymous'
         return ('(u: {u}; saved: {ds}; q: {q}; acc: {acc}; off: {off}; dg: '
-                '{dg})').format(u=self.user.username,
+                '{dg})').format(u=username,
                                 ds=self.date_saved,
                                 q=self.get_quality_display(),
                                 acc=(self.accent or "native"),

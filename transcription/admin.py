@@ -280,10 +280,19 @@ class TranscriptionAdmin(admin.ModelAdmin):
         user2prices = dict()  # :: username -> dialogue annotation -> price
         for trs in queryset:
             dg_ann = trs.dialogue_annotation
-            user = dg_ann.user.username
+            try:
+                user = dg_ann.user.username
+            except AttributeError:
+                user = ''
             user2trss.setdefault(user, list()).append(trs)
             user2prices.setdefault(user, dict()).setdefault(
                 dg_ann, dg_ann.dialogue.transcription_price)
+        # Remap the anonymous user to the 'anonymous' username.
+        if '' in user2prices and 'anonymous' not in user2prices:
+            user2prices['anonymous'] = user2prices['']
+            user2trss['anonymous'] = user2trss['']
+            del user2prices['']
+            del user2trss['']
         # Compute statistics.
         user2price = {user: sum(ann2price.values())
                     for user, ann2price in user2prices.iteritems()}

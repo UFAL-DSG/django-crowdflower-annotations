@@ -116,6 +116,10 @@ class XMLSession(object):
 
         """
         dg_ann = trs.dialogue_annotation
+        if dg_ann.user is not None:
+            username = dg_ann.user.username
+        else:
+            username = ''
         trs_path = ("{uturn}[@{turn_attr}='{turn}']{trss}/{trs}"
                     "[@{auth_attr}='{author}'][@{ann_attr}='{ann}']").format(
                         uturn=self.USERTURN_PATH,
@@ -124,7 +128,7 @@ class XMLSession(object):
                         trss=self.SLASH_TRANSCRIPTIONS_ELEM,
                         trs=self.TRANSCRIPTION_ELEM,
                         auth_attr=self.AUTHOR_ATTR,
-                        author=dg_ann.user.username,
+                        author=username,
                         ann_attr="annotation",  # hard-wired in views.py, too
                         ann=str(dg_ann.pk))
         return self.sess_xml.find(trs_path)
@@ -160,7 +164,11 @@ class XMLSession(object):
             breaks_gold="1" if trs.breaks_gold else "0",
             some_breaks_gold="1" if trs.some_breaks_gold else "0",
             program_version=dg_ann.program_version)
-        trs_xml.set(self.AUTHOR_ATTR, dg_ann.user.username)
+        if dg_ann.user is not None:
+            username = dg_ann.user.username
+        else:
+            username = ''
+        trs_xml.set(self.AUTHOR_ATTR, username)
         trs_xml.set(self.DATE_ATTR,
                     self.format_datetime(dg_ann.date_saved))
         trs_xml.text = trs.text
@@ -242,6 +250,10 @@ class XMLSession(object):
         # First, get the embedding element for all annotations.
         anns_el = self.find_or_create_annotations()
         # Second, create an appropriate element for the new annotation.
+        if dg_ann.user is not None:
+            username = dg_ann.user.username
+        else:
+            username = ''
         etree.SubElement(
             anns_el,
             self.ANNOTATION_ELEM,
@@ -251,7 +263,7 @@ class XMLSession(object):
             offensive=str(dg_ann.offensive),
             program_version=dg_ann.program_version,
             date_saved=self.format_datetime(dg_ann.date_saved),
-            user=dg_ann.user.username)\
+            user=username)\
                 .text = dg_ann.notes
 
     def iter_uturns(self):

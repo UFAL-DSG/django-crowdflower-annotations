@@ -162,7 +162,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False):
 
         # If transcriptions should be read and saved as well,
         if with_trss:
-            dummy_user = User.objects.get(username='testres')
+            dummy_user = None
 
             # Iterate over all dialogue annotations.
             for ann_el in session.iter_annotations():
@@ -236,7 +236,7 @@ def transcribe(request):
         form = TranscriptionForm(request.POST, cid=cid, uturn_ind=uturn_ind)
 
         if form.is_valid():
-            dummy_user = User.objects.get(username='testres')
+            dummy_user = None
 
             # Create the DialogueAnnotation object and save it into DB.
             dg_ann = None

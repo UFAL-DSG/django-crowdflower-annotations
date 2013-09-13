@@ -410,7 +410,7 @@ def record_worker(request):
         if not found_anns:
             raise ValueError()
         anns_from_dummy = anns_el.findall(
-            "./{ann_el}[@user='testres']".format(
+            "./{ann_el}[@user='']".format(
                 ann_el=settings.XML_COMMON['ANNOTATION_ELEM']))
         anns_unlabeled = filter(lambda el: 'worker_id' not in el.attrib,
                                 anns_from_dummy)
