@@ -303,7 +303,7 @@ class TranscriptionAdmin(admin.ModelAdmin):
         models.ForeignKey: {'form_class': LinkField},
         SizedTextField: {'widget': forms.Textarea(attrs={'rows': '3'})}
     }
-    search_fields = ['text']
+    search_fields = ['text', 'dialogue_annotation__dialogue__cid']
     list_filter = ['is_gold',
                    'breaks_gold',
                    'dialogue_annotation__user__username',
