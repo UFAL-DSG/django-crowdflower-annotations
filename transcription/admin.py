@@ -118,7 +118,24 @@ class DialogueAdmin(admin.ModelAdmin):
             return queryset.filter(
                 dialogueannotation__transcription__is_gold=val).distinct()
 
-    list_filter = ('list_filename', GoldListFilter, PriceBinListFilter)
+    class AnnotatedListFilter(admin.SimpleListFilter):
+        title = 'Is annotated'
+        parameter_name = 'anned'
+
+        def lookups(self, request, model_admin):
+            return (('1', 'true'), ('0', 'false'))
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val:
+                return queryset
+
+            is_anned = bool(int(val))
+            return queryset.filter(
+                dialogueannotation__isnull=not is_anned).distinct()
+
+    list_filter = ('list_filename', GoldListFilter, AnnotatedListFilter,
+                   PriceBinListFilter)
 
     # Add view #
     ############
