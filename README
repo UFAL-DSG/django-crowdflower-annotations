@@ -9,11 +9,7 @@ How to set up the transcription environment on the server:
 
 	TODO
 
-# Update also references to the site URL in templates (do `grep -R
-  '/cir_transcription' transcription/templates`).
-  FIXME This should not be asked from the user.
-
-	Run scripts/inst_templates.py.
+# Run scripts/inst_templates.py.
 
 # Set up your webserver to find your new transcription web application. For 
 	Apache, this can be done by inserting a snippet like the following to
@@ -33,7 +29,7 @@ How to set up the transcription environment on the server:
 	/webapps/transcription, affecting where the wsgi.py script and other 
 	Python modules used by the app are looked for.
 
-# Create the database (following is a pseudocode, do NOT copy and paste it 
+# Create the database (following is a pseudocode, do NOT copy & paste it 
   to your terminal):
 
 	mkdir /webapps/transcription/db  # or whatever was configured in settings
@@ -42,8 +38,6 @@ How to set up the transcription environment on the server:
 	cd /webapps/transcription && ln -s $DJANGO
 
 	# TODO Make sure the database access rights are set correctly.
-
-	# TODO Don't forget to create a user named 'testres'!
 
 # Restart Apache, open the site URL, and log in with the superuser account 
   you created.
