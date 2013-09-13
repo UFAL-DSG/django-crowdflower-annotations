@@ -15,6 +15,7 @@ import time
 from urllib import urlencode
 
 from dg_util import is_gold
+from models import CrowdflowerJob
 import settings
 from settings import SettingsException
 from transcription.models import UserTurn
@@ -355,18 +356,27 @@ def create_job(cents_per_unit,
         # to not work with Content-Type: application/json, whereas some of the
         # above, on the contrary, seemed to require exactly that format.
         #
+        # Set up the gold field.
+        params = (('check', 'code'), )
+        # Make the request and check the response.
+        cf_url = 'jobs/{jobid}/gold'.format(jobid=job_id)
+        try:
+            cf_msg = _contact_cf(cf_url, verb='PUT', params=params)
+        except CrowdflowerException as cex:
+            lead = ('Error when setting the gold field of the new job (job '
+                    'ID: {jobid}: ').format(jobid=job_id)
+            return False, (lead + ' ||| '.join(cex.er_msgs))
+
         # Set up the workers' countries included.
         params = [('job[included_countries][]', country)
                   for country in ("AU", "CA", "GB", "IE", "IM", "NZ", "US")]
-        # Set up the gold field.
-        params.append(('check', 'code'))
         # Make the request and check the response.
         cf_url = 'jobs/{jobid}'.format(jobid=job_id)
         try:
             cf_msg = _contact_cf(cf_url, verb='PUT', params=params)
         except CrowdflowerException as cex:
-            lead = ('Error when updating parameters of the new job (job ID: '
-                    '{jobid}: ').format(jobid=job_id)
+            lead = ('Error when updating allowed countries of the new job '
+                    '(job ID: {jobid}: ').format(jobid=job_id)
             return False, (lead + ' ||| '.join(cex.er_msgs))
 
         # If everything has gone alright and the new job's ID should be stored,
@@ -639,23 +649,11 @@ class _PriceClassHandler(object):
     _inst = None  # the singleton instance
 
     @staticmethod
-    def __new__(cls, settings):
+    def __new__(cls):
         if cls._inst is not None:
             raise ValueError('This singleton has already been created.')
         cls._inst = super(_PriceClassHandler, cls).__new__(cls)
         return cls._inst
-
-    def __init__(self, settings):
-        # Store the settings.
-        self._settings = settings
-        # Check whether dialogues should be split into several CF jobs based on
-        # their price.
-        self._last_read = 0.  # timestamp when we last read the jobs file
-        self.load_price_classes()
-
-    @property
-    def uses_jobfile(self):
-        return self._uses_jobfile
 
     @property
     def price_classes(self):
@@ -666,31 +664,19 @@ class _PriceClassHandler(object):
 
         """
 
-        # Read again the jobs file if it was updated without us reading it.
-        if (self._uses_jobfile and
-            self._last_read < os.stat(
-                self._settings.CF_JOBS_FNAME).st_mtime):
-            self.load_price_classes()
-
-        if self._price_classes_valid:
-            return self._price_classes
-        else:
-            msg = ('Price classes should be read from a file '
-                   '(settings.CF_JOBS_FNAME="{fname}") but it contains no '
-                   'valid records.').format(fname=self._settings.CF_JOBS_FNAME)
-            raise Exception(msg)
+        active_jobs = CrowdflowerJob.objects.filter(active=True)
+        job_prices = set(active_jobs.values_list('cents', flat=True))
+        return {CrowdflowerJob.cents2dollars(price):
+                    active_jobs.filter(cents=price).latest().job_id
+                for price in job_prices}
 
     @property
     def old_price_classes(self):
         """Returns a list of (price_usd, job_id) for jobs not used anymore."""
-        if not self._uses_jobfile:
-            return list()
-
-        # Read again the jobs file if it was updated without us reading it.
-        if self._last_read < os.stat(self._settings.CF_JOBS_FNAME).st_mtime:
-            self.load_price_classes()
-
-        return self._old_price_classes
+        prices_ids = CrowdflowerJob.objects.values_list('cents', 'job_id')
+        return [(CrowdflowerJob.cents2dollars(price), job_id)
+                for price, job_id in prices_ids
+                if job_id not in self.price_classes.values()]
 
     @property
     def price_ranges(self):
@@ -703,151 +689,19 @@ class _PriceClassHandler(object):
         all_steps = [-float('inf')] + inner_steps + [float('inf')]
         return zip(all_steps[:-1], all_steps[1:])
 
-    def load_price_classes(self):
-        """Loads price classes configured, reading cents, outputting dollars.
-        """
-        self._price_classes_valid = True
-        self._old_price_classes = list()  # price classes not in use anymore
-        # If the price classes are to be stored in a file,
-        self._uses_jobfile = hasattr(self._settings, 'CF_JOBS_FNAME')
-        if self._uses_jobfile:
-            jobs_fname = self._settings.CF_JOBS_FNAME
-            if os.path.exists(jobs_fname):
-                job_ids = dict()
-                with open(jobs_fname) as jobs_file:
-                    for line in jobs_file:
-                        line = line.strip()
-                        if not line:
-                            continue
-                        try:
-                            price_str, job_id_str = line.strip().split('\t')
-                            dollars = float(price_str) / 100.
-                            # If a job for this price was defined before,
-                            if dollars in job_ids:
-                                # Store it as an old price class.
-                                self._old_price_classes.append(
-                                    (dollars, job_ids[dollars]))
-                            job_ids[dollars] = job_id_str
-                        except:
-                            raise Exception(
-                                'Wrong format of the job IDs file {fname}.'
-                                .format(fname=jobs_fname))
-                self._last_read = os.stat(jobs_fname).st_mtime
-                self._price_classes = job_ids
-            else:
-                # If the job IDs file has not been created yet, trust that it
-                # will be created yet in time.  Do not complain.
-                self._price_classes = None
-                self._price_classes_valid = False
-        elif hasattr(self._settings, 'CF_JOB_IDS'):
-            self._price_classes = {
-                float(price) / 100.: str(job_id)
-                for price, job_id in self._settings.CF_JOB_IDS}
-        else:
-            if not hasattr(self._settings, 'CF_JOB_ID'):
-                msg = ('At least one of CF_JOB_ID, CF_JOB_IDS or '
-                       'CF_JOBS_FNAME has to be set.')
-                raise SettingsException(msg)
-            self._price_classes = None
-
-    @classmethod
-    def _line_matches_jobid(cls, line, job_id):
-        rec = line.split('\t', 1)
-        return len(rec) > 1 and rec[1].strip() == str(job_id)
-
     def remove_price_class(self, job_id):
-        if not self._uses_jobfile:
-            raise SettingsException('Cannot alter price classes when not '
-                                    'using the job IDs file.')
+        CrowdflowerJob.objects.filter(job_id=str(job_id)).delete()
 
-        # Update the job IDs file.
-        with open(self._settings.CF_JOBS_FNAME, 'r+') as jobs_file:
-            lines = filter(lambda line: not self._line_matches_jobid(line,
-                                                                     job_id),
-                           jobs_file.readlines())
-            jobs_file.seek(0)
-            jobs_file.truncate()
-            jobs_file.write(''.join(lines))
-
-        # Update the price classes structures.
-        job_price = None
-        for price, known_job_id in self._price_classes.iteritems():
-            if known_job_id == job_id:
-                job_price = price
-                break
-        if job_price is not None:
-            del self._price_classes[job_price]
-        else:
-            job_idx = None
-            for idx, (price, known_job_id) in enumerate(
-                    self._old_price_classes):
-                if known_job_id == job_id:
-                    job_idx = idx
-                    break
-            if job_idx is not None:
-                del self._old_price_classes[job_idx]
-
-    def store_job_id(self, job_id, cents, outfname=None):
+    def store_job_id(self, job_id, cents):
         """Stores the ID of a Crowdflower job with the given price.
 
         Arguments:
             job_id -- the ID of the job used by Crowdflower
             cents -- price of each dialogue in this job in cents
-            outfname -- path towards the file where the job ID should be stored
-                (default: settings.CF_JOBS_FNAME)
 
         """
 
-        job_id = str(job_id)
-
-        # Figure out the `outfname'.
-        jobs_fname = None
-        if outfname is None:
-            try:
-                outfname = jobs_fname = self._settings.CF_JOBS_FNAME
-                default_out = True
-            except AttributeError:
-                msg = ('Cannot store job ID to a file: "CF_JOBS_FNAME" has '
-                       'not been configured.')
-                raise SettingsException(msg)
-        else:
-            default_out = (os.path.abspath(outfname)
-                           == os.path.abspath(jobs_fname))
-
-        # Create the file's parent dirs if they did not exist.
-        out_dirname = os.path.dirname(os.path.abspath(outfname))
-        if not os.path.exists(out_dirname):
-            try:
-                os.makedirs(outfname)
-            except os.error:
-                msg = ('Cannot store job ID to the file "{fname}": the '
-                       'directories in the path could not be created.'
-                       ).format(fname=outfname)
-                raise Exception(msg)
-
-        # If writing to the default jobs file,
-        if default_out:
-            # Remember when this was last modified.
-            last_modified = os.stat(outfname).st_mtime
-
-        # Write the job ID.
-        with open(outfname, 'a+') as outfile:
-            outfile.write('{price}\t{id_}\n'.format(price=cents, id_=job_id))
-
-        # Update the dict of price classes.
-        if default_out:
-            # If we saw the file after it was last modified (before the current
-            # method was called),
-            if self._last_read >= last_modified:
-                # Just enter the new price class to the dictionary.
-                dollars = float(cents) / 100.
-                self._price_classes[dollars] = job_id
-                # Remember we know the jobs file contents as of now.
-                self._last_read = os.stat(jobs_fname).st_mtime
-            # If the file was modified in the meantime,
-            else:
-                # Read the whole file.
-                self.load_price_classes()
+        CrowdflowerJob.objects.create(cents=cents, job_id=str(job_id))
 
     def get_job_id(self, dg):
         """
@@ -864,9 +718,8 @@ class _PriceClassHandler(object):
         price_classes = self.price_classes
 
         # If no price classes are distinguished,
-        if price_classes is None:
-            # This means that all dialogues go to a single job.
-            return self._settings.CF_JOB_ID
+        if not price_classes:
+            raise ValueError('No active Crowdflower jobs are defined.')
         # If several price classes are distinguished,
         else:
             try:
@@ -887,11 +740,11 @@ class _PriceClassHandler(object):
         # case we let it propagate.
         price_classes = self.price_classes
 
-        if price_classes is None:
-            return [settings.CF_JOB_ID]
+        if not price_classes:
+            raise ValueError('No active Crowdflower jobs are defined.')
         else:
             return price_classes.viewvalues()
 
 
 # Create the singleton instance of _PriceClassHandler.
-price_class_handler = _PriceClassHandler(settings)
+price_class_handler = _PriceClassHandler()

@@ -480,8 +480,8 @@ def transcribe(request):
 
 @login_required
 def home(request):
-    context = {'USE_CF': settings.USE_CF,
-               'USE_JOBFILE': price_class_handler.uses_jobfile}
+    context = {'USE_CF': settings.USE_CF}
+#                'USE_JOBFILE': price_class_handler.uses_jobfile}
     return render(request, "trs/home.html", context)
 
 

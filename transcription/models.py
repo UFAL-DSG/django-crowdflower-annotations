@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from db_fields import ROCharField, WavField, SizedTextField
 from session_xml import XMLSession
 from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
-    LISTS_DIR
+    LISTS_DIR, USE_CF
 
 
 class Dialogue(models.Model):
@@ -187,3 +187,33 @@ class Transcription(models.Model):
 
 pre_save.connect(Transcription.pre_save, sender=Transcription)
 post_save.connect(Transcription.post_save, sender=Transcription)
+
+
+if USE_CF:
+    class CrowdflowerJob(models.Model):
+        """
+        Maps dialogue prices onto Crowdflower jobs created.
+        """
+        cents = models.PositiveSmallIntegerField()
+        """ price of a dialogue in USD cents """
+        job_id = models.CharField(max_length=8,  # CF currently uses 6 chars
+                                  unique=True)
+        """ ID of the Crowdflower job """
+        active = models.BooleanField(default=True)
+        """ whether this Crowdflower job is currently in use """
+        date_created = models.DateTimeField(auto_now_add=True, editable=False)
+        """ date when this job was asked to be created by Django """
+
+        class Meta:
+            get_latest_by = 'date_created'
+
+        @classmethod
+        def dollars2cents(cls, dollars):
+            return int(dollars * 100)
+
+        @classmethod
+        def cents2dollars(cls, cents):
+            return cents / 100.
+
+        def __unicode__(self):
+            return '{job} ({price}c)'.format(job=self.job_id, price=self.cents)

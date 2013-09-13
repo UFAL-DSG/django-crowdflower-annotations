@@ -33,19 +33,16 @@ if settings.USE_CF:
                        url('^fire-hooks$',
                            'transcription.views.fire_hooks',
                            name="fire_hooks"),
+                       url('^create-jobs$',
+                           'transcription.views.create_job_view',
+                           name="create_jobs"),
+                       url('^delete-jobs$',
+                           'transcription.views.delete_job_view',
+                           name="delete_jobs"),
                        ]
-
-    # Only when tracking Crowdflower job IDs using a job IDs file:
-    if price_class_handler.uses_jobfile:
-        cf_pattern_args.extend([
-            url('^create-jobs$',
-                'transcription.views.create_job_view',
-                name="create_jobs"),
-            url('^delete-jobs$',
-                'transcription.views.delete_job_view',
-                name="delete_jobs"),
-            ])
     pattern_args.extend(cf_pattern_args)
+
+# Displaying the home page is the default.
 pattern_args.append(url(r'^',
                         'transcription.views.home',
                         name='home'))

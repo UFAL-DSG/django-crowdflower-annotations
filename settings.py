@@ -26,17 +26,12 @@ for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
 # For the CF_JOB_ID and CF_JOB_IDS configuration variables, if USE_CF is in
 # force, at least one of them has to be set.
 _cf_ids_set = False
-for name in ('CF_JOB_IDS', 'CF_JOB_ID', 'CF_JOBS_FNAME', 'CF_WAIT_SECS'):
-    try:
-        setattr(_module, name, getattr(localsettings, name))
-    except AttributeError as er:
-        pass
-    else:
-        _cf_ids_set = True
-if USE_CF and not _cf_ids_set:
-    raise AttributeError('USE_CF == True but none of CF_JOB_IDS, CF_JOB_ID or '
-                         'CF_JOBS_FNAME is set.')
-del _cf_ids_set
+try:
+    _tmp = CF_WAIT_SECS
+except NameError:
+    CF_WAIT_SECS = 1
+finally:
+    del _tmp
 
 MAX_CHAR_ER = localsettings.MAX_CHAR_ER
 

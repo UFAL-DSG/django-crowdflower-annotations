@@ -186,12 +186,13 @@ class DialogueAdmin(admin.ModelAdmin):
                 if success:
                     modeladmin.message_user(
                         request,
-                        'Gold dialogues have been updated to Crowdflower.')
+                        ('Gold status of {cid} has been updated at Crowdflower'
+                         .format(cid=dg.cid)))
                 else:
                     messages.error(
                         request,
-                        ('Failed to update the gold status on Crowdflower: '
-                         '{msg}').format(msg=msg))
+                        ('Failed to update the gold status of {cid} at '
+                         'Crowdflower: {msg}').format(cid=dg.cid, msg=msg))
 
         update_gold_action.short_description = (
             "Update dialogue gold status on CF")
