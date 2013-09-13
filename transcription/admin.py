@@ -270,7 +270,23 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
             return queryset.annotate(Count('transcription')).filter(
                 transcription__count=val)
 
+    class BreaksGoldListFilter(admin.SimpleListFilter):
+        title = 'breaks gold'
+        parameter_name = 'breaks_gold'
+
+        def lookups(self, request, model_admin):
+            return (('1', 'true'), ('0', 'false'))
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val:
+                return queryset
+
+            val = bool(int(val))
+            return queryset.filter(transcription__breaks_gold=val).distinct()
+
     list_filter = [GoldListFilter,
+                   BreaksGoldListFilter,
                    TranscriptionCountListFilter,
                    'user__username',
                    'finished',
