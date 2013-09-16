@@ -39,6 +39,9 @@ if settings.USE_CF:
                        url('^delete-jobs$',
                            'transcription.views.delete_job_view',
                            name="delete_jobs"),
+                       url('^collect-reports$',
+                           'transcription.views.collect_reports',
+                           name="collect_reports"),
                        ]
     pattern_args.extend(cf_pattern_args)
 

@@ -342,7 +342,7 @@ class XMLSession(object):
         # XML elements.
         unassigned_el = None
         for ann_el in session.iter_annotations(user=''):
-            if ann_el.get('worker_id', None) is not None:
+            if ann_el.get('worker_id', None) is None:
                 unassigned_el = ann_el
                 break
 

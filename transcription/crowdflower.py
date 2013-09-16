@@ -178,13 +178,18 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
             pass
         logfile.write(msg)
 
-    # Check for errors.
+    # Process the Crowdflower response.
     try:
         # Unzip if asked to.
         if out_zipped:
-            zip_contents = zipfile.ZipFile(StringIO.StringIO(cf_out))
-            with zip_contents.open(zip_contents.infolist()[0]) as zip_file:
-                cf_out = zip_file.read()
+            try:
+                zip_contents = zipfile.ZipFile(StringIO.StringIO(cf_out))
+                with zip_contents.open(zip_contents.infolist()[0]) as zip_file:
+                    cf_out = zip_file.read()
+            except Exception as ex:
+                error_msgs.append(unicode(ex))
+                serious_errors = True
+                raise ValueError()  # To be caught just below.
 
         if type_theirs == 'json':
             cf_outobj = json.loads(cf_out) if cf_out else None
@@ -756,6 +761,13 @@ class _PriceClassHandler(object):
         return [(CrowdflowerJob.cents2dollars(price), job_id)
                 for price, job_id in prices_ids
                 if job_id not in self.price_classes.values()]
+
+    @property
+    def all_price_classes(self):
+        """Returns a list of (price_usd, job_id) for jobs not used anymore."""
+        prices_ids = CrowdflowerJob.objects.values_list('cents', 'job_id')
+        return [(CrowdflowerJob.cents2dollars(price), job_id)
+                for price, job_id in prices_ids]
 
     @property
     def price_ranges(self):

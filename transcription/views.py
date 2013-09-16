@@ -6,6 +6,7 @@
 from __future__ import unicode_literals
 
 import codecs
+from collections import namedtuple
 from datetime import datetime
 import hashlib
 from itertools import chain
@@ -655,12 +656,42 @@ if settings.USE_CF:
             job_ids = price_class_handler.get_job_ids()
 
         for job_id in job_ids:
-            # DEBUG
-#             fire_gold_hooks(job_id)
-            success, msg = collect_judgments(job_id)
-#         context = {'n_jobs': len(job_ids)}
-        context = {'n_jobs': str(success) + '; ' + msg}
+            fire_gold_hooks(job_id)
+        context = {'n_jobs': len(job_ids)}
         return render(request, "trs/hooks-fired.html", context)
+
+
+    @login_required
+    @user_passes_test(lambda u: u.is_staff)
+    def collect_reports(request):
+        # Allow a specific job to be specified as a GET parameter.
+        if 'jobid' in request.GET:
+            job_ids = [request.GET['jobid']]
+        else:
+            # If no specific job ID was specified, fire hooks for all jobs.
+            job_ids = price_class_handler.get_job_ids()
+
+        # Do the work, collect return statuses and messages.
+        success = True
+        price_classes_dict = {jobid: int(100 * dollars) for dollars, jobid in
+                              price_class_handler.all_price_classes}
+        response_tup = namedtuple('ReportItem', ['job_id', 'price', 'failed',
+                                                 'msg'])
+        response_data = list()
+
+        for job_id in job_ids:
+            success_part, msg = collect_judgments(job_id)
+            success &= success_part
+            response_data.append(
+                response_tup(job_id,
+                             price_classes_dict.get(job_id, '???'),
+                             not success_part,
+                             msg))
+
+        # Render the response.
+        context = {'success': success,
+                   'response_data': response_data}
+        return render(request, "trs/reports-collected.html", context)
 
 
     class ListField(forms.Field):
@@ -1032,10 +1063,7 @@ if settings.USE_CF:
             elif signal == 'job_complete':
                 job_id = request.POST['payload']['id']
                 fire_gold_hooks(job_id)
-                # XXX Following does not work with Crowdflower.  If it starts
-                # working some time, the judgments will need further
-                # processing.
-                # success, msg = collect_judgments(job_id)
+                collect_judgments(job_id)
         finally:
             return HttpResponse(status=200)
 

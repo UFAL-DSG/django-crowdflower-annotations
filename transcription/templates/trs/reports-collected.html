@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Crowdflower reports collected</h1>
+
+<p>
+{% if success %}
+Crowdflower reports for all active jobs have been successfully collected.
+{% else %}
+There was an error collecting Crowdflower job reports.
+{% endif %}
+A detailed message follows.
+</p>
+
+<table border="1">
+  <tr>
+    <th>job ID</th>
+    <th>message</th>
+  </tr>
+  {% for tup in response_data %}
+  <tr>
+    <td>{% if tup.failed %}<strong>{% endif %}
+				{{ tup.job_id }} ({{ tup.price }}c)
+        {% if tup.failed %}</strong>{% endif %}
+    </td>
+    <td>{% if tup.failed %}<strong>{% endif %}
+        {{ tup.msg|linebreaksbr }}
+        {% if tup.failed %}</strong>{% endif %}
+    </td>
+  </tr>
+  {% endfor %}
+</table>
+
+<p>
+Go back <a href="{% url home %}">home</a>.
+</p>
+
+{% endblock %}
