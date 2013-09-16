@@ -1,7 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from __future__ import unicode_literals
-
 from collections import Counter
 import cStringIO as StringIO
 import csv
@@ -81,7 +79,8 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
     # Default the verb to GET or POST, depending on the presence of data.
     if verb is None:
         verb = 'GET' if data is None else 'POST'
-    use_urllib2 = (type_ours == 'data' and headers is None)
+    use_urllib2 = (verb in ('GET', 'POST') and type_ours == 'data'
+                   and headers is None)
 
     # Initialisation.
     error_msgs = list()
@@ -125,6 +124,8 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
 
     # Make the connection, retrieve results.
     # Special case: use urllib2 when possible.
+    cf_out = None
+    cf_res = None
     if use_urllib2:
         try:
             cf_url_whole = CF_URL_START + cf_url
@@ -135,6 +136,11 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
         else:
             status = 200
             reason = 'OK'
+        try:
+            cf_out = cf_res.read()
+        except Exception as ex:
+            error_msgs.append(unicode(ex))
+            serious_errors = True
     # General case: use httplib.
     else:
         try:
@@ -146,15 +152,15 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
             cf_res = cf_conn.getresponse()
             status = cf_res.status
             reason = cf_res.reason
+            cf_out = cf_res.read()
+        except Exception as ex:
+            error_msgs.append(unicode(ex))
+            serious_errors = True
         finally:
             cf_conn.close()
-    # Save the response body.
-    try:
-        cf_out = cf_res.read()
-    except:
-        cf_out = None
 
-    if out_enc is not None:
+    # Run through character decoding if asked to.
+    if out_enc is not None and cf_out is not None:
         try:
             cf_out = cf_out.decode(out_enc)
         except Exception as ex:
@@ -164,14 +170,20 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
     if log and logfile:
         headers_str = '; '.join('{key}: {val}'.format(key=key, val=val)
                                 for key, val in headers_final.iteritems())
-        msg = (b"Call \"request('{verb}', '{url}', '{params}', '{headers}')\"\n"
-               b"----\n"
-               b"Response: {status} {reason}\n"
-               b"----\n"
-               b"Returned:\n"
-               b"{data}\n").format(verb=verb, url=cf_url, params=data_str,
-                                   headers=headers_str, status=status,
-                                   reason=reason, data=cf_out)
+        msg = ("Call \"request('{verb}', '{url}', '{params}', '{headers}')\"\n"
+               "----\n"
+               "Response: {status} {reason}\n"
+               "----\n"
+               "Returned:\n").format(verb=verb, url=cf_url, params=data_str,
+                                     headers=headers_str, status=status,
+                                     reason=reason)
+        try:
+            msg += cf_out + '\n'
+        except UnicodeEncodeError:
+            try:
+                msg = str(msg) + cf_out + '\n'
+            except:
+                pass
         try:
             msg = msg.encode('UTF-8')
         except:
@@ -410,7 +422,8 @@ def create_job(cents_per_unit,
     cf_url = 'jobs'
     er_msg_lead = 'Error when creating new job: '
     try:
-        cf_msg = _contact_cf(cf_url, type_ours='json', data=json.dumps(params))
+        cf_msg = _contact_cf(cf_url, type_ours='json', data=json.dumps(params),
+                             out_enc=None)
 
     # If the creation of the job itself was unsuccessful,
     except CrowdflowerException as cex:

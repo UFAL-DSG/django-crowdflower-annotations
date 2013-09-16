@@ -9,26 +9,27 @@
 <p>
 A total of <strong>{{ n_jobs }}</strong> Crowdflower jobs have been
 successfully created.
-{% if had_errors %}
+{% if not success %}
 The table below shows reports for each of the jobs individually.
 {% endif %}
 </p>
 
-{% if had_errors %}
+{% if not success %}
 <table>
   <tr>
     <th>job ID</th>
     <th>message</th>
   </tr>
-  {% for jobid, msg in msgs.items %}
+  {% for tup in response_data %}
   <tr>
-    <td>{% if job_creation_failed.jobid %}<strong>{% endif %}
-        {{ jobid }}
-        {% if job_creation_failed.jobid %}</strong>{% endif %}
+		<td>{% if tup.failed %}<strong>FAIL 
+				{% else %}{{ tup.job_id }} {% endif %}
+        ({{ tup.price }}c)
+        {% if tup.failed %}</strong>{% endif %}
     </td>
-    <td>{% if job_creation_failed.jobid %}<strong>{% endif %}
-        {{ msg }}
-        {% if job_creation_failed.jobid %}</strong>{% endif %}
+    <td>{% if tup.failed %}<strong>{% endif %}
+        {{ tup.msg|linebreaksbr }}
+        {% if tup.failed %}</strong>{% endif %}
     </td>
   </tr>
   {% endfor %}

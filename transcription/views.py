@@ -985,41 +985,46 @@ if settings.USE_CF:
             form = CreateJobForm(request.POST)
             if form.is_valid():
                 prices = form.cleaned_data['cents_per_unit']
-                job_creation_failed = dict()  # :: {price -> ?creation_failed}
-                msgs = dict()  # :: {price -> message}
 
                 # Copy and alter the form data dictionary.
                 form_data = {key: val for key, val in
                              form.cleaned_data.iteritems()}
                 del form_data['cents_per_unit']
 
+                # Do the work, collect return statuses and messages.
+                success = True
+                response_tup = namedtuple('ReportItem',
+                                          ['price', 'job_id', 'failed', 'msg'])
+                response_data = list()
+                n_successful = 0
+
                 for price in prices:
-                    try:
-                        success, msg = create_job(cents_per_unit=price,
-                                                  **form_data)
-                    except Exception as ex:
-                        success = False
-                        msg = str(ex)
+                    success_part, msg = create_job(cents_per_unit=price,
+                                                   **form_data)
                     # Remember whether job creation was successful for this job
                     # price.
-                    job_creation_failed[price] = not success
-                    msgs[price] = 'OK' if success else msg
+                    success &= success_part
+                    n_successful += success_part
+                    job_id = msg['id'] if success_part else None
+                    response_data.append(
+                        response_tup(price,
+                                     job_id,
+                                     not success_part,
+                                     'OK' if success_part else msg))
                     # Log the communication with Crowdflower from job creation.
                     log_path = get_log_path(settings.WORKLOGS_DIR)
                     with codecs.open(log_path, 'w',
                                      encoding='UTF-8') as log_file:
-                        log_file.write(str(success) + '\n')
-                        if success:
+                        log_file.write(str(success_part) + '\n')
+                        if success_part:
                             log_file.write(json.dumps(msg))
                         else:
                             log_file.write(msg)
 
                 # Build and render the response.
-                n_successful = (len(prices)
-                                - sum(job_creation_failed.viewvalues()))
                 context = {'n_jobs': n_successful,
-                           'had_errors': any(job_creation_failed.itervalues()),
-                           'msgs': msgs,
+                           'success': success,
+                           'response_data': response_data,
                            'form': form,
                            }
                 return render(request, "trs/jobs-created.html", context)
@@ -1079,31 +1084,44 @@ if settings.USE_CF:
                 old_job_ids = form.cleaned_data['old_job_ids']
                 active_job_ids = form.cleaned_data['active_job_ids']
 
+                # Do the work, collect return statuses and messages.
+                success = True
+                price_classes_dict = {
+                    jobid: int(100 * dollars) for dollars, jobid in
+                    price_class_handler.all_price_classes}
+                response_tup = namedtuple('ReportItem',
+                                          ['job_id', 'price', 'failed', 'msg'])
+                response_data = list()
+                n_successful = 0
+
                 job_deletion_failed = dict()  # :: {jobid -> ?deletion_failed}
                 msgs = dict()  # :: {jobid -> message}
-                n_successful = 0
                 for job_id in chain(old_job_ids, active_job_ids):
                     if not form.cleaned_data[job_id]:
                         continue
-                    success, msg = delete_job(job_id)
-                    n_successful += success
+                    success_part, msg = delete_job(job_id)
                     # Remember whether this job was successfully deleted.
-                    job_deletion_failed[job_id] = not success
-                    msgs[job_id] = 'OK' if success else msg
+                    success &= success_part
+                    n_successful += success_part
+                    response_data.append(
+                        response_tup(job_id,
+                                     price_classes_dict[job_id],
+                                     not success_part,
+                                     'OK' if success_part else msg))
                     # Log the communication with Crowdflower from job deletion.
                     log_path = get_log_path(settings.WORKLOGS_DIR)
                     with codecs.open(log_path, 'w',
                                      encoding='UTF-8') as log_file:
-                        log_file.write(str(success) + '\n')
-                        if success:
+                        log_file.write(str(success_part) + '\n')
+                        if success_part:
                             log_file.write(json.dumps(msg))
                         else:
                             log_file.write(msg)
 
                 # Build and render the response.
                 context = {'n_jobs': n_successful,
-                           'had_errors': any(job_deletion_failed.itervalues()),
-                           'msgs': msgs,
+                           'success': success,
+                           'response_data': response_data,
                            'form': form,
                            }
                 return render(request, "trs/jobs-deleted.html", context)
