@@ -3,6 +3,7 @@
 
 from collections import namedtuple
 from lxml import etree
+import os
 import os.path
 
 import settings
@@ -10,6 +11,34 @@ import settings
 
 UserTurn_nt = namedtuple('UserTurn_nt', ['turn_number', 'wav_fname'])
 SystemTurn_nt = namedtuple('SystemTurn_nt', ['turn_number', 'text'])
+
+
+def is_dialogue_dirname(fname):
+    """Checks whether `fname' is a name of a known dialogue dir."""
+    return os.path.isdir(os.path.join(settings.CONVERSATION_DIR, fname))
+
+
+def update_worker_stats(gold_stats):
+    """Updates the gold hit statistic in all available session files.
+
+    Arguments:
+        gold_stats -- a mapping {worker_id -> gold_ratio}
+
+    Returns a tuple (number of files affected, number of XML elements affected)
+    where an XML element corresponds to one dialogue annotation (by one
+    worker).
+
+    """
+
+    dg_dirs = filter(is_dialogue_dirname,
+                     os.listdir(settings.CONVERSATION_DIR))
+    n_files = 0
+    n_els = 0
+    for dg_dir in dg_dirs:
+        with XMLSession(cid=dg_dir) as session:
+            n_els += session.update_worker_stats(gold_stats)
+            n_files += (n_els > 0)
+    return n_files, n_els
 
 
 class FileNotFoundError(Exception):
@@ -211,11 +240,18 @@ class XMLSession(object):
             anns_above.insert(anns_after_idx, anns_el)
         return anns_el
 
-    def iter_annotations(self):
+    def iter_annotations(self, **kwargs):
         anns_above, anns_after_idx, anns_el = self.find_annotations()
         if anns_el is not None:
+            def matches_kwargs(el):
+                for name, val in kwargs.iteritems():
+                    if el.get(name, (val, None)) != val:
+                        return False
+                return True
+
             for ann_el in anns_el:
-                yield ann_el
+                if matches_kwargs(ann_el):
+                    yield ann_el
 
     def iter_transcriptions(self, annotation):
         """
@@ -299,3 +335,47 @@ class XMLSession(object):
                 "Your call will be recorded for research purposes.",
                 "").strip()
             yield SystemTurn_nt(turn_number, text)
+
+    def record_judgment(self, judgment):
+        # Find the relevant dialogue annotation element.
+        # Heuristic: take the first one of the potential dialogue annotation
+        # XML elements.
+        unassigned_el = None
+        for ann_el in session.iter_annotations(user=''):
+            if ann_el.get('worker_id', None) is not None:
+                unassigned_el = ann_el
+                break
+
+        # Check that there is an element for the judgment we are about to
+        # assign.
+        if unassigned_el is None:
+            raise ValueError('Trying to record a judgment for which there is '
+                             'no XML element in place.')
+
+        # Set all the desired attributes.
+        if 'worker_id' not in settings.LOGGED_JOB_DATA:
+            dg_ann_el.set('worker_id', str(judgment["worker_id"]))
+        for json_key, att_name in settings.LOGGED_JOB_DATA:
+            att_val = judgment.get(json_key, None)
+            if att_val is not None:
+                dg_ann_el.set(att_name, unicode(att_val))
+
+    def update_worker_stats(self, gold_stats):
+        """Updates the gold hit statistic.
+
+        Arguments:
+            gold_stats -- a mapping {worker_id -> gold_ratio}
+
+        Returns the number of XML elements affected) where an XML element
+        corresponds to one dialogue annotation (by one worker).
+
+        """
+
+        n_updated = 0
+        for ann_el in self.iter_annotations(user=''):
+            worker_id = ann_el.get('worker_id', None)
+            if worker_id in gold_stats:
+                ratio_str = '{0:.2f}'.format(gold_stats[worker_id])
+                ann_el.set('gold_ratio', ratio_str)
+                n_updated += 1
+        return n_updated

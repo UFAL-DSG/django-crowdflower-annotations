@@ -655,8 +655,11 @@ if settings.USE_CF:
             job_ids = price_class_handler.get_job_ids()
 
         for job_id in job_ids:
-            fire_gold_hooks(job_id)
-        context = {'n_jobs': len(job_ids)}
+            # DEBUG
+#             fire_gold_hooks(job_id)
+            success, msg = collect_judgments(job_id)
+#         context = {'n_jobs': len(job_ids)}
+        context = {'n_jobs': str(success) + '; ' + msg}
         return render(request, "trs/hooks-fired.html", context)
 
 

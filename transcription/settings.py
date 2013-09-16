@@ -1,4 +1,9 @@
 import os
+
+# Defaults
+CF_WAIT_SECS = 1
+CF_MAX_WAITS = 30
+
 from localsettings import *
 import localsettings
 import sys
@@ -23,15 +28,6 @@ for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
     except AttributeError as er:
         if USE_CF:
             raise er
-# For the CF_JOB_ID and CF_JOB_IDS configuration variables, if USE_CF is in
-# force, at least one of them has to be set.
-_cf_ids_set = False
-try:
-    _tmp = CF_WAIT_SECS
-except NameError:
-    CF_WAIT_SECS = 1
-finally:
-    del _tmp
 
 MAX_CHAR_ER = localsettings.MAX_CHAR_ER
 
