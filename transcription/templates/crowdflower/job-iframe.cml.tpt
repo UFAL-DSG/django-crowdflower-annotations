@@ -1,3 +1,3 @@
-<iframe src="{{ settings.DOMAIN_URL }}{{ settings.SUB_SITE }}transcribe?cid={% templatetag openvariable %}cid{% templatetag closevariable %}" height="600" width="800" />
+<iframe src="{{ settings.DOMAIN_URL }}{{ settings.SUB_SITE }}/transcribe?cid={% templatetag openvariable %}cid{% templatetag closevariable %}" height="600" width="800" />
 
 <cml:text instructions="Copy here the code obtained above" label="Code" validates="required regex" data-validates-regex="^{% templatetag openvariable %}code{% templatetag closevariable %}" data-validates-regex-message="You have not provided the correct code. It has to be exactly same as the one provided by the system. You get the code after pressing the 'Save transcription' button." class=""/>

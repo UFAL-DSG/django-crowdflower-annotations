@@ -408,7 +408,7 @@ def create_job(cents_per_unit,
     job_params['gold_per_assignment'] = gold_per_assignment
     job_params['instructions'] = instructions
     # webhook
-    job_params['webhook_uri'] = '{domain}{site}log-work'.format(
+    job_params['webhook_uri'] = '{domain}{site}/log-work'.format(
         domain=settings.DOMAIN_URL,
         site=settings.SUB_SITE)
     # skills
