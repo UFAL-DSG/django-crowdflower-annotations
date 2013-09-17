@@ -356,6 +356,7 @@ def transcribe(request):
 
             # Populate context with data from the previous dialogue (form).
             context = settings.TRANSCRIBE_EXTRA_CONTEXT
+            context['app_url'] = settings.APP_URL
             for key, value in request.POST.iteritems():
                 context[key] = value
             context['form'] = form
@@ -475,6 +476,7 @@ def transcribe(request):
     uturn_ind = map(lambda turn: turn['has_rec'], turns)
 
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
+    context['app_url'] = settings.APP_URL
     context['success'] = str(success)
     context['turns'] = turns
     context['dbl_num_turns'] = 2 * len(turns)
@@ -505,7 +507,8 @@ def import_dialogues(request):
 
     # Check whether the form is yet to be served.
     if not request.GET:
-        context = {'use_cf': settings.USE_CF}
+        context = {'use_cf': settings.USE_CF,
+                   'app_url': settings.APP_URL}
         return render(request, "trs/import.html", context,
                       context_instance=RequestContext(request))
 
