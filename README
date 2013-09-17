@@ -1,8 +1,19 @@
 Prerequisites:
 --------------
 	- Python 2 (version 2.7.3 proven to work)
+
+		# apt-get install python2.7
+
 	- Django (version 1.4.1 proven to work)
-	- a web server (example relevant configuration is shown for Apache 2)
+
+		# pip install Django==1.4.1
+		OR a newer version, such as
+		# pip install Django==1.5.4
+
+	- a web server (example relevant configuration is shown for Apache 2) 
+		able to handle WSGI
+
+		# apt-get install libapache2-mod-wsgi
 
 
 How to set up the transcription environment on the server:
@@ -20,9 +31,10 @@ How to set up the transcription environment on the server:
 		/etc/apache2/sites-available/default
 	and
 		/etc/apache2/sites-enabled/000-default
+		(which is by default a symlink to the former file)
 	below the root <VirtualHost> element:
 
-		WSGIDaemonProcess app_transcript python-path=/webapps/:/webapps/transcription:/webapps/libs/django-1.4.1/
+		WSGIDaemonProcess app_transcript python-path=/webapps/:/webapps/transcription
 		WSGIScriptAlias /apps/transcription /webapps/transcription/wsgi.py
 		<Location /apps/transcription>
 			WSGIProcessGroup app_transcript
@@ -36,12 +48,16 @@ How to set up the transcription environment on the server:
 # Create the database (following is pseudocode, do NOT copy & paste it 
 	to your terminal):
 
-	mkdir /webapps/transcription/db  # or whatever was configured in settings
 	cd /webapps/transcription && ./manage.py syncdb
 	# You will be asked to enter your superuser details.
-	cd /webapps/transcription && ln -s $DJANGO
 
-	# TODO Make sure the database access rights are set correctly.
+	Make sure the database access rights are set correctly. This can mean you 
+	need to issue the following commands:
+
+	# APP_URL=/webapps/transcription
+	# chown www-data $APP_URL/db $APP_URL/db/trss.db
+
+
 
 # Restart Apache, open the site URL, and log in with the superuser account 
   you created.

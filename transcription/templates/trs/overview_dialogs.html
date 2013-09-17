@@ -24,12 +24,12 @@ td.ratingzero {
 {% block content %}
 <table>
 <tr>
-<th>dialog <br> (<a href="{% url rating_overview_dialog %}?sort=fname&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=fname&sorder=-1">v</a>)</th>
-<th># of ratings <br> (<a href="{% url rating_overview_dialog %}?sort=count&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=count&sorder=-1">v</a>)</th>
+<th>dialog <br> (<a href="{% url "rating_overview_dialog" %}?sort=fname&sorder=1">^</a>/<a href="{% url "rating_overview_dialog" %}?sort=fname&sorder=-1">v</a>)</th>
+<th># of ratings <br> (<a href="{% url "rating_overview_dialog" %}?sort=count&sorder=1">^</a>/<a href="{% url "rating_overview_dialog" %}?sort=count&sorder=-1">v</a>)</th>
 <th>avg rating <br>
-(<a href="{% url rating_overview_dialog %}?sort=avg_rating_0&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_0&sorder=-1">v</a>)
-(<a href="{% url rating_overview_dialog %}?sort=avg_rating_1&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_1&sorder=-1">v</a>)
-(<a href="{% url rating_overview_dialog %}?sort=avg_rating_2&sorder=1">^</a>/<a href="{% url rating_overview_dialog %}?sort=avg_rating_2&sorder=-1">v</a>)
+(<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_0&sorder=1">^</a>/<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_0&sorder=-1">v</a>)
+(<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_1&sorder=1">^</a>/<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_1&sorder=-1">v</a>)
+(<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_2&sorder=1">^</a>/<a href="{% url "rating_overview_dialog" %}?sort=avg_rating_2&sorder=-1">v</a>)
 </th>
 {% for u in users %}
 <th>{{ u.username }}</th>

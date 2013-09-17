@@ -15,9 +15,11 @@ from urllib import urlencode
 import urllib2
 import zipfile
 
-from dg_util import is_gold
-from models import CrowdflowerJob
 import settings
+
+from dg_util import is_gold
+if settings.USE_CF:
+    from models import CrowdflowerJob
 from settings import SettingsException
 from session_xml import XMLSession, update_worker_stats
 from transcription.models import UserTurn

@@ -16,8 +16,9 @@ from django.shortcuts import render
 from dg_util import is_gold
 from session_xml import XMLSession
 import settings
-from transcription.crowdflower import JsonDialogueUpload, \
-    price_class_handler, update_gold
+from transcription.crowdflower import price_class_handler
+if settings.USE_CF:
+    from transcription.crowdflower import JsonDialogueUpload, update_gold
 from transcription.db_fields import SizedTextField, ROCharField
 from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
