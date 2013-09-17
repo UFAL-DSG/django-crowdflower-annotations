@@ -652,7 +652,6 @@ def import_dialogues(request):
 
 
 def temp_test(request):
-    from crowdflower import *
     # Set up whatever variables you are interested in dumping here.
     assert False
 

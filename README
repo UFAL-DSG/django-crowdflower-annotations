@@ -51,13 +51,19 @@ How to set up the transcription environment on the server:
 	cd /webapps/transcription && ./manage.py syncdb
 	# You will be asked to enter your superuser details.
 
-	Make sure the database access rights are set correctly. This can mean you 
-	need to issue the following commands:
+	Make sure the access permissions are set correctly for directories used 
+	by Django.  This can mean you need to issue the following commands:
 
-	# APP_URL=/webapps/transcription
-	# chown www-data $APP_URL/db $APP_URL/db/trss.db
+	# APP_PATH=/webapps/transcription
+	# chown www-data $APP_PATH/db $APP_PATH/db/trss.db
 
+# Collect static files using the following command:
 
+	$ cd $APP_PATH && ./manage.py collectstatic
+	# You may be asked to confirm you want to override existing files. In 
+	# a clean installation, with the default setting of STATIC_ROOT, this 
+	# warning is a false alarm. If there were static files collected, they 
+	# would be overwritten, but there are none.
 
 # Restart Apache, open the site URL, and log in with the superuser account 
   you created.

@@ -2,6 +2,10 @@
 # -*- coding: UTF-8 -*-
 import datetime
 
+# DEBUG: This causes Django bring up a detailed report on uncaught exceptions.
+# Set to False to protect your site.
+DEBUG = True
+
 DOMAIN_URL = "http://example.com"
 APP_ROOT = "/webapps/cir_transcription"
 APP_URL = "/apps/cir_transcription"

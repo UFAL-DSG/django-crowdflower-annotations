@@ -1,4 +1,4 @@
-from django.conf.urls.defaults import patterns, url
+from django.conf.urls import patterns, url
 
 import settings
 from crowdflower import price_class_handler
@@ -7,6 +7,9 @@ pattern_args = ['',
                 url('^transcribe$',
                     'transcription.views.transcribe',
                     name='transcribe'),
+
+                url('^static/(?P<path>.*)$',
+                    'django.views.static.serve'),
 
                 url('^data/recs/(?P<path>.*)$',
                     'django.views.static.serve',
@@ -19,11 +22,12 @@ pattern_args = ['',
                 url('^import$',
                     'transcription.views.import_dialogues',
                     name="import_dialogues"),
-
-                url(r'^test-view$',
-                    'transcription.views.temp_test',
-                    name="test_view"),
                ]
+
+if settings.DEBUG:
+    pattern_args.append(url(r'^test-view$',
+                            'transcription.views.temp_test',
+                            name="test_view"))
 
 # Only when using Crowdflower:
 if settings.USE_CF:
