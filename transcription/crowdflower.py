@@ -20,6 +20,8 @@ import settings
 from dg_util import is_gold
 if settings.USE_CF:
     from models import CrowdflowerJob
+else:
+    from models import PriceClass
 from settings import SettingsException
 from session_xml import XMLSession, update_worker_stats
 from transcription.models import UserTurn
@@ -747,6 +749,12 @@ class JsonDialogueUpload(object):
 class _PriceClassHandler(object):
     """The only object of this class tracks the job price classes defined."""
     _inst = None  # the singleton instance
+    if settings.USE_CF:
+        _model = CrowdflowerJob
+        _id_attr = 'job_id'
+    else:
+        _model = PriceClass
+        _id_attr = 'pk'
 
     @staticmethod
     def __new__(cls):
@@ -764,26 +772,30 @@ class _PriceClassHandler(object):
 
         """
 
-        active_jobs = CrowdflowerJob.objects.filter(active=True)
+        if settings.USE_CF:
+            active_jobs = CrowdflowerJob.objects.filter(active=True)
+        else:
+            active_jobs = PriceClass.objects.all()
         job_prices = set(active_jobs.values_list('cents', flat=True))
-        return {CrowdflowerJob.cents2dollars(price):
-                    active_jobs.filter(cents=price).latest().job_id
+        return {self._model.cents2dollars(price):
+                    getattr(active_jobs.filter(cents=price).latest(),
+                            self._id_attr)
                 for price in job_prices}
 
     @property
     def old_price_classes(self):
         """Returns a list of (price_usd, job_id) for jobs not used anymore."""
-        prices_ids = CrowdflowerJob.objects.values_list('cents', 'job_id')
-        return [(CrowdflowerJob.cents2dollars(price), job_id)
-                for price, job_id in prices_ids
-                if job_id not in self.price_classes.values()]
+        prices_ids = self._model.objects.values_list('cents', self._id_attr)
+        return [(self._model.cents2dollars(price), id_)
+                for price, id_ in prices_ids
+                if id_ not in self.price_classes.values()]
 
     @property
     def all_price_classes(self):
         """Returns a list of (price_usd, job_id) for jobs not used anymore."""
-        prices_ids = CrowdflowerJob.objects.values_list('cents', 'job_id')
-        return [(CrowdflowerJob.cents2dollars(price), job_id)
-                for price, job_id in prices_ids]
+        prices_ids = self._model.objects.values_list('cents', self._id_attr)
+        return [(self._model.cents2dollars(price), id_)
+                for price, id_ in prices_ids]
 
     @property
     def price_ranges(self):
@@ -796,19 +808,21 @@ class _PriceClassHandler(object):
         all_steps = [-float('inf')] + inner_steps + [float('inf')]
         return zip(all_steps[:-1], all_steps[1:])
 
-    def remove_price_class(self, job_id):
-        CrowdflowerJob.objects.filter(job_id=str(job_id)).delete()
+    def remove_price_class(self, id_):
+        filter_kwargs = {self._id_attr: str(id_)}
+        self._model.objects.filter(**filter_kwargs).delete()
 
-    def store_job_id(self, job_id, cents):
-        """Stores the ID of a Crowdflower job with the given price.
+    if settings.USE_CF:
+        def store_job_id(self, job_id, cents):
+            """Stores the ID of a Crowdflower job with the given price.
 
-        Arguments:
-            job_id -- the ID of the job used by Crowdflower
-            cents -- price of each dialogue in this job in cents
+            Arguments:
+                job_id -- the ID of the job used by Crowdflower
+                cents -- price of each dialogue in this job in cents
 
-        """
+            """
 
-        CrowdflowerJob.objects.create(cents=cents, job_id=str(job_id))
+            CrowdflowerJob.objects.create(cents=cents, job_id=str(job_id))
 
     def get_job_id(self, dg):
         """
