@@ -88,12 +88,17 @@ class DialogueAnnotation(models.Model):
             username = self.user.username
         else:
             username = 'anonymous'
-        return self.uni_tpt.format(u=username,
-                                   ds=self.date_saved,
-                                   q=self.get_quality_display(),
-                                   acc=(self.accent or "native"),
-                                   off=self.offensive,
-                                   dg=self.dialogue.cid)
+        tpt_kwargs = {'u': username,
+                      'ds': self.date_saved,
+                      'dg': self.dialogue.cid}
+        if 'quality' in EXTRA_QUESTIONS:
+            tpt_kwargs['q'] = self.get_quality_display()
+        if 'accent' in EXTRA_QUESTIONS:
+            tpt_kwargs['acc'] = self.accent or "native"
+        if 'offensive' in EXTRA_QUESTIONS:
+            tpt_kwargs['off'] = self.offensive
+
+        return self.uni_tpt.format(**tpt_kwargs)
 
 
 class DialogueTurn(models.Model):
