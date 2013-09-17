@@ -27,7 +27,8 @@ def inst_templates(settings_module, tpt_list=_default_tptlist):
     if tpt_list is None:
         return
 
-    def _cond_abspath(path):
+    def _cond_abspath(slashed_path):
+        path = slashed_path.replace('/', os.sep)
         if os.path.isabs(path):
             return path
         return os.path.normpath(os.path.join(os.path.dirname(tpt_list), path))

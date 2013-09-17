@@ -26,7 +26,8 @@ from util import get_log_path
 CF_URL_START = "https://api.crowdflower.com"
 
 default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
-                                    'crowdflower', 'job-linked.cml')
+                                    'templates', 'crowdflower',
+                                    'job-linked.cml')
 
 
 class CrowdflowerMessage(object):
