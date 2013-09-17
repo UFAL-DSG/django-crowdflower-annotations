@@ -10,7 +10,7 @@ from django.contrib.auth.models import User
 from db_fields import ROCharField, WavField, SizedTextField
 from session_xml import XMLSession
 from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
-    LISTS_DIR, USE_CF
+    LISTS_DIR, USE_CF, EXTRA_QUESTIONS
 
 
 class Dialogue(models.Model):
@@ -44,18 +44,38 @@ class Dialogue(models.Model):
 
 class DialogueAnnotation(models.Model):
     """Represents a single submit of an annotation for a single dialogue."""
-    QUALITY_NOISY = 0
-    QUALITY_CLEAR = 1
-    QUALITY_CHOICES = ((u'0', 'noisy'),
-                       (QUALITY_NOISY, 'noisy'),
-                       (u'1', 'clear'),
-                       (QUALITY_CLEAR, 'clear'))
+
+    # Create the optional fields (all that should be created).
+    if 'quality' in EXTRA_QUESTIONS:
+        QUALITY_NOISY = 0
+        QUALITY_CLEAR = 1
+        QUALITY_CHOICES = (('0', 'noisy'),
+                           (QUALITY_NOISY, 'noisy'),
+                           ('1', 'clear'),
+                           (QUALITY_CLEAR, 'clear'))
+        quality = models.CharField(max_length=1,
+                                   choices=QUALITY_CHOICES,
+                                   default=1)
+        qual_tpt = ' q: {q};'
+    else:
+        qual_tpt = ''
+    if 'accent' in EXTRA_QUESTIONS:
+        accent = models.CharField(max_length=100, blank=True, default="")
+        acc_tpt = ' acc: {acc};'
+    else:
+        acc_tpt = ''
+    if 'offensive' in EXTRA_QUESTIONS:
+        offensive = models.BooleanField(default=False)
+        off_tpt = ' off: {off};'
+    else:
+        off_tpt = ''
+    # uni_tpt: template for self.__unicode__
+    uni_tpt = ('(u: {{u}}; saved: {{ds}};{q_tpt}{acc_tpt}{off_tpt} dg: {{dg}})'
+               .format(q_tpt = qual_tpt, acc_tpt = acc_tpt, off_tpt = off_tpt))
+    del qual_tpt, acc_tpt, off_tpt
+
+    # Common fields.
     dialogue = models.ForeignKey(Dialogue)
-    quality = models.CharField(max_length=1,
-                               choices=QUALITY_CHOICES,
-                               default=1)
-    accent = models.CharField(max_length=100, blank=True, default="")
-    offensive = models.BooleanField(default=False)
     notes = SizedTextField(max_length=500, blank=True, default="", rows=3)
     program_version = models.CharField(max_length=40, editable=False)
     date_saved = models.DateTimeField(auto_now_add=True, editable=False)
@@ -68,13 +88,12 @@ class DialogueAnnotation(models.Model):
             username = self.user.username
         else:
             username = 'anonymous'
-        return ('(u: {u}; saved: {ds}; q: {q}; acc: {acc}; off: {off}; dg: '
-                '{dg})').format(u=username,
-                                ds=self.date_saved,
-                                q=self.get_quality_display(),
-                                acc=(self.accent or "native"),
-                                off=self.offensive,
-                                dg=self.dialogue.cid)
+        return self.uni_tpt.format(u=username,
+                                   ds=self.date_saved,
+                                   q=self.get_quality_display(),
+                                   acc=(self.accent or "native"),
+                                   off=self.offensive,
+                                   dg=self.dialogue.cid)
 
 
 class DialogueTurn(models.Model):

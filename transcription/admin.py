@@ -1,3 +1,7 @@
+# -*- coding: UTF-8 -*-
+# This code is PEP8-compliant. See http://www.python.org/dev/peps/pep-0008/.
+from __future__ import unicode_literals
+
 from datetime import datetime
 import os
 import os.path
@@ -289,9 +293,11 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                    BreaksGoldListFilter,
                    TranscriptionCountListFilter,
                    'user__username',
-                   'finished',
-                   'offensive',
-                   'accent']
+                   'finished']
+    if 'offensive' in settings.EXTRA_QUESTIONS:
+        list_filter.append('offensive')
+    if 'accent' in settings.EXTRA_QUESTIONS:
+        list_filter.append('accent')
 
     # Actions #
     ###########

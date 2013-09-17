@@ -1,15 +1,14 @@
 How to set up the transcription environment on the server:
 ----------------------------------------------------------
 
-# Update the configuration files settings.py, transcription/settings.py and 
-	localsettings.py (create this by copying localsettings.py.example) to 
-	suit your environment.
+# Update the localsettings.py config file (create this by copying 
+	localsettings.py.example) to suit your environment. Meaning and format of 
+	all configuration variables should be clear from the comments in 
+	localsettings.py.
 
-	Important configuration variables are:
-
-	TODO
-
-# Run scripts/inst_templates.py.
+# Run scripts/inst_templates.py. If on Windows, you will need to substitute 
+	forward slashes in scripts/tpt-static-files.lst with backward slashes in 
+	all the paths.
 
 # Set up your webserver to find your new transcription web application. For 
 	Apache, this can be done by inserting a snippet like the following to
@@ -47,8 +46,10 @@ How to set up transcription via Crowdflower:
 --------------------------------------------
 
 # Make sure USE_CF is set to True in localsettings.
+
 # Update all other related configuration, including CF_KEY (should be 
   provided by Crowdflower for your account).
+
 # Create a new Crowdflower job, either one for all transcriptions, or 
 	a couple of, for different price levels. You want to fill out appropriate 
 	job names and instructions; a workable contents for the main part of 
@@ -64,19 +65,22 @@ How to set up transcription via Crowdflower:
 	
 	Having created the Crowdflower jobs, you need to tell Django about them 
 	using a configuration variable, either CF_JOB_ID, or CF_JOB_IDS.
+
 # You can choose to upload all dialogues imported into the application to 
 	Crowdflower right away (use the checkbox on the import page) or you can 
 	do so any time later using the Upload to Crowdflower action from the 
 	Dialogues admin page.
+
 # Set up all other required settings on Crowdflower and order your jobs.  
 	The important settings include country and skills filters. If you want to 
 	get logs of the work done, and worker IDs logged in XML logs, set the 
 	webhook to <app_url>/log-work for your jobs. For this, the application 
 	assumes each job page contains only one work item.
+
 # If fully annotated transcription elements are desired also for gold 
-	units, remember to GET 
-	https://api.crowdflower.com/v1/jobs/{job_id}/golds/fire_webhooks
-	when finished with the job.
+	units, fire gold hooks (an option in the main menu) when finished with 
+	the job, just in case the job_complete webhook from CrowdFlower did not 
+	fire.
 
 
 How to import dialogues:
@@ -94,9 +98,11 @@ How to import dialogues:
 		2. (optional) pack the directory;
 		3. run the script at the target server; run the script without
 			 arguments for usage message.
+
 # Create a text file listing paths towards the log directories, one per 
 	line (preferably in localsettings.LISTS_DIR, although whether you put it
 	in this directory or elsewhere, probably has no impact).
+
 # Open the web interface of your application and navigate to dialogue 
 	import (through an option in the menu at the first page after login, or 
 	through the Dialogues->Add option of the Admin app). Specify the path 

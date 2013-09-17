@@ -1,12 +1,15 @@
+import imp
 import os
+import os.path
+import sys
 
-# Defaults
+# Set defaults before importing localsettings.
 CF_WAIT_SECS = 1
 CF_MAX_WAITS = 30
 
+# XXX This duplicates much of the work performed in the following lines.
 from localsettings import *
 import localsettings
-import sys
 
 # custom variables
 _module = sys.modules[__name__]
@@ -15,8 +18,27 @@ if not PROJECT_DIR in sys.path:
     sys.path.append(PROJECT_DIR)
 sys.path.append(PYLIBS_DIR)
 
+# Determine DJANGO_PATH, unless overriden by localsettings.
+if not hasattr(_module, 'DJANGO_PATH'):
+    if 'django' in sys.modules:
+        DJANGO_PATH = os.path.dirname(django.__file__)
+    else:
+        try:
+            django_fp, DJANGO_PATH, django_desc = imp.find_module('django')
+        except:
+            raise Exception('The Django package was not found.')
+        finally:
+            if django_fp is not None:
+                django_fp.close()
+                raise Exception('The `django\' module does not import as a '
+                                '*package*.')
+            del django_fp, django_desc
+# Set this Django as the default django for imports.
+sys.path.insert(0, DJANGO_PATH)
+
 CONVERSATION_DIR = localsettings.CONVERSATION_DIR
 SESSION_FNAME = localsettings.SESSION_FNAME
+SESSION_FNAMES = localsettings.SESSION_FNAMES
 
 CODE_LENGTH = localsettings.CODE_LENGTH
 CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
@@ -82,8 +104,7 @@ USE_L10N = True
 # Absolute filesystem path to the directory that will hold user-uploaded files.
 # Example: "/home/media/media.lawrence.com/media/"
 MEDIA_ROOT = os.path.join(PROJECT_DIR, 'media')
-ADMIN_MEDIA_ROOT = '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
-# ADMIN_MEDIA_ROOT = os.path.join(PROJECT_DIR, 'static')
+ADMIN_MEDIA_ROOT = os.path.join(DJANGO_PATH, 'contrib', 'admin', 'static')
 
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
@@ -114,9 +135,7 @@ STATICFILES_DIRS = (
     # Put strings here, like "/home/html/static" or "C:/www/django/static".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-# 	"/webapps/cir_transcription/libs/django-1.4.1/django/contrib/admin/static",
-    '/webapps/libs/django-1.4.1/django/contrib/admin/static/'
-	# "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/static",
+    os.path.join(DJANGO_PATH, 'contrib', 'admin', 'static')
 )
 
 # List of finder classes that know how to find static files in
@@ -149,10 +168,7 @@ MIDDLEWARE_CLASSES = (
 ROOT_URLCONF = 'urls'
 
 TEMPLATE_DIRS = (
-#     "/home/matej/wc/vys/cf_transcription/templates",
-    os.path.join(PROJECT_DIR, "templates"),
-#     "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/auth/templates/",
-#     "/home/matej/wc/vys/cf_transcription/libs/django-1.4.1/django/contrib/admin/templates/",
+    os.path.join(PROJECT_DIR, "templates").replace('\\', '/'),
     # Put strings here, like "/home/html/django_templates" or "C:/www/django/templates".
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.

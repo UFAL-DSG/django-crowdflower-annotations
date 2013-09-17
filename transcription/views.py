@@ -33,8 +33,8 @@ import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
 # XXX: Beware, this imports the settings from within the `transcription'
-# directory. That means that PROJECT_DIR will be
-# /webapps/cf_transcription/transcription, not just /webapps/cf_transcription.
+# directory. That means that PROJECT_DIR will be APP_ROOT + "/transcription",
+# not just APP_ROOT.
 from tr_normalisation import trss_match
 from transcription.models import Transcription, DialogueAnnotation, \
     Dialogue, UserTurn, SystemTurn
@@ -60,10 +60,13 @@ def _hash(s):
 
 
 class TranscriptionForm(forms.Form):
-    quality = forms.CharField()
-    accent = forms.CharField()
-    accent_name = forms.CharField(required=False)
-    offensive = forms.BooleanField(required=False)
+    if 'quality' in settings.EXTRA_QUESTIONS:
+        quality = forms.CharField()
+    if 'accent' in settings.EXTRA_QUESTIONS:
+        accent = forms.CharField()
+        accent_name = forms.CharField(required=False)
+    if 'offensive' in settings.EXTRA_QUESTIONS:
+        offensive = forms.BooleanField(required=False)
     notes = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
@@ -169,27 +172,33 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False):
             # Iterate over all dialogue annotations.
             for ann_el in session.iter_annotations():
                 # Retrieve all properties of the dialogue annotation object.
-                accent_str = ann_el.get('accent')
-                accent = ("" if accent_str == 'native' else accent_str)
                 notes = ('' if ann_el.text is None else ann_el.text.strip())
-                offensive = (ann_el.get("offensive") == "True")
                 program_version = ann_el.get('program_version')
-                quality = (DialogueAnnotation.QUALITY_CLEAR
-                           if ann_el.get('quality') == 'clear'
-                           else DialogueAnnotation.QUALITY_NOISY)
                 ann_users = User.objects.filter(username=ann_el.get('user'))
                 if ann_users.exists():
                     ann_user = ann_users[0]
                 else:
                     ann_user = dummy_user
-                # Check whether this object has been imported already.
-                ann_props = {'accent': accent,
-                             'dialogue': dg_data,
+
+                ann_props = {'dialogue': dg_data,
                              'notes': notes,
-                             'offensive': offensive,
-                             'quality': quality,
                              'user': ann_user,
                              'program_version': program_version}
+
+                if 'accent' in settings.EXTRA_QUESTIONS:
+                    accent_str = ann_el.get('accent')
+                    accent = ("" if accent_str == 'native' else accent_str)
+                    ann_props['accent'] = accent
+                if 'offensive' in settings.EXTRA_QUESTIONS:
+                    offensive = (ann_el.get("offensive") == "True")
+                    ann_props['offensive'] = offensive
+                if 'quality' in settings.EXTRA_QUESTIONS:
+                    quality = (DialogueAnnotation.QUALITY_CLEAR
+                               if ann_el.get('quality') == 'clear'
+                               else DialogueAnnotation.QUALITY_NOISY)
+                    ann_props['quality'] = quality
+
+                # Check whether this object has been imported already.
                 if not DialogueAnnotation.objects.filter(**ann_props):
                     # Save the dialogue annotation.
                     dg_ann = DialogueAnnotation(**ann_props)
@@ -256,12 +265,15 @@ def transcribe(request):
             dg_ann.program_version = unicode(check_output(
                 ["git", "rev-parse", "HEAD"],
                 cwd=settings.PROJECT_DIR).rstrip('\n'))
-            dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
-                              request.POST['quality'] == 'clear'
-                              else DialogueAnnotation.QUALITY_NOISY)
-            dg_ann.accent = ("" if request.POST['accent'] == 'native'
-                             else form.cleaned_data['accent_name'])
-            dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
+            if 'quality' in settings.EXTRA_QUESTIONS:
+                dg_ann.quality = (DialogueAnnotation.QUALITY_CLEAR if
+                                  request.POST['quality'] == 'clear'
+                                  else DialogueAnnotation.QUALITY_NOISY)
+            if 'accent' in settings.EXTRA_QUESTIONS:
+                dg_ann.accent = ("" if request.POST['accent'] == 'native'
+                                 else form.cleaned_data['accent_name'])
+            if 'offensive' in settings.EXTRA_QUESTIONS:
+                dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
             dg_ann.notes = form.cleaned_data['notes']
             if request.user.is_authenticated():
                 dg_ann.user = request.user

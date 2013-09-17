@@ -426,6 +426,7 @@ p.user { color: orange; }
 			</h3>
 			<div>
 				<table>
+					{% if "quality" in EXTRA_QUESTIONS %}
 					<tr>
 						<td>What was the quality of the recording?</td>
 						<td>
@@ -440,6 +441,8 @@ p.user { color: orange; }
 									clear</input>
 						</td>
 					</tr>
+					{% endif %}
+					{% if "accent" in EXTRA_QUESTIONS %}
 					<tr>
 						<td>What accent did the speaker have?</td>
 						<td>
@@ -463,6 +466,7 @@ p.user { color: orange; }
 								tabindex="{{ dbl_num_turns|add:3 }}">
 						</td>
 					</tr>
+					{% if "offensive" in EXTRA_QUESTIONS %}
 					<tr>
 						<td>Was offensive language used in the dialogue?</td>
 						<td>
@@ -476,6 +480,7 @@ p.user { color: orange; }
 								tabindex="{{ dbl_num_turns|add:4 }}">no</input>
 						</td>
 					</tr>
+					{% endif %}
 					<tr>
 						<td colspan="3">
 							<label for="id_notes">Should you have any comments to the 

@@ -290,17 +290,21 @@ class XMLSession(object):
             username = dg_ann.user.username
         else:
             username = ''
-        etree.SubElement(
+        ann_el = etree.SubElement(
             anns_el,
             self.ANNOTATION_ELEM,
             id=str(dg_ann.pk),
-            quality=('clear' if dg_ann.quality == 1 else 'noisy'),
-            accent=dg_ann.accent or "native",
-            offensive=str(dg_ann.offensive),
             program_version=dg_ann.program_version,
             date_saved=self.format_datetime(dg_ann.date_saved),
-            user=username)\
-                .text = dg_ann.notes
+            user=username)
+        if 'offensive' in settings.EXTRA_QUESTIONS:
+            ann_el.set('offensive', str(dg_ann.offensive))
+        if 'accent' in settings.EXTRA_QUESTIONS:
+            ann_el.set('accent', dg_ann.accent or "native")
+        if 'quality' in settings.EXTRA_QUESTIONS:
+            ann_el.set('quality',
+                       ('clear' if dg_ann.quality == 1 else 'noisy'))
+        ann_el.text = dg_ann.notes
 
     def iter_uturns(self):
         turnnums_seen = set()
