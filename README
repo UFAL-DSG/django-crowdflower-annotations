@@ -1,3 +1,10 @@
+Prerequisites:
+--------------
+	- Python 2 (version 2.7.3 proven to work)
+	- Django (version 1.4.1 proven to work)
+	- a web server (example relevant configuration is shown for Apache 2)
+
+
 How to set up the transcription environment on the server:
 ----------------------------------------------------------
 
@@ -26,8 +33,8 @@ How to set up the transcription environment on the server:
 	/webapps/transcription, affecting where the wsgi.py script and other 
 	Python modules used by the app are looked for.
 
-# Create the database (following is a pseudocode, do NOT copy & paste it 
-  to your terminal):
+# Create the database (following is pseudocode, do NOT copy & paste it 
+	to your terminal):
 
 	mkdir /webapps/transcription/db  # or whatever was configured in settings
 	cd /webapps/transcription && ./manage.py syncdb
