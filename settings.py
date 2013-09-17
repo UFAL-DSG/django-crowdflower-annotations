@@ -21,7 +21,7 @@ sys.path.append(PYLIBS_DIR)
 # Determine DJANGO_PATH, unless overriden by localsettings.
 if not hasattr(_module, 'DJANGO_PATH'):
     if 'django' in sys.modules:
-        DJANGO_PATH = os.path.dirname(django.__file__)
+        DJANGO_PATH = os.path.dirname(sys.modules['django'].__file__)
     else:
         try:
             django_fp, DJANGO_PATH, django_desc = imp.find_module('django')
