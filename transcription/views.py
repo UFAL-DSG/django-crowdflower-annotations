@@ -526,14 +526,18 @@ def import_dialogues(request):
     if not csv_fname:
         csv_fname = os.path.join(settings.CONVERSATION_DIR, 'new_tasks.csv')
     else:
-        if os.path.isabs(csv_fname):
-            csv_fname = os.path.abspath(csv_fname)
-        else:
+        if not os.path.isabs(csv_fname):
             csv_fname = os.path.join(settings.CONVERSATION_DIR, csv_fname)
-    dirlist_fname = request.GET['list_fname']
+
+    dirlist_fname = os.path.abspath(request.GET['list_fname'])
     with_trss = request.GET.get('with_trss', False) == 'on'
     ignore_exdirs = request.GET.get('ignore_exdirs', False) == 'on'
     upload_to_cf = settings.USE_CF and request.GET.get('upload', False) == 'on'
+
+    # Make sure the output file's directory exists.
+    csv_dirname = os.path.dirname(csv_fname)
+    if not os.path.isdir(csv_dirname):
+        os.makedirs(csv_dirname)
 
     # Do the import.
     with open(dirlist_fname, 'r') as dirlist_file, \

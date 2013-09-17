@@ -37,6 +37,9 @@ LANGUAGE_CODE = 'en-gb'
 
 EXPORT_DIR = APP_ROOT + "/data/export"
 CONVERSATION_DIR = APP_ROOT + "/data/conversations"
+# LISTS_DIR: Path towards a directory where lists of dialogue dirs to import
+# will be looked for. This does not influence the scripts/fetch_dgdir.sh script
+# which uses (APP_ROOT + "/data/lists") anyway.
 LISTS_DIR = APP_ROOT + "/data/lists"
 SESSION_FNAME = 'session-fixed.xml'
 SESSION_FNAMES = ('session-fixed.xml', 'session.xml')

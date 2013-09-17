@@ -151,6 +151,7 @@ class DialogueAdmin(admin.ModelAdmin):
         if extra_context is None:
             extra_context = dict()
         extra_context['use_cf'] = settings.USE_CF
+        extra_context['app_url'] = settings.APP_URL
         return super(DialogueAdmin, self).add_view(
             request, form_url, extra_context)
 

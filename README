@@ -55,7 +55,8 @@ How to set up the transcription environment on the server:
 	by Django.  This can mean you need to issue the following commands:
 
 	# APP_PATH=/webapps/transcription
-	# chown www-data $APP_PATH/db $APP_PATH/db/trss.db
+	# chown www-data $APP_PATH/db $APP_PATH/db/trss.db \
+		$APP_PATH/data/{,import,lists}
 
 # Collect static files using the following command:
 
