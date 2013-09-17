@@ -7,7 +7,7 @@ import sys
 CF_WAIT_SECS = 1
 CF_MAX_WAITS = 30
 
-# XXX This duplicates much of the work performed in the following lines.
+# TODO Check that all required config variables have been hereby imported.
 from localsettings import *
 import localsettings
 
@@ -36,28 +36,23 @@ if not hasattr(_module, 'DJANGO_PATH'):
 # Set this Django as the default django for imports.
 sys.path.insert(0, DJANGO_PATH)
 
-CONVERSATION_DIR = localsettings.CONVERSATION_DIR
-SESSION_FNAME = localsettings.SESSION_FNAME
-SESSION_FNAMES = localsettings.SESSION_FNAMES
-
-CODE_LENGTH = localsettings.CODE_LENGTH
-CODE_LENGTH_EXT = localsettings.CODE_LENGTH_EXT
-
-USE_CF = localsettings.USE_CF
-for name in ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN'):
+_cf_required = ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN',
+                'CODE_LENGTH', 'CODE_LENGTH_EXT' 'WORKLOGS_DIR', 'LOG_CURL')
+for name in _cf_required:
     try:
         setattr(_module, name, getattr(localsettings, name))
     except AttributeError as er:
         if USE_CF:
             raise er
+try:
+    setattr(_module, 'CURLLOGS_DIR', localsettings.CURLLOGS_DIR)
+except AttributeError as er:
+    if LOG_CURL:
+        raise er
 
-MAX_CHAR_ER = localsettings.MAX_CHAR_ER
-
-XML_COMMON = localsettings.XML_COMMON
-XML_SCHEMES = localsettings.XML_SCHEMES
+TRANSCRIBE_EXTRA_CONTEXT['EXTRA_QUESTIONS'] = EXTRA_QUESTIONS
 
 # Django settings for the `transcription' project.
-
 DEBUG = True
 TEMPLATE_DEBUG = DEBUG
 
@@ -78,19 +73,6 @@ DATABASES = {
     }
 }
 
-# Local time zone for this installation. Choices can be found here:
-# http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
-# although not all choices may be available on all operating systems.
-# On Unix systems, a value of None will cause Django to use the same
-# timezone as the operating system.
-# If running in a Windows environment this must be set to the same as your
-# system time zone.
-TIME_ZONE = 'Europe/Prague'
-
-# Language code for this installation. All choices can be found here:
-# http://www.i18nguy.com/unicode/language-identifiers.html
-LANGUAGE_CODE = 'en-gb'
-
 SITE_ID = 1
 
 # If you set this to False, Django will make some optimizations so as not
@@ -109,8 +91,7 @@ ADMIN_MEDIA_ROOT = os.path.join(DJANGO_PATH, 'contrib', 'admin', 'static')
 # URL that handles the media served from MEDIA_ROOT. Make sure to use a
 # trailing slash.
 # Examples: "http://media.lawrence.com/media/", "http://example.com/media/"
-MEDIA_URL = '/apps/cir_transcription/media/'
-# MEDIA_URL = '/media/'
+MEDIA_URL = APP_URL + '/media/'
 
 # Absolute path to the directory static files should be collected to.
 # Don't put anything in this directory yourself; store your static files
@@ -120,15 +101,12 @@ STATIC_ROOT = os.path.join(PROJECT_DIR, 'static')
 
 # URL prefix for static files.
 # Example: "http://media.lawrence.com/static/"
-STATIC_URL = '/apps/cir_transcription/static/'
-# STATIC_URL = '/static/'
-# STATIC_ROOT = STATIC_URL = '/cf_transcription/static/'
+STATIC_URL = APP_URL + '/static/'
 
 # URL prefix for admin static files -- CSS, JavaScript and images.
 # Make sure to use a trailing slash.
 # Examples: "http://foo.com/static/admin/", "/static/admin/".
-ADMIN_MEDIA_PREFIX = '/apps/cir_transcription/static/admin/'
-# ADMIN_MEDIA_PREFIX = '/static/admin/'
+ADMIN_MEDIA_PREFIX = APP_URL + '/static/admin/'
 
 # Additional locations of static files
 STATICFILES_DIRS = (
@@ -145,9 +123,6 @@ STATICFILES_FINDERS = (
     'django.contrib.staticfiles.finders.AppDirectoriesFinder',
 #    'django.contrib.staticfiles.finders.DefaultStorageFinder',
 )
-
-# Make this unique, and don't share it with anybody.
-SECRET_KEY = '9fv=(fe8%h0&67(-$4347=iwhlpn52$o=56h&*)*!2w-5tbwt_'
 
 # List of callables that know how to import templates from various sources.
 TEMPLATE_LOADERS = (
@@ -213,12 +188,12 @@ LOGGING = {
 }
 
 WSGI_APPLICATION = "transcription.wsgi.application"
-SUB_SITE="/apps/cir_transcription/"
-#FORCE_SCRIPT_NAME="/er"
-LOGIN_URL="/apps/cir_transcription/accounts/login/"
-# LOGIN_URL="/accounts/login/"
-# STATICFILES_STORAGE="/apps/cir_transcription"
-LOGIN_REDIRECT_URL=SUB_SITE
+SUB_SITE = APP_URL
+# FORCE_SCRIPT_NAME = "/transcription"
+LOGIN_URL = APP_URL + "/accounts/login/"
+# LOGIN_URL = "/accounts/login/"
+# STATICFILES_STORAGE = APP_URL
+LOGIN_REDIRECT_URL = SUB_SITE
 
 
 class SettingsException(Exception):
