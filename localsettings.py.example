@@ -1,15 +1,19 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 import datetime
+import os.path
+
+# PROJECT_DIR: This should be an absolute path to the root of this Django
+# project. Do not change this.
+PROJECT_DIR = os.path.dirname(__file__)
 
 # DEBUG: This causes Django bring up a detailed report on uncaught exceptions.
 # Set to False to protect your site.
 DEBUG = True
 
 DOMAIN_URL = "http://example.com"
-APP_ROOT = "/webapps/cir_transcription"
 APP_URL = "/apps/cir_transcription"
-PYLIBS_DIR = APP_ROOT + "/libs/python"
+PYLIBS_DIR = PROJECT_DIR + "/libs/python"
 # DJANGO_PATH: If you have multiple django installations, set the path to
 # Django v1.4 to this variable.
 DJANGO_PATH = '/webapps/libs/django-1.4.1/django'
@@ -35,20 +39,20 @@ TIME_ZONE = 'Europe/Prague'
 # http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = 'en-gb'
 
-EXPORT_DIR = APP_ROOT + "/data/export"
-CONVERSATION_DIR = APP_ROOT + "/data/conversations"
+EXPORT_DIR = PROJECT_DIR + "/data/export"
+CONVERSATION_DIR = PROJECT_DIR + "/data/conversations"
 # LISTS_DIR: Path towards a directory where lists of dialogue dirs to import
 # will be looked for. This does not influence the scripts/fetch_dgdir.sh script
-# which uses (APP_ROOT + "/data/lists") anyway.
-LISTS_DIR = APP_ROOT + "/data/lists"
+# which uses (PROJECT_DIR + "/data/lists") anyway.
+LISTS_DIR = PROJECT_DIR + "/data/lists"
 SESSION_FNAME = 'session-fixed.xml'
 SESSION_FNAMES = ('session-fixed.xml', 'session.xml')
 # alternatives, tried from the first (up to the last if the previous did not
 # exist)
 
 USE_CF = True    # use Crowdflower?
-WORKLOGS_DIR = APP_ROOT + "/log/work_logs"
-CURLLOGS_DIR = APP_ROOT + "/log/curl_logs"
+WORKLOGS_DIR = PROJECT_DIR + "/log/work_logs"
+CURLLOGS_DIR = PROJECT_DIR + "/log/curl_logs"
 LOG_CURL = False
 
 CODE_LENGTH = 6  # length of the validation code

@@ -63,8 +63,8 @@ fi
 
 # Create the dialogue list.
 # (The directory structure now is
-#			$APP_ROOT/data/import/`date`-$batch_name/imported_dir/dg_dirs,
-#  i.e.,                          $import_dir/imported_dir/dg_dirs.)
+#			$PROJECT_DIR/data/import/`date`-$batch_name/imported_dir/dg_dirs,
+#  i.e.,                              $import_dir/imported_dir/dg_dirs.)
 echo "Creating the dialogue dirs list."
 find "$import_dir" -mindepth 2 -maxdepth 2 -type d >"$list_fname"
 echo "List created."

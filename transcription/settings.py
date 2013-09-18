@@ -36,7 +36,7 @@ if not hasattr(_module, 'DJANGO_PATH'):
 sys.path.insert(0, DJANGO_PATH)
 
 _cf_required = ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN',
-                'CODE_LENGTH', 'CODE_LENGTH_EXT' 'WORKLOGS_DIR', 'LOG_CURL')
+                'CODE_LENGTH', 'CODE_LENGTH_EXT', 'WORKLOGS_DIR', 'LOG_CURL')
 for name in _cf_required:
     try:
         setattr(_module, name, getattr(localsettings, name))
