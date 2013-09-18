@@ -54,13 +54,13 @@ How to set up the transcription environment on the server:
 	Make sure the access permissions are set correctly for directories used 
 	by Django.  This can mean you need to issue the following commands:
 
-	# APP_PATH=/webapps/transcription
-	# chown www-data $APP_PATH/db $APP_PATH/db/trss.db \
-		$APP_PATH/data/{,import,lists}
+	# PROJECT_PATH=/webapps/transcription
+	# chown www-data $PROJECT_PATH/db $PROJECT_PATH/db/trss.db \
+		$PROJECT_PATH/data/{,import,lists}
 
 # Collect static files using the following command:
 
-	$ cd $APP_PATH && ./manage.py collectstatic
+	$ cd $PROJECT_PATH && ./manage.py collectstatic
 	# You may be asked to confirm you want to override existing files. In 
 	# a clean installation, with the default setting of STATIC_ROOT, this 
 	# warning is a false alarm. If there were static files collected, they 
