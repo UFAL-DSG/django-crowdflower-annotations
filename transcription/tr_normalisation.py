@@ -14,8 +14,6 @@ import re
 
 
 # Constants.
-_variant_fname = '../libs/varcon-5.1/variant.tab'
-_variant_read = False
 _more_spaces = re.compile(r'\s{2,}')
 _special_words = ["breath", "hum", "laugh", "noise", "sil", "unint"]
 _special_rx = '(?:' + '|'.join(_special_words) + ')'

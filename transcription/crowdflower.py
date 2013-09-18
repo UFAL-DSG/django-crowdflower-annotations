@@ -487,13 +487,11 @@ def cancel_job(jobid):
         return True, ''
 
 
-def delete_job(jobid, force_delete_from_file=True):
-    # Make sure the job is not running.
+def delete_job(jobid, force_delete_from_db=True):
+    # Try to cancel the job in case it is running.
     success, msgs = cancel_job(jobid)
-    if not success:
-        return False, msgs
-
-    time.sleep(settings.CF_WAIT_SECS)
+    if success:
+        time.sleep(settings.CF_WAIT_SECS)
 
     # Delete the job from Crowdflower.
     cf_url = 'jobs/{jobid}'.format(jobid=jobid)
@@ -507,7 +505,7 @@ def delete_job(jobid, force_delete_from_file=True):
         ret_msg = cf_msg.obj or ''
 
     # Delete job from the job IDs file.
-    if success or force_delete_from_file:
+    if success or force_delete_from_db:
         try:
             price_class_handler.remove_price_class(jobid)
         except SettingsException as sex:

@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
 import datetime
+import os
 import os.path
 
 # PROJECT_DIR: This should be an absolute path to the root of this Django
 # project. Do not change this.
-PROJECT_DIR = os.path.dirname(__file__)
+PROJECT_DIR = os.path.join(os.path.dirname(__file__), os.pardir)
 
 # DEBUG: This causes Django bring up a detailed report on uncaught exceptions.
 # Set to False to protect your site.

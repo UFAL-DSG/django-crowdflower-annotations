@@ -13,19 +13,26 @@ import localsettings
 
 # custom variables
 _module = sys.modules[__name__]
-PROJECT_DIR = os.path.realpath(os.path.dirname(__file__))
+SITE_DIR = os.path.realpath(os.path.dirname(__file__))
+PROJECT_DIR = os.path.realpath(os.path.join(SITE_DIR, os.pardir))
+try:
+    sys.path.append(PYLIBS_DIR)
+except NameError:
+    pass
 if not PROJECT_DIR in sys.path:
-    sys.path.append(PROJECT_DIR)
-sys.path.append(PYLIBS_DIR)
+    sys.path.insert(0, PROJECT_DIR)
+if not SITE_DIR in sys.path:
+    sys.path.insert(0, SITE_DIR)
 
 # Determine DJANGO_PATH, unless overriden by localsettings.
 if not hasattr(_module, 'DJANGO_PATH'):
     if 'django' in sys.modules:
         DJANGO_PATH = os.path.dirname(sys.modules['django'].__file__)
     else:
+        django_fp = django_desc = None
         try:
             django_fp, DJANGO_PATH, django_desc = imp.find_module('django')
-        except:
+        except Exception as ex:
             raise Exception('The Django package was not found.')
         finally:
             if django_fp is not None:
@@ -164,9 +171,15 @@ INSTALLED_APPS = (
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'filters': {
+        'require_debug_false': {
+            '()': 'django.utils.log.RequireDebugFalse'
+        }
+    },
     'handlers': {
         'mail_admins': {
             'level': 'ERROR',
+            'filters': ['require_debug_false'],
             'class': 'django.utils.log.AdminEmailHandler'
         }
     },
@@ -179,7 +192,7 @@ LOGGING = {
     }
 }
 
-WSGI_APPLICATION = "transcription.wsgi.application"
+WSGI_APPLICATION = "site.wsgi.application"
 SUB_SITE = APP_URL
 # FORCE_SCRIPT_NAME = "/transcription"
 LOGIN_URL = APP_URL + "/accounts/login/"

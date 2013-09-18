@@ -19,9 +19,8 @@ def update_price(dg):
     # Compute the length of the audio.
     wavsize = 0
     for turn in uturns:
-        wavsize += os.path.getsize(os.path.join(
-            settings.CONVERSATION_DIR,
-            turn.wav_fname))
+        wavsize += os.path.getsize(os.path.join(settings.CONVERSATION_DIR,
+                                                turn.wav_fname))
     sec = wavsize / float(16000 * 2)
     minutes = sec / 60.
 

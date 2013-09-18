@@ -808,7 +808,7 @@ if settings.USE_CF:
             help_text=('Select the file that defines the body of the '
                        'Crowdflower unit.\n'
                        'If you see no choices here, you might need to run '
-                       'the scripts/inst_templates.py script yet.'))
+                       'the scripts/setup_script.py script yet.'))
         judgments_per_unit = forms.IntegerField(
             initial=1,
             widget=fixedWidthTextInput,
