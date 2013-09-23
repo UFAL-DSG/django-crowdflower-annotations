@@ -93,6 +93,10 @@ def make_dirs(stngs):
     # Add Crowdflower-specific directories.
     if stngs.USE_CF:
         dirnames.extend([stngs.WORKLOGS_DIR, stngs.CURLLOGS_DIR])
+    # Add the directory for emails if they are to be stored in files.
+    if (settings.EMAIL_BACKEND ==
+            'django.core.mail.backends.filebased.EmailBackend'):
+        dirnames.append(settings.EMAIL_FILE_PATH)
 
     # Make the directories.
     for dirname in dirnames:
