@@ -62,10 +62,6 @@ TRANSCRIBE_EXTRA_CONTEXT['EXTRA_QUESTIONS'] = EXTRA_QUESTIONS
 # Django settings for the `transcription' project.
 TEMPLATE_DEBUG = DEBUG
 
-ADMINS = (
-    # ('Your Name', 'your_email@example.com'),
-)
-
 MANAGERS = ADMINS
 
 DATABASES = {

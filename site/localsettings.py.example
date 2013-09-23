@@ -12,6 +12,30 @@ PROJECT_DIR = os.path.join(os.path.dirname(__file__), os.pardir)
 # Set to False to protect your site.
 DEBUG = True
 
+# ADMINS: Important diagnostics emails will be sent to emails defined here.
+ADMINS = (
+    # ('Your Name', 'your_email@example.com'),
+)
+
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+# Following specifies how smtplib sends emails, provided the email backend is
+# set to 'django.core.mail.backends.smtp.EmailBackend'.
+EMAIL_HOST = 'smtp.example.com'
+EMAIL_PORT = 465  # default for SMTP with TLS
+EMAIL_HOST_USER = 'user@example.com'
+EMAIL_HOST_PASSWORD = 'secretSMTPpassword'
+EMAIL_USE_TLS = True
+
+# As an alternative to sending emails (if it is not convenient for you to use
+# SMTP), you can have them written to logs. You will have to remember to read
+# them yourself, though.
+#
+# If this is what you want, uncomment the following two lines and set the
+# second one to a more reasonable place (and writable by the web server).
+# EMAIL_BACKEND = 'django.core.mail.backends.filebased.EmailBackend'
+# EMAIL_FILE_PATH = '/tmp/app-messages' # change this to a proper location
+
+
 DOMAIN_URL = "http://example.com"
 APP_URL = "/apps/cir_transcription"
 PYLIBS_DIR = PROJECT_DIR + "/libs/python"

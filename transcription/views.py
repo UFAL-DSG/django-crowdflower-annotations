@@ -38,7 +38,7 @@ import settings
 from tr_normalisation import trss_match
 from transcription.models import Transcription, DialogueAnnotation, \
     Dialogue, UserTurn, SystemTurn
-from util import get_log_path
+from util import get_log_path, catch_locked_database
 
 
 def group_by(objects, attrs):
@@ -217,6 +217,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False):
                                 trs_el.get('some_breaks_gold') != '0')).save()
 
 
+@catch_locked_database
 def transcribe(request):
 
     success = None  # whether annotation data have been successfully stored
