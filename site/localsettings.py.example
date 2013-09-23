@@ -36,9 +36,17 @@ EMAIL_USE_TLS = True
 # EMAIL_FILE_PATH = '/tmp/app-messages' # change this to a proper location
 
 
+# DOMAIN_URL: This is the beginning of the URL where your application will be
+# accessible.
 DOMAIN_URL = "http://example.com"
+
 APP_URL = "/apps/cir_transcription"
+
+# PYLIBS_DIR: Some auxiliary Python modules are made available under this path
+# by default.  You should have gotten them as part of the git clone.   Unless
+# you have a reason, leave this setting as is.
 PYLIBS_DIR = PROJECT_DIR + "/libs/python"
+
 # DJANGO_PATH: If you have multiple django installations, set the path to
 # Django v1.4 to this variable.
 DJANGO_PATH = '/webapps/libs/django-1.4.1/django'
@@ -64,8 +72,14 @@ TIME_ZONE = 'Europe/Prague'
 # http://www.i18nguy.com/unicode/language-identifiers.html
 LANGUAGE_CODE = 'en-gb'
 
+# EXPORT_DIR: Path towards the directory where annotated XML logs will be
+# exported using the admin Export Annotations action.
 EXPORT_DIR = PROJECT_DIR + "/data/export"
+
+# CONVERSATION_DIR: Path towards the directory where dialogue log directories
+# are put and reside.
 CONVERSATION_DIR = PROJECT_DIR + "/data/conversations"
+
 # LISTS_DIR: Path towards a directory where lists of dialogue dirs to import
 # will be looked for. This does not influence the scripts/fetch_dgdir.sh script
 # which uses (PROJECT_DIR + "/data/lists") anyway.
