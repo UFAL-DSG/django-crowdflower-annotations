@@ -41,7 +41,7 @@ if not hasattr(_module, 'DJANGO_PATH'):
                                 '*package*.')
             del django_fp, django_desc
 # Set this Django as the default django for imports.
-sys.path.insert(0, DJANGO_PATH)
+sys.path.insert(0, os.path.join(DJANGO_PATH, os.pardir))
 
 _cf_required = ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN',
                 'CODE_LENGTH', 'CODE_LENGTH_EXT', 'WORKLOGS_DIR', 'LOG_CURL')
@@ -64,16 +64,17 @@ TEMPLATE_DEBUG = DEBUG
 
 MANAGERS = ADMINS
 
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
-        'NAME': os.path.join(PROJECT_DIR, 'db', 'trss.db'),                      # Or path to database file if using sqlite3.
-        'USER': '',                      # Not used with sqlite3.
-        'PASSWORD': '',                  # Not used with sqlite3.
-        'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
-        'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
+if not hasattr(_module, 'DATABASES'):
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
+            'NAME': os.path.join(PROJECT_DIR, 'db', 'trss.db'),                      # Or path to database file if using sqlite3.
+            'USER': '',                      # Not used with sqlite3.
+            'PASSWORD': '',                  # Not used with sqlite3.
+            'HOST': '',                      # Set to empty string for localhost. Not used with sqlite3.
+            'PORT': '',                      # Set to empty string for default. Not used with sqlite3.
+        }
     }
-}
 
 SITE_ID = 1
 
