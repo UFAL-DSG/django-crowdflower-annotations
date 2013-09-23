@@ -51,7 +51,11 @@ SESSION_FNAMES = ('session-fixed.xml', 'session.xml')
 # alternatives, tried from the first (up to the last if the previous did not
 # exist)
 
-USE_CF = True    # use Crowdflower?
+USE_CF = True        # use Crowdflower?
+USE_WEBHOOKS = True  # set webhooks on Crowdflower? (used for tracking worker
+                     # IDs and their gold hit ratios)
+                     # This requires DOMAIN_URL to be a public URL (not
+                     # http://localhost or similar).
 WORKLOGS_DIR = PROJECT_DIR + "/log/work_logs"
 CURLLOGS_DIR = PROJECT_DIR + "/log/curl_logs"
 LOG_CURL = False

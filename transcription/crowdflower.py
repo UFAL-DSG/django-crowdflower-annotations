@@ -412,9 +412,10 @@ def create_job(cents_per_unit,
     job_params['gold_per_assignment'] = gold_per_assignment
     job_params['instructions'] = instructions
     # webhook
-    job_params['webhook_uri'] = '{domain}{site}/log-work'.format(
-        domain=settings.DOMAIN_URL,
-        site=settings.SUB_SITE)
+    if settings.USE_WEBHOOKS:
+        job_params['webhook_uri'] = '{domain}{site}/log-work'.format(
+            domain=settings.DOMAIN_URL,
+            site=settings.SUB_SITE)
     # skills
     # (copied from a JSON retrieved from Crowdflower for a manually set up job)
     if bronze:
@@ -584,6 +585,17 @@ def create_dialogue_csv(dg):
 
 
 def collect_judgments(job_id):
+    """Downloads a CSV of all judgments for a job from Crowdflower.
+
+    Downloads a CSV of all judgments for a job from Crowdflower and updates
+    workers' gold ratio statistics in session XML files.
+
+    Arguments:
+        job_id -- Crowdflower job ID for the job in question
+
+    Returns a tuple (success?, reason).
+
+    """
     cf_url = 'jobs/{jobid}'.format(jobid=job_id)
 
     # Wait for an OK response from CF.

@@ -31,13 +31,7 @@ if settings.DEBUG:
 
 # Only when using Crowdflower:
 if settings.USE_CF:
-    cf_pattern_args = [url('^log-work$',
-                           'transcription.views.log_work',
-                           name="log_work"),
-                       url('^fire-hooks$',
-                           'transcription.views.fire_hooks',
-                           name="fire_hooks"),
-                       url('^create-jobs$',
+    cf_pattern_args = [url('^create-jobs$',
                            'transcription.views.create_job_view',
                            name="create_jobs"),
                        url('^delete-jobs$',
@@ -48,6 +42,15 @@ if settings.USE_CF:
                            name="collect_reports"),
                        ]
     pattern_args.extend(cf_pattern_args)
+    if settings.USE_WEBHOOKS:
+        cf_pattern_args = [url('^log-work$',
+                               'transcription.views.log_work',
+                               name="log_work"),
+                           url('^fire-hooks$',
+                               'transcription.views.fire_hooks',
+                               name="fire_hooks"),
+                           ]
+        pattern_args.extend(cf_pattern_args)
 
 # Displaying the home page is the default.
 pattern_args.append(url(r'^',
