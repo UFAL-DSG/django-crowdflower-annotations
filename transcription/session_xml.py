@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 from collections import namedtuple
+from datetime import datetime
 from lxml import etree
 import os
 import os.path
@@ -112,9 +113,18 @@ class XMLSession(object):
         if hasattr(self, 'DATE_FORMAT') and self.DATE_FORMAT is not None:
             def format_datetime(dt):
                 return dt.strftime(self.DATE_FORMAT)
+            def parse_datetime(dt_str):
+                return datetime.strptime(dt_str, self.DATE_FORMAT)
         else:
+            iso_format = '%Y-%m-%d %H:%M:%S.%f'
+            iso_format0 = '%Y-%m-%d %H:%M:%S'  # in case microsecond == 0
             def format_datetime(dt):
                 return unicode(dt)
+            def parse_datetime(dt_str):
+                try:
+                    return datetime.strptime(dt_str, iso_format)
+                except ValueError:
+                    return datetime.strptime(dt_str, iso_format0)
         self.format_datetime = format_datetime
 
         return self
@@ -341,6 +351,25 @@ class XMLSession(object):
             yield SystemTurn_nt(turn_number, text)
 
     def record_judgment(self, judgment):
+        """Records data about a judgment to this XML session log.
+
+        It can be configured what all kinds of information is recorded, using
+        the LOGGED_JOB_DATA configuration variable.  However, Crowdflower
+        worker ID is recorded in any case.
+
+        Arguments:
+            judgment -- an object describing one judgment, as created by
+                Crowdflower
+
+        Returns True if the corresponding annotation element was found and
+        updated, False otherwise (namely if an existing annotation element from
+        this worker ID was found).
+
+        """
+
+        # Get this worker's ID.
+        worker_id = str(judgment["worker_id"])
+
         # Find the relevant dialogue annotation element.
         # Heuristic: take the first one of the potential dialogue annotation
         # XML elements.
@@ -356,13 +385,22 @@ class XMLSession(object):
             raise ValueError('Trying to record a judgment for which there is '
                              'no XML element in place.')
 
+        # Check whether we don't have an existing annotation from this worker
+        # already.
+        for ann_el in session.iter_annotations(user=''):
+            if ann_el.get('worker_id', None) == worker_id:
+                # Cancel the operation if it seems we would record the worker
+                # for the second time.
+                return False
+
         # Set all the desired attributes.
         if 'worker_id' not in settings.LOGGED_JOB_DATA:
-            dg_ann_el.set('worker_id', str(judgment["worker_id"]))
+            dg_ann_el.set('worker_id', worker_id)
         for json_key, att_name in settings.LOGGED_JOB_DATA:
             att_val = judgment.get(json_key, None)
             if att_val is not None:
                 dg_ann_el.set(att_name, unicode(att_val))
+        return True
 
     def update_worker_stats(self, gold_stats):
         """Updates the gold hit statistic.
