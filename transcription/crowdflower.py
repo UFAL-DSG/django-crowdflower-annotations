@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from collections import Counter
+from collections import Counter, Sequence
 import cStringIO as StringIO
 import csv
 import httplib
@@ -248,6 +248,141 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
     # Return the returned object in case of success.
     cf_msg = CrowdflowerMessage(status=status, obj=cf_outobj)
     return cf_msg
+
+
+def _cf_json_getitem(cf_json, key, deser=True):
+    """Wrapper for getitem that additionally deserializes JSON values.
+
+    Arguments:
+        cf_json -- object originally received as JSON from Crowdflower
+        key -- key to use to index `cf_json'
+        deser -- whether to deserialize the value of `key' if it looks like
+            a JSON-serialized object
+
+    Returns value for the key or raises KeyError if the key was not found. If
+    asked to deserialize, the cf_json object's value for key is altered as
+    a side effect.
+
+    """
+
+    try:
+        val = cf_json[key]
+    except IndexError:
+        raise KeyError()
+    if isinstance(val, basestring):
+        try:
+            val = json.loads(val)
+        except:
+            pass
+        else:
+            cf_json[key] = val
+    return val
+
+
+def _get_keys_iterator(collection):
+    if isinstance(collection, basestring):
+        return None
+    elif isinstance(collection, Sequence):
+        keys = xrange(len(collection))
+    else:
+        if hasattr(collection, '__iter__'):
+            keys = collection
+        else:
+            return None
+    return iter(keys)
+
+
+def _find_in_cf_json(cf_json, key, preferred_path=None):
+    """
+    Finds the value of a given key anywhere somewhere in JSON structure
+    returned by CF.
+
+    This function may be given a preferred path, specifying where the key
+    should be found in the JSON. If it is not there, the JSON is searched for
+    all dictionaries and their keys checked for match with `key'. JSON
+    structures serialized into strings may be deserialized on the fly.
+
+    Arguments:
+        cf_json -- the JSON structure (i.e., an object originally received as
+            JSON from Crowdflower)
+        key -- dictionary key for which to look up the value
+        preferred_path -- an iterable of indices leading to the dictionary
+            where `key' would normally be found. If it is there, its value is
+            returned. If not, it is looked for everywhere else in the JSON.
+
+    Returns a tuple (found on preferred path, values) for the key or raises
+    KeyError if that key was not found. In the former case, a list of values
+    for all occurrences of `key' is returned.
+
+    """
+
+    # Try to find the key at the preferred path.
+    if preferred_path is not None:
+        cur_json = cf_json
+        for cur_key in preferred_path:
+            try:
+                cur_json = _cf_json_getitem(cur_json, cur_key)
+            except KeyError:
+                break
+        else:
+            try:
+                return (True, [_cf_json_getitem(cur_json, key)])
+            except:
+                pass
+
+    # If it was not found there, go through the whole structure.
+    levels = [cf_json]
+    # :: [embedding level-> current object to iterate at that level]
+    next_iter = _get_keys_iterator(cf_json)
+    if next_iter is None:
+        raise KeyError()
+    level_keys = [next_iter]
+    # :: [embedding level-> iterator for keys on that level]
+    values = list()  # the eventual return value (second item of)
+
+    # Traverse the structure and record all values found.
+    while levels:
+        last_level = levels[-1]
+        last_keys = level_keys[-1]
+
+        # Go deeper if possible.
+        try:
+            last_key = next(last_keys)
+        except StopIteration:
+            # If no more keys are available to this object, go back.
+            del levels[-1]
+            del level_keys[-1]
+        else:
+            next_level = _cf_json_getitem(last_level, last_key)
+            if last_key == key:
+                values.append(next_level)
+
+            next_iter = _get_keys_iterator(next_level)
+            if next_iter is not None:
+                levels.append(next_level)
+                level_keys.append(_get_keys_iterator(next_level))
+
+    # Return.
+    if values:
+        return (preferred_path is None, values)
+    else:
+        raise KeyError()
+
+
+def _find_unique_in_cf_json(cf_json, key, preferred_paths=None):
+    if preferred_paths is None:
+        preferred_paths = [None]
+
+    for path in preferred_paths:
+        using_known_path, values = _find_in_cf_json(cf_json, key, path)
+        if using_known_path or len(values) == 1:
+            return values[0]
+        if all(lambda otherval: otherval == values[0], values[1:]):
+            return values[0]
+
+    msg = ('Structure of JSONs from Crowdflower has changed. Cannot '
+           'find the "{key}" key reliably.'.format(key=key))
+    raise CrowdflowerException(msg)
 
 
 @lru_cache(maxsize=10)
@@ -542,8 +677,16 @@ def record_worker(request):
 
     """
     cf_data = json.loads(request.POST['payload'])
-    judgment_data = cf_data["results"]["judgments"][0]
-    cid = judgment_data["unit_data"]["cid"]
+
+    # There are two known paths towards the 'judgments' value.
+    judgments_paths = [('results', ),
+                       (0, 'results')]
+    judgments_data = _find_unique_in_cf_json(cf_data, 'judgments',
+                                             judgments_paths)
+    # Find the CID.
+    judgment_data = _cf_json_getitem(judgments_data, 0)
+    cid = _find_unique_in_cf_json(judgment_data, 'cid', ('unit_data', ))
+
     # Update the XML session file.
     with XMLSession(cid=cid) as session:
         session.record_judgment(judgment_data)
