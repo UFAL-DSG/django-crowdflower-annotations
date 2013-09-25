@@ -60,7 +60,7 @@ for name in _cf_required:
 try:
     setattr(_module, 'CURLLOGS_DIR', localsettings.CURLLOGS_DIR)
 except AttributeError as er:
-    if LOG_CURL:
+    if USE_CF and LOG_CURL:
         raise er
 
 # Other interpretation of localsettings.
