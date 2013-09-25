@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block content %}
+<h1>{% block pagetitle %}A form{% endblock %}</h1>
+
+<form action="" method="POST">
+  {% csrf_token %}
+	{% block form_body %}
+  <table>
+    {{ form.as_table }}
+    <tr>
+      <td>
+				<input id="submit" type="submit" name="send" value="{% block submit %}Submit{% endblock %}">
+      </td>
+    </tr>
+  </table>
+	{% endblock %}
+</form>
+
+{% endblock %}

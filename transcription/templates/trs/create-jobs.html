@@ -1,22 +1,5 @@
-{% extends "base.html" %}
+{% extends "trs/base_form.html" %}
 {% load url from future %}
 
-{% block head %}
-{% endblock %}
-
-{% block content %}
-<h1>Creating a new job</h1>
-
-<form action="" method="POST">
-  {% csrf_token %}
-  <table>
-    {{ form.as_table }}
-    <tr>
-      <td>
-        <input id="submit" type="submit" name="send" value="Create jobs">
-      </td>
-    </tr>
-  </table>
-</form>
-
-{% endblock %}
+{% block pagetitle %}Creating new jobs{% endblock %}
+{% block submit %}Create jobs{% endblock %}

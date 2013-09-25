@@ -1,12 +1,11 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-from collections import Counter, Sequence
+from collections import Sequence
 import cStringIO as StringIO
 import csv
 import httplib
 import json
 from lru_cache import lru_cache
-from lxml import etree
 import os
 import os.path
 import re
@@ -220,8 +219,8 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
             cf_outobj = cf_out or None
             serious_errors = True
             error_msgs.append('Unknown content type for the Crowdflower '
-                                'returned object specified: "{ct}".'
-                                .format(ct=type_theirs))
+                              'returned object specified: "{ct}".'
+                              .format(ct=type_theirs))
     except ValueError:
         cf_outobj = None
         error_msgs.append('Unexpected reply from CF: """{cf_out}"""\n'
@@ -518,7 +517,8 @@ def create_job(cents_per_unit,
         job_cml_path = default_job_cml_path
     # It seems to make more sense to call the job by the price per assignment,
     # not per unit.
-    # job_price = (units_per_assignment * cents_per_unit) / units_per_assignment
+    # job_price = (units_per_assignment * cents_per_unit)
+    #   / units_per_assignment
     job_price = units_per_assignment * cents_per_unit
     if title is None:
         title = 'Dialogue transcription – {price}c'
@@ -613,6 +613,7 @@ def create_job(cents_per_unit,
 
         return True, cf_msg.obj
 
+
 def cancel_job(jobid):
     cf_url = 'jobs/{jobid}/cancel'.format(jobid=jobid)
     try:
@@ -670,13 +671,17 @@ def update_gold(dg):
     return True, None
 
 
-def record_worker(request):
+def record_worker(post_dict):
     """
     Records worker information to the corresponding session XML file based
     on POST data from CrowdFlower.
 
+    Arguments:
+        post_dict -- a mapping of attributes to values, as given by
+            Crowdflower's HTTP request
+
     """
-    cf_data = json.loads(request.POST['payload'])
+    cf_data = json.loads(post_dict['payload'])
 
     # There are two known paths towards the 'judgments' value.
     judgments_paths = [('results', ),
@@ -690,6 +695,16 @@ def record_worker(request):
     # Update the XML session file.
     with XMLSession(cid=cid) as session:
         session.record_judgment(judgment_data)
+
+
+def process_worklog(log_fname):
+    # Read contents of the log file.
+    with open(log_fname) is log_file:
+        contents = log_file.read()
+    # Strip the leading "<QueryDict: " and trailing ">", deserialize the dict.
+    post_dict = eval(contents[contents.index('{'):-1])
+    # Record worker based on this reconstructed POST dict.
+    return record_worker(post_dict)
 
 
 def create_dialogue_json(dg):
@@ -776,7 +791,7 @@ def collect_judgments(job_id):
     # Count gold/missed items per worker.
     for rec in recs:
         worker = rec[worker_idx]
-        worker_stats = gold_stats.setdefault(rec[worker_idx], [0, 0])
+        worker_stats = gold_stats.setdefault(worker, [0, 0])
         if rec[golden_idx] == 'true':
             worker_stats[1] += 1
             worker_stats[0] += int(rec[missed_idx] == 'true')
@@ -931,8 +946,8 @@ class _PriceClassHandler(object):
             active_jobs = PriceClass.objects.all()
         job_prices = set(active_jobs.values_list('cents', flat=True))
         return {self._model.cents2dollars(price):
-                    getattr(active_jobs.filter(cents=price).latest(),
-                            self._id_attr)
+                getattr(active_jobs.filter(cents=price).latest(),
+                        self._id_attr)
                 for price in job_prices}
 
     @property

@@ -26,9 +26,9 @@ from django.template import RequestContext
 from django.utils.datastructures import SortedDict
 from django.views.decorators.csrf import csrf_exempt
 
-from crowdflower import collect_judgments, create_job, delete_job, \
-    default_job_cml_path, fire_gold_hooks, price_class_handler, \
-    JsonDialogueUpload, record_worker
+from crowdflower import (collect_judgments, create_job, delete_job,
+    default_job_cml_path, fire_gold_hooks, price_class_handler,
+    process_worklog, JsonDialogueUpload, record_worker)
 import dg_util
 from session_xml import FileNotFoundError, XMLSession
 import settings
@@ -680,6 +680,36 @@ if settings.USE_CF:
         return render(request, "trs/hooks-fired.html", context)
 
 
+    class WorkLogsForm(forms.Form):
+        logs_list_path = forms.FilePathField(
+            path=settings.LISTS_DIR,
+            label="Path to the worklogs list file",
+            help_text=('Select the file that lists paths towards worklog '
+                       'files that should be reused.'))
+
+
+    @login_required
+    @user_passes_test(lambda u: u.is_staff)
+    def reuse_worklogs(request):
+        if request.method == 'POST':
+            form = WorkLogsForm(request.POST)
+            if form.is_valid()
+                with open(form.cleaned_data['logs_list_path']) as list_file:
+                    for path_line in list_file:
+                        process_worklog(path_line.strip())
+            else:
+                context = {'form': form}
+                response = render(request, 'trs/reuse-worklogs.html', context,
+                                  context_instance=RequestContext(request))
+                return response
+
+        # If a new form is to be served,
+        else:
+            context = {'form': WorkLogsForm()}
+            response = render(request, 'trs/reuse-worklogs.html', context,
+                              context_instance=RequestContext(request))
+            return response
+
     @login_required
     @user_passes_test(lambda u: u.is_staff)
     def collect_reports(request):
@@ -1083,7 +1113,7 @@ if settings.USE_CF:
                 pass
             # Record the request to a session XML file.
             if signal == 'unit_complete':
-                record_worker(request)
+                record_worker(request.POST)
             elif signal == 'job_complete':
                 job_id = request.POST['payload']['id']
                 fire_gold_hooks(job_id)

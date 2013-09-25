@@ -49,6 +49,9 @@ if settings.USE_CF:
                            url('^fire-hooks$',
                                'transcription.views.fire_hooks',
                                name="fire_hooks"),
+                           url('^reuse-worklogs$',
+                               'transcription.views.reuse_worklogs',
+                               name="reuse_worklogs"),
                            ]
         pattern_args.extend(cf_pattern_args)
 
