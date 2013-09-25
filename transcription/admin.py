@@ -22,8 +22,8 @@ if settings.USE_CF:
 from transcription.db_fields import SizedTextField, ROCharField
 from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
-from transcription.models import Dialogue, DialogueAnnotation, \
-    Transcription, UserTurn
+from transcription.models import (Dialogue, DialogueAnnotation, Transcription,
+                                  UserTurn)
 from transcription.tr_normalisation import trss_match
 from transcription.widgets import ROInput
 

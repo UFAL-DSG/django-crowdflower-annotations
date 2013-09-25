@@ -11,7 +11,11 @@ CF_MAX_WAITS = 30
 from localsettings import *
 import localsettings
 
-# custom variables
+####################
+# custom variables #
+####################
+
+# Adjust Python path to include both PROJECT_DIR and SITE_DIR.
 _module = sys.modules[__name__]
 SITE_DIR = os.path.realpath(os.path.dirname(__file__))
 PROJECT_DIR = os.path.realpath(os.path.join(SITE_DIR, os.pardir))
@@ -43,6 +47,8 @@ if not hasattr(_module, 'DJANGO_PATH'):
 # Set this Django as the default django for imports.
 sys.path.insert(0, os.path.join(DJANGO_PATH, os.pardir))
 
+# Check that all configuration variables needed for Crowdflower have been set
+# unless USE_CF is False.
 _cf_required = ('CF_KEY', 'PRICE_CONST', 'PRICE_PER_MIN', 'PRICE_PER_TURN',
                 'CODE_LENGTH', 'CODE_LENGTH_EXT', 'WORKLOGS_DIR', 'LOG_CURL')
 for name in _cf_required:
@@ -57,9 +63,13 @@ except AttributeError as er:
     if LOG_CURL:
         raise er
 
+# Other interpretation of localsettings.
 TRANSCRIBE_EXTRA_CONTEXT['EXTRA_QUESTIONS'] = EXTRA_QUESTIONS
+CONVERSATION_DIR = os.path.realpath(CONVERSATION_DIR)
 
-# Django settings for the `transcription' project.
+####################################################
+# Django settings for the `transcription' project. #
+####################################################
 TEMPLATE_DEBUG = DEBUG
 
 MANAGERS = ADMINS

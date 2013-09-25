@@ -77,7 +77,7 @@ class PlayWidget(Widget):
     def render_content(self, name, value, attrs=None):
         if (not hasattr(value, 'startswith') or not
                 value.startswith(CONVERSATION_DIR)):
-            return mark_safe(u'N/A')
+            return mark_safe('N/A')
         wav_rest = value[len(CONVERSATION_DIR):]
         context = {'wav_fname': wav_rest,
                    'script_id': unicode(PlayWidget.num_wavs),
