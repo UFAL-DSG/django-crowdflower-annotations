@@ -693,7 +693,7 @@ if settings.USE_CF:
     def reuse_worklogs(request):
         if request.method == 'POST':
             form = WorkLogsForm(request.POST)
-            if form.is_valid()
+            if form.is_valid():
                 with open(form.cleaned_data['logs_list_path']) as list_file:
                     for path_line in list_file:
                         process_worklog(path_line.strip())

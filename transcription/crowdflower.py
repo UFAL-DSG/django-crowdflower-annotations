@@ -31,6 +31,10 @@ CF_URL_START = "https://api.crowdflower.com"
 default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
                                     'templates', 'crowdflower',
                                     'job-linked.cml')
+try:
+    _LOG_CURL = settings.LOG_CURL
+except AttributeError:
+    _LOG_CURL = False
 
 
 class CrowdflowerMessage(object):
@@ -57,8 +61,8 @@ class CrowdflowerException(Exception):
 
 
 def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
-                verb=None, log=settings.LOG_CURL, headers=None,
-                out_zipped=False, out_enc='UTF-8'):
+                verb=None, log=_LOG_CURL, headers=None, out_zipped=False,
+                out_enc='UTF-8'):
     """
 
     Arguments:
