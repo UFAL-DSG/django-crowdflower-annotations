@@ -105,6 +105,9 @@ class DialogueTurn(models.Model):
     """An abstract class for one turn in a dialogue."""
     dialogue = models.ForeignKey(Dialogue)
     turn_number = models.PositiveSmallIntegerField()
+    turn_abs_number = models.PositiveSmallIntegerField(default=0)
+    """absolute turn number, if both system and user turns are linearly ordered
+    wrt their (starting) time"""
 
     class Meta(object):
         abstract = True

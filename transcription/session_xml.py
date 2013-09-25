@@ -12,6 +12,10 @@ import settings
 
 UserTurn_nt = namedtuple('UserTurn_nt', ['turn_number', 'wav_fname'])
 SystemTurn_nt = namedtuple('SystemTurn_nt', ['turn_number', 'text'])
+UserTurnAbs_nt = namedtuple('UserTurnAbs_nt', ['turn_abs_number',
+                                               'turn_number', 'wav_fname'])
+SystemTurnAbs_nt = namedtuple('SystemTurnAbs_nt', ['turn_abs_number',
+                                                   'turn_number', 'text'])
 
 
 def is_dialogue_dirname(fname):
@@ -316,6 +320,46 @@ class XMLSession(object):
                        ('clear' if dg_ann.quality == 1 else 'noisy'))
         ann_el.text = dg_ann.notes
 
+    @classmethod
+    def _turn_is_userturn(cls, turn_el):
+        return (turn_el.tag == 'userturn' or
+                turn_el.get('speaker', None) == 'user')
+
+    def iter_turns(self):
+
+        # XXX This method was build in an ugly way, by putting together the
+        # bodies of iter_uturns and iter_systurns.
+        turns = self.sess_xml.xpath(
+            '|'.join((self.USERTURN_PATH, self.SYSTURN_PATH)))
+        uturnnums_seen = set()
+        for turn_abs_num, turn_xml in enumerate(turns, start=1):
+            if self._turn_is_userturn(turn_xml):
+                rec = turn_xml.find(self.REC_SUBPATH)
+                if rec is not None:
+                    rec = rec.attrib[self.REC_FNAME_ATTR]
+                try:
+                    turn_number = int(turn_xml.attrib[self.TURNNUMBER_ATTR])
+                except KeyError as er:  # There may be a turn with no turn
+                                        # number.
+                    pass
+                else:
+                    if turn_number not in uturnnums_seen:
+                        yield UserTurnAbs_nt(turn_abs_num, turn_number, rec)
+                        uturnnums_seen.add(turn_number)
+            else:
+                turn_number = turn_xml.attrib[self.TURNNUMBER_ATTR]
+                try:
+                    text = turn_xml.findtext(self.SYSTEXT_SUBPATH).strip()
+                except AttributeError:
+                    # Some turns might not have the text subelement.
+                    yield SystemTurnAbs_nt(turn_abs_num, turn_number, "")
+                    continue
+                # Throw away some distracting pieces of system prompts.
+                text = self._clean_systurn_text(text)
+                if text is None:
+                    continue
+                yield SystemTurnAbs_nt(turn_abs_num, turn_number, text)
+
     def iter_uturns(self):
         turnnums_seen = set()
         for uturn_xml in self.sess_xml.iterfind(self.USERTURN_PATH):
@@ -331,6 +375,16 @@ class XMLSession(object):
                     yield UserTurn_nt(turn_number, rec)
                     turnnums_seen.add(turn_number)
 
+    @classmethod
+    def _clean_systurn_text(cls, text):
+        if (text.startswith("Thank you for using")
+                or text.startswith("Thank you goodbye")):
+            return None
+        return text.replace(
+            "Thank you for calling the Cambridge Information system. "
+            "Your call will be recorded for research purposes.",
+            "").strip()
+
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):
             turn_number = systurn_xml.attrib[self.TURNNUMBER_ATTR]
@@ -341,13 +395,9 @@ class XMLSession(object):
                 yield SystemTurn_nt(turn_number, "")
                 continue
             # Throw away some distracting pieces of system prompts.
-            if (text.startswith("Thank you for using")
-                    or text.startswith("Thank you goodbye")):
+            text = self._clean_systurn_text(text)
+            if text is None:
                 continue
-            text = text.replace(
-                "Thank you for calling the Cambridge Information system. "
-                "Your call will be recorded for research purposes.",
-                "").strip()
             yield SystemTurn_nt(turn_number, text)
 
     def record_judgment(self, judgment):

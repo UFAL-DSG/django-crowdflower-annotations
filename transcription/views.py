@@ -119,7 +119,7 @@ def _gen_codes():
     return (code, code_corr, code_incorr)
 
 
-def _read_dialogue_turns(dg_data, dirname, with_trss=False):
+def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
     """
     Reads system and user turns from an XML session file and saves it
     to the DB.  This function should be called after the dialogue in question
@@ -131,90 +131,110 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False):
                    looked for
         with_trss -- should any annotations and transcriptions be read too?
             (default: False)
+        only_order -- used to fix the order of turns using the `turn_abs_num'
+            datum
 
     """
 
     with XMLSession(dg_data.cid) as session:
-        # Process user turns.
-        uturns = list()
-        for uturn_nt in session.iter_uturns():
-            if uturn_nt.wav_fname is not None:
-                turnnum = uturn_nt.turn_number
-                # Do not override turns saved earlier.
-                if turnnum < len(uturns) and uturns[turnnum] is not None:
-                    continue
-
-                # Create the user turn object.
-                uturn = UserTurn(
-                    dialogue=dg_data,
-                    turn_number=turnnum,
-                    wav_fname=os.path.join(dirname, uturn_nt.wav_fname))
-
-                # Prepare the `uturns' list for storing the new user turn.
-                while turnnum > len(uturns):
-                    uturns.append(None)
-
-                # Save the user turn object.
-                uturns.append(uturn)
-                assert (uturns[turnnum] == uturn)
-                uturn.save()
-
-        # Process system turns.
-        for systurn in session.iter_systurns():
-            SystemTurn(dialogue=dg_data,
-                       turn_number=systurn.turn_number,
-                       text=systurn.text).save()
-
-        # If transcriptions should be read and saved as well,
-        if with_trss:
-            dummy_user = None
-
-            # Iterate over all dialogue annotations.
-            for ann_el in session.iter_annotations():
-                # Retrieve all properties of the dialogue annotation object.
-                notes = ('' if ann_el.text is None else ann_el.text.strip())
-                program_version = ann_el.get('program_version')
-                ann_users = User.objects.filter(username=ann_el.get('user'))
-                if ann_users.exists():
-                    ann_user = ann_users[0]
+        if only_order:
+            sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
+            user_turns = UserTurn.objects.filter(dialogue=dg_data)
+            for turn_nt in session.iter_turns():
+                # If this is a system turn,
+                if hasattr(turn_nt, 'text'):
+                    turn = sys_turns.get(turn_number=turn_nt.turn_number)
+                # If this is a user turn,
                 else:
-                    ann_user = dummy_user
+                    turn = user_turns.get(turn_number=turn_nt.turn_number)
+                turn.turn_abs_number = turn_nt.turn_abs_number
+                turn.save()
 
-                ann_props = {'dialogue': dg_data,
-                             'notes': notes,
-                             'user': ann_user,
-                             'program_version': program_version}
+        else:
 
-                if 'accent' in settings.EXTRA_QUESTIONS:
-                    accent_str = ann_el.get('accent')
-                    accent = ("" if accent_str == 'native' else accent_str)
-                    ann_props['accent'] = accent
-                if 'offensive' in settings.EXTRA_QUESTIONS:
-                    offensive = (ann_el.get("offensive") == "True")
-                    ann_props['offensive'] = offensive
-                if 'quality' in settings.EXTRA_QUESTIONS:
-                    quality = (DialogueAnnotation.QUALITY_CLEAR
-                               if ann_el.get('quality') == 'clear'
-                               else DialogueAnnotation.QUALITY_NOISY)
-                    ann_props['quality'] = quality
+            # TODO Take into account the absolute turn number. Use
+            # session.iter_turns().
 
-                # Check whether this object has been imported already.
-                if not DialogueAnnotation.objects.filter(**ann_props):
-                    # Save the dialogue annotation.
-                    dg_ann = DialogueAnnotation(**ann_props)
-                    dg_ann.save()
+            # Process user turns.
+            uturns = list()
+            for uturn_nt in session.iter_uturns():
+                if uturn_nt.wav_fname is not None:
+                    turnnum = uturn_nt.turn_number
+                    # Do not override turns saved earlier.
+                    if turnnum < len(uturns) and uturns[turnnum] is not None:
+                        continue
 
-                    # Find all transcriptions that belong to this dialogue
-                    # annotation and save them as database objects.
-                    for turnnum, trs_el in session.iter_transcriptions(ann_el):
-                        Transcription(
-                            text=trs_el.text,
-                            turn=uturns[turnnum],
-                            dialogue_annotation=dg_ann,
-                            is_gold=(trs_el.get('is_gold') != '0'),
-                            breaks_gold=(trs_el.get('breaks_gold') != '0'),
-                            some_breaks_gold=(
-                                trs_el.get('some_breaks_gold') != '0')).save()
+                    # Create the user turn object.
+                    uturn = UserTurn(
+                        dialogue=dg_data,
+                        turn_number=turnnum,
+                        wav_fname=os.path.join(dirname, uturn_nt.wav_fname))
+
+                    # Prepare the `uturns' list for storing the new user turn.
+                    while turnnum > len(uturns):
+                        uturns.append(None)
+
+                    # Save the user turn object.
+                    uturns.append(uturn)
+                    assert (uturns[turnnum] == uturn)
+                    uturn.save()
+
+            # Process system turns.
+            for systurn in session.iter_systurns():
+                SystemTurn(dialogue=dg_data,
+                        turn_number=systurn.turn_number,
+                        text=systurn.text).save()
+
+            # If transcriptions should be read and saved as well,
+            if with_trss:
+                dummy_user = None
+
+                # Iterate over all dialogue annotations.
+                for ann_el in session.iter_annotations():
+                    # Retrieve all properties of the dialogue annotation object.
+                    notes = ('' if ann_el.text is None else ann_el.text.strip())
+                    program_version = ann_el.get('program_version')
+                    ann_users = User.objects.filter(username=ann_el.get('user'))
+                    if ann_users.exists():
+                        ann_user = ann_users[0]
+                    else:
+                        ann_user = dummy_user
+
+                    ann_props = {'dialogue': dg_data,
+                                'notes': notes,
+                                'user': ann_user,
+                                'program_version': program_version}
+
+                    if 'accent' in settings.EXTRA_QUESTIONS:
+                        accent_str = ann_el.get('accent')
+                        accent = ("" if accent_str == 'native' else accent_str)
+                        ann_props['accent'] = accent
+                    if 'offensive' in settings.EXTRA_QUESTIONS:
+                        offensive = (ann_el.get("offensive") == "True")
+                        ann_props['offensive'] = offensive
+                    if 'quality' in settings.EXTRA_QUESTIONS:
+                        quality = (DialogueAnnotation.QUALITY_CLEAR
+                                if ann_el.get('quality') == 'clear'
+                                else DialogueAnnotation.QUALITY_NOISY)
+                        ann_props['quality'] = quality
+
+                    # Check whether this object has been imported already.
+                    if not DialogueAnnotation.objects.filter(**ann_props):
+                        # Save the dialogue annotation.
+                        dg_ann = DialogueAnnotation(**ann_props)
+                        dg_ann.save()
+
+                        # Find all transcriptions that belong to this dialogue
+                        # annotation and save them as database objects.
+                        for turnnum, trs_el in session.iter_transcriptions(ann_el):
+                            Transcription(
+                                text=trs_el.text,
+                                turn=uturns[turnnum],
+                                dialogue_annotation=dg_ann,
+                                is_gold=(trs_el.get('is_gold') != '0'),
+                                breaks_gold=(trs_el.get('breaks_gold') != '0'),
+                                some_breaks_gold=(
+                                    trs_el.get('some_breaks_gold') != '0')).save()
 
 
 @catch_locked_database
@@ -532,6 +552,7 @@ def import_dialogues(request):
 
     dirlist_fname = os.path.abspath(request.GET['list_fname'])
     with_trss = request.GET.get('with_trss', False) == 'on'
+    only_order = request.GET.get('only_order', False) == 'on'
     ignore_exdirs = request.GET.get('ignore_exdirs', False) == 'on'
     upload_to_cf = settings.USE_CF and request.GET.get('upload', False) == 'on'
 
@@ -546,7 +567,7 @@ def import_dialogues(request):
         # Prepare the JSON upload data, and the CSV header.
         if upload_to_cf:
             json_data = JsonDialogueUpload()
-        csv_file.write('cid, code, code_gold\n')
+        csv_file.write('cid,code,code_gold\n')
         # Process the dialogue files.
         for line in dirlist_file:
             src_fname = line.rstrip().rstrip(os.sep)
@@ -592,6 +613,14 @@ def import_dialogues(request):
             # it has been there already.
             if same_cid_dgs:
                 dg_existed.append(dirname)
+
+                # XXX If only updating the absolute turn numbers,
+                if only_order:
+                    # Do update the order.
+                    dg_data = Dialogue.objects.get(cid=cid)
+                    _read_dialogue_turns(dg_data, tgt_fname, with_trss,
+                                         only_order)
+
                 continue
             # Generate codes and other defining attributes of the dialogue.
             dg_codes = _gen_codes()
@@ -607,7 +636,7 @@ def import_dialogues(request):
                 save_failed.append((dirname, cid))
                 continue
             # Read the dialogue turns.
-            _read_dialogue_turns(dg_data, tgt_fname, with_trss)
+            _read_dialogue_turns(dg_data, tgt_fname, with_trss, only_order)
             # Compute the dialogue price.
             dg_util.update_price(dg_data)
             # Update the dialogue in the DB.
@@ -619,7 +648,7 @@ def import_dialogues(request):
 
             # Add a record to the CSV for CrowdFlower. (kept for extra safety)
             code_gold = dg_codes[0] + dg_codes[1]
-            csv_file.write('{cid}, {code}, {gold}\n'
+            csv_file.write('{cid},{code},{gold}\n'
                            .format(cid=cid, code=dg_codes[0], gold=code_gold))
             # Add a record to the JSON for CrowdFlower.
             if upload_to_cf:
