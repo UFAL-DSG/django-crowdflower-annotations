@@ -318,7 +318,8 @@ class XMLSession(object):
         if 'quality' in settings.EXTRA_QUESTIONS:
             ann_el.set('quality',
                        ('clear' if dg_ann.quality == 1 else 'noisy'))
-        ann_el.text = dg_ann.notes
+        if dg_ann.notes:
+            ann_el.text = dg_ann.notes
 
     @classmethod
     def _turn_is_userturn(cls, turn_el):
