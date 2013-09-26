@@ -30,7 +30,8 @@ from crowdflower import (collect_judgments, create_job, delete_job,
     default_job_cml_path, fire_gold_hooks, price_class_handler,
     process_worklog, JsonDialogueUpload, record_worker)
 import dg_util
-from session_xml import FileNotFoundError, XMLSession
+from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt,
+    SystemTurnAbs_nt)
 import settings
 # XXX: Beware, this imports the settings from within the `transcription'
 # directory. That means that PROJECT_DIR will be APP_ROOT + "/transcription",
@@ -137,53 +138,58 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
     """
 
     with XMLSession(dg_data.cid) as session:
+
+        # Handle the functionality of only extending turns' data for their
+        # absolute order.
         if only_order:
             sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
             user_turns = UserTurn.objects.filter(dialogue=dg_data)
             for turn_nt in session.iter_turns():
-                # If this is a system turn,
-                if hasattr(turn_nt, 'text'):
-                    turn = sys_turns.get(turn_number=turn_nt.turn_number)
-                # If this is a user turn,
-                else:
+                if isinstance(turn_nt, UserTurnAbs_nt):
                     turn = user_turns.get(turn_number=turn_nt.turn_number)
+                else:
+                    turn = sys_turns.get(turn_number=turn_nt.turn_number)
                 turn.turn_abs_number = turn_nt.turn_abs_number
                 turn.save()
 
         else:
 
-            # TODO Take into account the absolute turn number. Use
-            # session.iter_turns().
-
-            # Process user turns.
+            # Save all the turns as database objects.
             uturns = list()
-            for uturn_nt in session.iter_uturns():
-                if uturn_nt.wav_fname is not None:
-                    turnnum = uturn_nt.turn_number
-                    # Do not override turns saved earlier.
-                    if turnnum < len(uturns) and uturns[turnnum] is not None:
-                        continue
+            for turn_nt in session.iter_turns():
+                # Take special care to not overwrite user turns with other user
+                # turns with a duplicate turn number (known fault of some XML
+                # logs).
+                if isinstance(turn_nt, UserTurnAbs_nt):
+                    if turn_nt.wav_fname is not None:
+                        turnnum = turn_nt.turn_number
+                        # Do not override turns saved earlier.
+                        if (turnnum < len(uturns) and
+                                uturns[turnnum] is not None):
+                            continue
 
-                    # Create the user turn object.
-                    uturn = UserTurn(
-                        dialogue=dg_data,
-                        turn_number=turnnum,
-                        wav_fname=os.path.join(dirname, uturn_nt.wav_fname))
+                        # Create the user turn object.
+                        wav_path = os.path.join(dirname, turn_nt.wav_fname)
+                        uturn = UserTurn(
+                            dialogue=dg_data,
+                            turn_number=turnnum,
+                            turn_abs_number=turn_nt.turn_abs_number,
+                            wav_fname=wav_path)
 
-                    # Prepare the `uturns' list for storing the new user turn.
-                    while turnnum > len(uturns):
-                        uturns.append(None)
+                        # Prepare the `uturns' list for storing the new user
+                        # turn.
+                        while turnnum > len(uturns):
+                            uturns.append(None)
 
-                    # Save the user turn object.
-                    uturns.append(uturn)
-                    assert (uturns[turnnum] == uturn)
-                    uturn.save()
-
-            # Process system turns.
-            for systurn in session.iter_systurns():
-                SystemTurn(dialogue=dg_data,
-                        turn_number=systurn.turn_number,
-                        text=systurn.text).save()
+                        # Save the user turn object.
+                        uturns.append(uturn)
+                        assert (uturns[turnnum] == uturn)
+                        uturn.save()
+                else:
+                    SystemTurn(dialogue=dg_data,
+                               turn_number=turn_nt.turn_number,
+                               turn_abs_number=turn_nt.turn_abs_number,
+                               text=turn_nt.text).save()
 
             # If transcriptions should be read and saved as well,
             if with_trss:
@@ -191,19 +197,22 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
 
                 # Iterate over all dialogue annotations.
                 for ann_el in session.iter_annotations():
-                    # Retrieve all properties of the dialogue annotation object.
-                    notes = ('' if ann_el.text is None else ann_el.text.strip())
+                    # Retrieve all properties of the dialogue annotation
+                    # object.
+                    notes = ('' if ann_el.text is None
+                             else ann_el.text.strip())
                     program_version = ann_el.get('program_version')
-                    ann_users = User.objects.filter(username=ann_el.get('user'))
+                    ann_users = User.objects.filter(
+                        username=ann_el.get('user'))
                     if ann_users.exists():
                         ann_user = ann_users[0]
                     else:
                         ann_user = dummy_user
 
                     ann_props = {'dialogue': dg_data,
-                                'notes': notes,
-                                'user': ann_user,
-                                'program_version': program_version}
+                                 'notes': notes,
+                                 'user': ann_user,
+                                 'program_version': program_version}
 
                     if 'accent' in settings.EXTRA_QUESTIONS:
                         accent_str = ann_el.get('accent')
@@ -226,15 +235,17 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
 
                         # Find all transcriptions that belong to this dialogue
                         # annotation and save them as database objects.
-                        for turnnum, trs_el in session.iter_transcriptions(ann_el):
-                            Transcription(
-                                text=trs_el.text,
-                                turn=uturns[turnnum],
-                                dialogue_annotation=dg_ann,
-                                is_gold=(trs_el.get('is_gold') != '0'),
-                                breaks_gold=(trs_el.get('breaks_gold') != '0'),
-                                some_breaks_gold=(
-                                    trs_el.get('some_breaks_gold') != '0')).save()
+                        for turnnum, trs_el in session.iter_transcriptions(
+                                ann_el):
+                            i_gold = (trs_el.get('is_gold') != '0')
+                            b_gold = (trs_el.get('breaks_gold') != '0')
+                            sb_gold = (trs_el.get('some_breaks_gold') != '0')
+                            Transcription(text=trs_el.text,
+                                          turn=uturns[turnnum],
+                                          dialogue_annotation=dg_ann,
+                                          is_gold=i_gold,
+                                          breaks_gold=b_gold,
+                                          some_breaks_gold=sb_gold).save()
 
 
 # TODO Move elsewhere (dg_util? models?).
@@ -361,7 +372,6 @@ def transcribe(request):
                     session.add_annotation(dg_ann)
                     # Create Transcription objects and save them into DB.
                     trss = [None] * len(paired_nums)
-#                     for turn_num, uturn in enumerate(uturn_list, start=1):
                     for turn_num, paired_num in enumerate(paired_nums,
                                                           start=1):
                         turn_dict = turn_dicts[paired_num - 1]
@@ -610,7 +620,7 @@ def import_dialogues(request):
             except FileNotFoundError:
                 session_missing.append(src_fname)
                 continue
-            # Check that there are any user turns in the session.
+            # Check that there are enough user turns in the session.
             with XMLSession(fname=sess_fname, mode='r') as session:
                 try:
                     for uturn_idx in xrange(settings.MIN_TURNS):
@@ -650,7 +660,7 @@ def import_dialogues(request):
                     # Do update the order.
                     dg_data = Dialogue.objects.get(cid=cid)
                     _read_dialogue_turns(dg_data, tgt_fname, with_trss,
-                                         only_order)
+                                         only_order=True)
 
                 continue
             # Generate codes and other defining attributes of the dialogue.
@@ -667,7 +677,8 @@ def import_dialogues(request):
                 save_failed.append((dirname, cid))
                 continue
             # Read the dialogue turns.
-            _read_dialogue_turns(dg_data, tgt_fname, with_trss, only_order)
+            _read_dialogue_turns(dg_data, tgt_fname, with_trss,
+                                 only_order=False)
             # Compute the dialogue price.
             dg_util.update_price(dg_data)
             # Update the dialogue in the DB.
