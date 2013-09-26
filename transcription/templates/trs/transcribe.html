@@ -393,10 +393,12 @@ p.user { color: orange; }
 				<a href="#">Turn {{ turn.turn_number }}</a>
 			</h3>
 			<div>
+				{% if turn.prompt %}
 				<div class="speaker">
 					Computer:
 				</div>
 				<p class="system">{{ turn.prompt }}</p>
+				{% endif %}
 			{% if turn.has_rec %}
 				<div class="speaker">
 					Human:
@@ -404,11 +406,11 @@ p.user { color: orange; }
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
 						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
-						tabindex="{{ turn.dbl_turn_num|add:2 }}"></textarea>
+						tabindex="{{ turn.dbl_turn_num|add:1 }}"></textarea>
 				</div>
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
-						tabindex="{{ turn.dbl_turn_num|add:1 }}"
+						tabindex="{{ turn.dbl_turn_num }}"
 						onclick="play_now('btnnext{{ turn.turn_number }}',
 														  'turn_{{ turn.turn_number }}',
 															'{{ app_url }}/data/recs{{ turn.rec }}');">Play</button>
@@ -416,7 +418,7 @@ p.user { color: orange; }
 			{% else %}
 				<div>
 					<button type="button" class="btnnext{{ turn.turn_number }}" 
-						tabindex="{{ turn.dbl_turn_num|add:1 }}"
+						tabindex="{{ turn.dbl_turn_num }}"
 					 onclick="pseudo_play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}', '');" class="btnnext">Next</button>
 				</div>
 			{% endif %}

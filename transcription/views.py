@@ -50,7 +50,7 @@ def group_by(objects, attrs):
     """
     groups = dict()
     for obj in objects:
-        key = tuple(obj.__getattribute__(attr) for attr in attrs)
+        key = tuple(getattr(obj, attr) for attr in attrs)
         groups.setdefault(key, []).append(obj)
     return groups
 
@@ -237,6 +237,49 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                                     trs_el.get('some_breaks_gold') != '0')).save()
 
 
+# TODO Move elsewhere (dg_util? models?).
+def _create_turn_dicts(dialogue):
+    """An auxiliary function for gathering important data about dialogue turns
+    for use in the transcription form."""
+    uturns = UserTurn.objects.filter(dialogue=dialogue)
+    systurns = SystemTurn.objects.filter(dialogue=dialogue)
+    max_turn_num = max(max(uturn.turn_abs_number for uturn in uturns),
+                       max(sturn.turn_abs_number for sturn in systurns))
+    # Transform data from DialogueTurn objects into dicts.
+    turns = [dict() for _ in xrange(max_turn_num)]
+    for systurn in systurns:
+        # Throw away empty system utterances.
+        if systurn.text:
+            turns[systurn.turn_abs_number - 1].update(prompt=systurn.text,
+                                                      has_rec=False)
+    for uturn in uturns:
+        # Find the relevant part of the WAV file path.
+        seclast_slash = uturn.wav_fname.rfind(
+            os.sep, 0, uturn.wav_fname.rfind(os.sep))
+        wav_fname_rest = uturn.wav_fname[seclast_slash:]
+        # Update the last system turn unless it already contains data about the
+        # user's utterance.
+        prev_turn_idx = uturn.turn_abs_number - 1
+        # ...The "-1" is for the different base for indexing.
+        for turn_idx in xrange(prev_turn_idx, -1, -1):
+            prev_turn = turns[turn_idx]
+            if prev_turn:
+                if prev_turn['has_rec']:
+                    prev_turn_idx = uturn.turn_abs_number - 1
+                else:
+                    prev_turn_idx = turn_idx
+                break
+        turns[prev_turn_idx].update(rec=wav_fname_rest,
+                                    has_rec=True)
+    # Number the turns.
+    turns = filter(None, turns)
+    for turn_number, turn in enumerate(turns, start=1):
+        turn['turn_number'] = turn_number
+        turn['dbl_turn_num'] = 2 * turn_number
+    # Return.
+    return turns
+
+
 @catch_locked_database
 def transcribe(request):
 
@@ -259,10 +302,15 @@ def transcribe(request):
         # Some dialogues have no records of the user whatsoever. If this
         # dialogue had the user saying anything, index the user turns.
         if uturns:
-            uturn_nums = [uturn.turn_number for uturn in uturns]
-            uturn_ind = [None] * max(uturn_nums)  # (turn_num - 1) -> uturn
+            uturns_list = [None] * max(uturn.turn_number
+                                       for uturn in uturns)
             for uturn in uturns:
-                uturn_ind[uturn.turn_number - 1] = uturn
+                uturns_list[uturn.turn_number - 1] = uturn
+            turn_dicts = _create_turn_dicts(dg_data)
+            uturn_ind = [turn['has_rec'] for turn in turn_dicts]
+            paired_nums = [paired_num for paired_num, has_rec
+                           in enumerate(uturn_ind, start=1)
+                           if has_rec]
         else:
             uturn_ind = None
         form = TranscriptionForm(request.POST, cid=cid, uturn_ind=uturn_ind)
@@ -312,15 +360,18 @@ def transcribe(request):
                     # Insert dialogue annotations into the XML.
                     session.add_annotation(dg_ann)
                     # Create Transcription objects and save them into DB.
-                    trss = dict()
-                    for turn_num, uturn in enumerate(uturn_ind, start=1):
-                        if not uturn:
+                    trss = [None] * len(paired_nums)
+#                     for turn_num, uturn in enumerate(uturn_list, start=1):
+                    for turn_num, paired_num in enumerate(paired_nums,
+                                                          start=1):
+                        turn_dict = turn_dicts[paired_num - 1]
+                        if not turn_dict['has_rec']:
                             continue
                         trs = Transcription()
                         trss[turn_num - 1] = trs
                         trs.text = form.cleaned_data[
-                            'trs_{0}'.format(turn_num)]
-                        trs.turn = uturn
+                            'trs_{0}'.format(paired_num)]
+                        trs.turn = uturns_list[turn_num - 1]
                         trs.dialogue_annotation = dg_ann
 
                     # Check the form against any gold items.  If all are OK,
@@ -330,24 +381,25 @@ def transcribe(request):
                         is_gold=True)
                     gold_trss = group_by(gold_trss, ('turn', ))
                     mismatch = False
-                    for turn_gold_trss in gold_trss.itervalues():
+                    for turn, turn_gold_trss in gold_trss.iteritems():
                         submismatch = True
+                        trs = trss[turn.turn_number - 1]
                         for gold_trs in turn_gold_trss:
-                            if trss_match(trss[gold_trs.turn.turn_number - 1],
-                                          gold_trs,
+                            if trss_match(trs, gold_trs,
                                           max_char_er=settings.MAX_CHAR_ER):
                                 submismatch = False
                                 break
                         if submismatch:
                             mismatch = True
-                            (trss[gold_trs.turn.turn_number - 1]
-                                .breaks_gold) = True
+                            trs.breaks_gold = True
 
                     # Update transcriptions in the light of their comparison to
                     # gold transcriptions, and save them both into the
                     # database, and to the XML.
-                    for turn_num, uturn in enumerate(uturn_ind, start=1):
-                        if not uturn:
+                    for turn_num, paired_num in enumerate(paired_nums,
+                                                          start=1):
+                        turn_dict = turn_dicts[paired_num - 1]
+                        if not turn_dict['has_rec']:
                             continue
                         trs = trss[turn_num - 1]
                         trs.some_breaks_gold = mismatch
@@ -375,7 +427,7 @@ def transcribe(request):
             DialogueAnnotation.objects.filter(
                 user=request.user, dialogue=dg_data).update(finished=False)
 
-            # Populate context with data from the previous dialogue (form).
+            # Populate the context with data from the previous dialogue (form).
             context = settings.TRANSCRIBE_EXTRA_CONTEXT
             context['app_url'] = settings.APP_URL
             for key, value in request.POST.iteritems():
@@ -401,8 +453,8 @@ def transcribe(request):
         # Anonymous user cannot be helped.
         if request.user.is_anonymous():
             return HttpResponseRedirect("finished")
-        # For a user who is logged in, find a suitable dialogue to transcribe.
 
+        # For a user who is logged in, find a suitable dialogue to transcribe.
         # Try using the last started annotation of this user.
         open_annions = DialogueAnnotation.objects.filter(user=request.user,
                                                          finished=False)
@@ -410,10 +462,10 @@ def transcribe(request):
             assert len(open_annions) == 1
             dg_data = open_annions[0].dialogue
             cid = dg_data.cid
-        else:
-            # If there is no open annotation for this user, find a dialogue
-            # that is free to annotate.
 
+        # If there is no open annotation for this user, find a dialogue that is
+        # free to annotate.
+        else:
             # Start by deleting old open transcriptions.
             sessions_earliest_start = datetime.now() - settings.SESSION_EXPIRED
             (DialogueAnnotation.objects.filter(
@@ -426,13 +478,11 @@ def transcribe(request):
                 cids_done = set()
             else:
                 _max_annions = settings.MAX_ANNOTATIONS_PER_INPUT  # shorthand
-                # XXX Not sure whether the following line does what it should
-                # do.  However, for MAX_ANNOTATIONS_PER_INPUT=1, it definitely
-                # works.
                 dg_ann_counts = DialogueAnnotation.objects.annotate(
                     Count('dialogue')).filter(
                         dialogue__count__gte=_max_annions)
                 cids_done = set(ann.dialogue.cid for ann in dg_ann_counts)
+
             # If being annotated by this user does not imply the dialogue was
             # already included in the above query results,
             if (settings.MAX_ANNOTATIONS_PER_INPUT is None
@@ -444,6 +494,7 @@ def transcribe(request):
                                  for trs in trss_done)
             cids_todo = (set(dg.cid for dg in Dialogue.objects.all())
                          - cids_done)
+
             # Serve him/her the next free dialogue if there is one, else tell
             # him he is finished.
             try:
@@ -451,6 +502,7 @@ def transcribe(request):
             except KeyError:
                 return HttpResponseRedirect("finished")
             dg_data = Dialogue.objects.get(cid=cid)
+
     # If `cid' was specified as a GET parameter,
     if dg_data is None:
         # Find the corresponding Dialogue object in the DB.
@@ -472,29 +524,8 @@ def transcribe(request):
                            finished=False).save()
 
     # Prepare the data about turns into a form suitable for the template.
-    uturns = UserTurn.objects.filter(dialogue=dg_data)
-    systurns = SystemTurn.objects.filter(dialogue=dg_data)
-    max_turn_num = max(max(uturn.turn_number for uturn in uturns),
-                       max(sturn.turn_number for sturn in systurns))
-    turns = [dict() for _ in xrange(max_turn_num)]
-    for uturn in uturns:
-        seclast_slash = uturn.wav_fname.rfind(
-            os.sep, 0, uturn.wav_fname.rfind(os.sep))
-        wav_fname_rest = uturn.wav_fname[seclast_slash:]
-        turns[uturn.turn_number - 1].update(turn_number=uturn.turn_number,
-                                            rec=wav_fname_rest,
-                                            has_rec=True)
-    for systurn in systurns:
-        turns[systurn.turn_number - 1].update(turn_number=systurn.turn_number,
-                                              prompt=systurn.text)
-    dbl_turn_num = 0
-    for turn in turns:
-        turn['dbl_turn_num'] = dbl_turn_num
-        if not 'has_rec' in turn:
-            turn['has_rec'] = False
-        dbl_turn_num += 2
-
-    uturn_ind = map(lambda turn: turn['has_rec'], turns)
+    turns = _create_turn_dicts(dg_data)
+    uturn_ind = [turn['has_rec'] for turn in turns]
 
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['app_url'] = settings.APP_URL
