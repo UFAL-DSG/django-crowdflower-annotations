@@ -425,32 +425,28 @@ class XMLSession(object):
         # Heuristic: take the first one of the potential dialogue annotation
         # XML elements.
         unassigned_el = None
-        for ann_el in session.iter_annotations(user=''):
-            if ann_el.get('worker_id', None) is None:
+        for ann_el in self.iter_annotations(user=''):
+            cur_worker_id = ann_el.get('worker_id', None)
+            if cur_worker_id is None and unassigned_el is None:
                 unassigned_el = ann_el
-                break
+            elif cur_worker_id == worker_id:
+                # Cancel the operation if it seems we would record the worker
+                # for the second time.
+                return False
 
         # Check that there is an element for the judgment we are about to
         # assign.
         if unassigned_el is None:
             raise ValueError('Trying to record a judgment for which there is '
-                             'no XML element in place.')
-
-        # Check whether we don't have an existing annotation from this worker
-        # already.
-        for ann_el in session.iter_annotations(user=''):
-            if ann_el.get('worker_id', None) == worker_id:
-                # Cancel the operation if it seems we would record the worker
-                # for the second time.
-                return False
+                             'no unassigned XML element in place.')
 
         # Set all the desired attributes.
         if 'worker_id' not in settings.LOGGED_JOB_DATA:
-            dg_ann_el.set('worker_id', worker_id)
+            ann_el.set('worker_id', worker_id)
         for json_key, att_name in settings.LOGGED_JOB_DATA:
             att_val = judgment.get(json_key, None)
             if att_val is not None:
-                dg_ann_el.set(att_name, unicode(att_val))
+                ann_el.set(att_name, unicode(att_val))
         return True
 
     def update_worker_stats(self, gold_stats):

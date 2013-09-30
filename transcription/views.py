@@ -26,6 +26,7 @@ from django.template import RequestContext
 from django.utils.datastructures import SortedDict
 from django.views.decorators.csrf import csrf_exempt
 
+import crowdflower
 from crowdflower import (collect_judgments, create_job, delete_job,
     default_job_cml_path, fire_gold_hooks, price_class_handler,
     process_worklog, JsonDialogueUpload, record_worker)
@@ -137,115 +138,115 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
 
     """
 
+    if only_order:
+        sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
+        user_turns = UserTurn.objects.filter(dialogue=dg_data)
+        def _get_uturn(uturn_nt):
+            return user_turns.get(turn_number=uturn_nt.turn_number)
+        def _get_systurn(systurn_nt):
+            return sys_turns.get(turn_number=systurn_nt.turn_number)
+    else:
+        def _get_uturn(uturn_nt):
+            return UserTurn(dialogue=dg_data,
+                            turn_number=turnnum,
+                            turn_abs_number=uturn_nt.turn_abs_number,
+                            wav_fname=wav_path)
+        def _get_systurn(systurn_nt):
+            return SystemTurn(dialogue=dg_data,
+                              turn_number=systurn_nt.turn_number,
+                              turn_abs_number=systurn_nt.turn_abs_number,
+                              text=systurn_nt.text)
+
     with XMLSession(dg_data.cid) as session:
 
-        # Handle the functionality of only extending turns' data for their
-        # absolute order.
+        # Save all the turns as database objects.
+        uturns = list()
+        for turn_nt in session.iter_turns():
+            # Take special care to not overwrite user turns with other user
+            # turns with a duplicate turn number (known fault of some XML
+            # logs).
+            if isinstance(turn_nt, UserTurnAbs_nt):
+                if turn_nt.wav_fname is not None:
+                    turnnum = turn_nt.turn_number
+                    # Do not override turns saved earlier.
+                    if (turnnum < len(uturns) and
+                            uturns[turnnum] is not None):
+                        continue
+
+                    # Create the user turn object.
+                    wav_path = os.path.join(dirname, turn_nt.wav_fname)
+                    uturn = _get_uturn(turn_nt)
+
+                    # Prepare the `uturns' list for storing the new user
+                    # turn.
+                    while turnnum > len(uturns):
+                        uturns.append(None)
+
+                    # Save the user turn object.
+                    uturns.append(uturn)
+                    assert (uturns[turnnum] == uturn)
+                    uturn.save()
+            else:
+                _get_systurn(turn_nt).save()
+
         if only_order:
-            sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
-            user_turns = UserTurn.objects.filter(dialogue=dg_data)
-            for turn_nt in session.iter_turns():
-                if isinstance(turn_nt, UserTurnAbs_nt):
-                    turn = user_turns.get(turn_number=turn_nt.turn_number)
+            return
+
+        # If transcriptions should be read and saved as well,
+        if with_trss:
+            dummy_user = None
+
+            # Iterate over all dialogue annotations.
+            for ann_el in session.iter_annotations():
+                # Retrieve all properties of the dialogue annotation
+                # object.
+                notes = ('' if ann_el.text is None
+                            else ann_el.text.strip())
+                program_version = ann_el.get('program_version')
+                ann_users = User.objects.filter(
+                    username=ann_el.get('user'))
+                if ann_users.exists():
+                    ann_user = ann_users[0]
                 else:
-                    turn = sys_turns.get(turn_number=turn_nt.turn_number)
-                turn.turn_abs_number = turn_nt.turn_abs_number
-                turn.save()
+                    ann_user = dummy_user
 
-        else:
+                ann_props = {'dialogue': dg_data,
+                                'notes': notes,
+                                'user': ann_user,
+                                'program_version': program_version}
 
-            # Save all the turns as database objects.
-            uturns = list()
-            for turn_nt in session.iter_turns():
-                # Take special care to not overwrite user turns with other user
-                # turns with a duplicate turn number (known fault of some XML
-                # logs).
-                if isinstance(turn_nt, UserTurnAbs_nt):
-                    if turn_nt.wav_fname is not None:
-                        turnnum = turn_nt.turn_number
-                        # Do not override turns saved earlier.
-                        if (turnnum < len(uturns) and
-                                uturns[turnnum] is not None):
-                            continue
+                if 'accent' in settings.EXTRA_QUESTIONS:
+                    accent_str = ann_el.get('accent')
+                    accent = ("" if accent_str == 'native' else accent_str)
+                    ann_props['accent'] = accent
+                if 'offensive' in settings.EXTRA_QUESTIONS:
+                    offensive = (ann_el.get("offensive") == "True")
+                    ann_props['offensive'] = offensive
+                if 'quality' in settings.EXTRA_QUESTIONS:
+                    quality = (DialogueAnnotation.QUALITY_CLEAR
+                            if ann_el.get('quality') == 'clear'
+                            else DialogueAnnotation.QUALITY_NOISY)
+                    ann_props['quality'] = quality
 
-                        # Create the user turn object.
-                        wav_path = os.path.join(dirname, turn_nt.wav_fname)
-                        uturn = UserTurn(
-                            dialogue=dg_data,
-                            turn_number=turnnum,
-                            turn_abs_number=turn_nt.turn_abs_number,
-                            wav_fname=wav_path)
+                # Check whether this object has been imported already.
+                if not DialogueAnnotation.objects.filter(**ann_props):
+                    # Save the dialogue annotation.
+                    dg_ann = DialogueAnnotation(**ann_props)
+                    dg_ann.save()
 
-                        # Prepare the `uturns' list for storing the new user
-                        # turn.
-                        while turnnum > len(uturns):
-                            uturns.append(None)
-
-                        # Save the user turn object.
-                        uturns.append(uturn)
-                        assert (uturns[turnnum] == uturn)
-                        uturn.save()
-                else:
-                    SystemTurn(dialogue=dg_data,
-                               turn_number=turn_nt.turn_number,
-                               turn_abs_number=turn_nt.turn_abs_number,
-                               text=turn_nt.text).save()
-
-            # If transcriptions should be read and saved as well,
-            if with_trss:
-                dummy_user = None
-
-                # Iterate over all dialogue annotations.
-                for ann_el in session.iter_annotations():
-                    # Retrieve all properties of the dialogue annotation
-                    # object.
-                    notes = ('' if ann_el.text is None
-                             else ann_el.text.strip())
-                    program_version = ann_el.get('program_version')
-                    ann_users = User.objects.filter(
-                        username=ann_el.get('user'))
-                    if ann_users.exists():
-                        ann_user = ann_users[0]
-                    else:
-                        ann_user = dummy_user
-
-                    ann_props = {'dialogue': dg_data,
-                                 'notes': notes,
-                                 'user': ann_user,
-                                 'program_version': program_version}
-
-                    if 'accent' in settings.EXTRA_QUESTIONS:
-                        accent_str = ann_el.get('accent')
-                        accent = ("" if accent_str == 'native' else accent_str)
-                        ann_props['accent'] = accent
-                    if 'offensive' in settings.EXTRA_QUESTIONS:
-                        offensive = (ann_el.get("offensive") == "True")
-                        ann_props['offensive'] = offensive
-                    if 'quality' in settings.EXTRA_QUESTIONS:
-                        quality = (DialogueAnnotation.QUALITY_CLEAR
-                                if ann_el.get('quality') == 'clear'
-                                else DialogueAnnotation.QUALITY_NOISY)
-                        ann_props['quality'] = quality
-
-                    # Check whether this object has been imported already.
-                    if not DialogueAnnotation.objects.filter(**ann_props):
-                        # Save the dialogue annotation.
-                        dg_ann = DialogueAnnotation(**ann_props)
-                        dg_ann.save()
-
-                        # Find all transcriptions that belong to this dialogue
-                        # annotation and save them as database objects.
-                        for turnnum, trs_el in session.iter_transcriptions(
-                                ann_el):
-                            i_gold = (trs_el.get('is_gold') != '0')
-                            b_gold = (trs_el.get('breaks_gold') != '0')
-                            sb_gold = (trs_el.get('some_breaks_gold') != '0')
-                            Transcription(text=trs_el.text,
-                                          turn=uturns[turnnum],
-                                          dialogue_annotation=dg_ann,
-                                          is_gold=i_gold,
-                                          breaks_gold=b_gold,
-                                          some_breaks_gold=sb_gold).save()
+                    # Find all transcriptions that belong to this dialogue
+                    # annotation and save them as database objects.
+                    for turnnum, trs_el in session.iter_transcriptions(
+                            ann_el):
+                        i_gold = (trs_el.get('is_gold') != '0')
+                        b_gold = (trs_el.get('breaks_gold') != '0')
+                        sb_gold = (trs_el.get('some_breaks_gold') != '0')
+                        Transcription(text=trs_el.text,
+                                      turn=uturns[turnnum],
+                                      dialogue_annotation=dg_ann,
+                                      is_gold=i_gold,
+                                      breaks_gold=b_gold,
+                                      some_breaks_gold=sb_gold).save()
 
 
 # TODO Move elsewhere (dg_util? models?).
@@ -764,15 +765,40 @@ if settings.USE_CF:
     def reuse_worklogs(request):
         if request.method == 'POST':
             form = WorkLogsForm(request.POST)
+            # If the form is valid,
             if form.is_valid():
+                # Re-apply the logs.
+                logs_by_success = [list() for _ in xrange(4)]
                 with open(form.cleaned_data['logs_list_path']) as list_file:
                     for path_line in list_file:
-                        process_worklog(path_line.strip())
+                        log_path = path_line.strip()
+                        success = process_worklog(log_path)
+                        logs_by_success[success].append(log_path)
+
+                # Compute some auxiliary variables for the template.
+                count = sum(map(len, logs_by_success))
+                n_failed = count - len(logs_by_success[crowdflower.CF_LOG_OK])
+                logs_existed = logs_by_success[crowdflower.CF_LOG_EXISTED]
+                logs_no_free_ann = logs_by_success[
+                    crowdflower.CF_LOG_NO_FREE_ANN]
+                logs_not_applicable = logs_by_success[
+                    crowdflower.CF_LOG_NOT_APPLICABLE]
+                context = {'count': count,
+                           'n_failed': n_failed,
+                           'logs_existed': logs_existed,
+                           'logs_no_free_ann': logs_no_free_ann,
+                           'logs_not_applicable': logs_not_applicable,
+                           }
+                response = render(request, 'trs/worklogs-reused.html', context,
+                                  context_instance=RequestContext(request))
+
+            # If the form was not valid,
             else:
+                # Re-render the form.
                 context = {'form': form}
                 response = render(request, 'trs/reuse-worklogs.html', context,
                                   context_instance=RequestContext(request))
-                return response
+            return response
 
         # If a new form is to be served,
         else:
@@ -814,6 +840,7 @@ if settings.USE_CF:
         return render(request, "trs/reports-collected.html", context)
 
 
+    # TODO Move forms to their own module.
     class ListField(forms.Field):
         def to_python(self, value):
             "Normalize data to a list of strings."
@@ -823,12 +850,14 @@ if settings.USE_CF:
             return sorted(set(map(unicode.strip, value.split(','))))
 
 
+    # TODO Move forms to their own module.
     class CustomFieldsForm(forms.Form):
         def __init__(self, fields, data=None):
             super(CustomFieldsForm, self).__init__(data)
             self.fields.update(fields)
 
 
+    # TODO Move forms to their own module.
     class CreateJobForm(forms.Form):
         """A form for creating Crowdflower jobs."""
 
@@ -947,6 +976,7 @@ if settings.USE_CF:
                        'Use two-letter country codes.'))
 
 
+    # TODO Move forms to their own module.
     class DeleteJobForm(forms.Form):
         """A form for deleting Crowdflower jobs."""
 
@@ -1170,7 +1200,7 @@ if settings.USE_CF:
     @csrf_exempt
     def log_work(request):
         try:
-            signal = request.POST.get('signal', None)
+            signal = request.POST.get('signal', [None])[0]
             # Try: be robust
             # a.k.a. Pokemon exception handling: catch 'em all
             try:

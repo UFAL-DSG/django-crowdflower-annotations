@@ -327,6 +327,8 @@ def _find_in_cf_json(cf_json, key, preferred_path=None):
                 cur_json = _cf_json_getitem(cur_json, cur_key)
             except KeyError:
                 break
+            except TypeError:
+                break
         else:
             try:
                 return (True, [_cf_json_getitem(cur_json, key)])
@@ -701,14 +703,48 @@ def record_worker(post_dict):
         session.record_judgment(judgment_data)
 
 
+# Return codes for `process_worklog'.
+CF_LOG_OK = 0
+CF_LOG_EXISTED = 1
+CF_LOG_NO_FREE_ANN = 2
+CF_LOG_NOT_APPLICABLE = 3
+
+
 def process_worklog(log_fname):
+    """
+    Reads a work log (a CF webhook serialized in a file) and tries to record
+    the worker ID to the corresponding XML session log.
+
+    Returns:
+        CF_LOG_OK             ... if the worker ID was recorded
+        CF_LOG_EXISTED        ... if the worker ID had been recorded for an
+                                  annotation already before
+        CF_LOG_NO_FREE_ANN    ... if no new annotation was found
+        CF_LOG_NOT_APPLICABLE ... if this work log does not speak about a unit
+                                  being completed
+
+    """
+
     # Read contents of the log file.
-    with open(log_fname) is log_file:
+    with open(log_fname) as log_file:
         contents = log_file.read()
-    # Strip the leading "<QueryDict: " and trailing ">", deserialize the dict.
-    post_dict = eval(contents[contents.index('{'):-1])
+    # Strip the leading "<QueryDict: " and trailing ">".
+    sered_dict = contents[contents.index('{'):-1]
+    # Deserialize the dict.
+    try:
+        post_dict = eval(sered_dict)
+        post_dict['payload'] = json.dumps(post_dict['payload'])
+    except:
+        return CF_LOG_NOT_APPLICABLE
+    # Check that this log describes unit completion.
+    if post_dict.get('signal', [None])[0] != 'unit_complete':
+        return CF_LOG_NOT_APPLICABLE
     # Record worker based on this reconstructed POST dict.
-    return record_worker(post_dict)
+    try:
+        recorded = record_worker(post_dict)
+    except ValueError:
+        return CF_LOG_NO_FREE_ANN
+    return CF_LOG_OK if recorded else CF_LOG_EXISTED
 
 
 def create_dialogue_json(dg):

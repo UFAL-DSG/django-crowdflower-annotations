@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Dialogue import report</h1>
+
+<p>
+A total of <strong>{{ count }}</strong> work log{{ count|pluralize }} have been processed.
+</p>
+
+{% if n_failed == 0 %}
+<p>
+There were no errors.
+</p>
+{% else %}
+<h2>Errors</h2>
+<p>
+There were problems with recording worker IDs for <strong>{{ n_failed }}</strong> work log{{ n_failed|pluralize }}.
+Below is a breakdown.
+</p>
+
+{% if logs_existed %}
+<h3>This worker ID has already been recorded with an existing annotation</h3>
+<table>
+	<tr><th>Log filename</th></tr>
+	{% for fname in logs_existed %}
+	<tr><td><tt>{{ fname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% if logs_no_free_ann %}
+<h3>No annotation element was without the <tt>worker_id</tt> attribute</h3>
+<table>
+	<tr><th>Log filename</th></tr>
+	{% for fname in logs_no_free_ann %}
+	<tr><td><tt>{{ fname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% if logs_not_applicable %}
+<h3>Work log was not of the &ldquo;unit-complete&rdquo; type</h3>
+<table>
+	<tr><th>Log filename</th></tr>
+	{% for fname in logs_not_applicable %}
+	<tr><td><tt>{{ fname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% endif %}
+
+{% endblock %}
