@@ -1,7 +1,5 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
-#
-# TODO: User.objects.get_or_create(dummy_user) where appropriate.
 
 from __future__ import unicode_literals
 
@@ -22,7 +20,7 @@ from django.contrib.auth.models import User
 from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
-from django.template import RequestContext
+from django.template import loader, RequestContext
 from django.utils.datastructures import SortedDict
 from django.views.decorators.csrf import csrf_exempt
 
@@ -34,12 +32,9 @@ import dg_util
 from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt,
     SystemTurnAbs_nt)
 import settings
-# XXX: Beware, this imports the settings from within the `transcription'
-# directory. That means that PROJECT_DIR will be APP_ROOT + "/transcription",
-# not just APP_ROOT.
 from tr_normalisation import trss_match
-from transcription.models import Transcription, DialogueAnnotation, \
-    Dialogue, UserTurn, SystemTurn
+from transcription.models import (Transcription, DialogueAnnotation,
+    Dialogue, UserTurn, SystemTurn)
 from util import get_log_path, catch_locked_database
 
 
@@ -142,9 +137,13 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
         sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
         user_turns = UserTurn.objects.filter(dialogue=dg_data)
         def _get_uturn(uturn_nt):
-            return user_turns.get(turn_number=uturn_nt.turn_number)
+            uturn = user_turns.get(turn_number=uturn_nt.turn_number)
+            uturn.turn_abs_number = uturn_nt.turn_abs_number
+            return uturn
         def _get_systurn(systurn_nt):
-            return sys_turns.get(turn_number=systurn_nt.turn_number)
+            systurn = user_turns.get(turn_number=systurn_nt.turn_number)
+            systurn.turn_abs_number = systurn_nt.turn_abs_number
+            return systurn
     else:
         def _get_uturn(uturn_nt):
             return UserTurn(dialogue=dg_data,
@@ -296,6 +295,7 @@ def _create_turn_dicts(dialogue):
 def transcribe(request):
 
     success = None  # whether annotation data have been successfully stored
+    cookie_value = None  # value for the transcriber-tracking cookie
 
     # If the form has been submitted,
     if request.method == "POST":
@@ -369,8 +369,20 @@ def transcribe(request):
                 if not uturns:
                     mismatch = False
                 else:
+                    # Get or set the transcriber ID cookie.
+                    cookie_name = settings.TRANSCRIBER_ID_COOKIE
+                    if cookie_name not in request.COOKIES:
+                        if dg_ann.user is not dummy_user:
+                            cookie_value = 'user:{name}'.format(
+                                name=dg_ann.user.username)
+                        else:
+                            n_anns = len(session.iter_annotations())
+                            cookie_value = '{cid}_{n_anns}'.format(**locals())
+                    else:
+                        cookie_value = request.COOKIES[cookie_name]
                     # Insert dialogue annotations into the XML.
-                    session.add_annotation(dg_ann)
+                    session.add_annotation(
+                        dg_ann, **{settings.TRANSCRIBER_ID_ATTR: cookie_value})
                     # Create Transcription objects and save them into DB.
                     trss = [None] * len(paired_nums)
                     for turn_num, paired_num in enumerate(paired_nums,
@@ -425,10 +437,14 @@ def transcribe(request):
                 # Render a page showing the dialogue code.
                 context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
                                                  dg_codes[1])
-                return render(request,
-                              "trs/code.html",
-                              context,
-                              context_instance=RequestContext(request))
+                response = render(request,
+                                  "trs/code.html",
+                                  context,
+                                  context_instance=RequestContext(request))
+                response.set_cookie(cookie_name, cookie_value,
+                                    max_age=settings.COOKIES_MAX_AGE,
+                                    path=settings.APP_URL)
+                return response
             # Else, if working locally, continue to serving a blank form.
             else:
                 success = True
@@ -552,6 +568,10 @@ def transcribe(request):
     if settings.USE_CF:
         # NOTE Perhaps not needed after all...
         response['X-Frame-Options'] = 'ALLOWALL'
+    if cookie_value is not None:
+        response.set_cookie(cookie_name, cookie_value,
+                            max_age=settings.COOKIES_MAX_AGE,
+                            path=settings.APP_URL)
 
     return response
 
@@ -582,6 +602,7 @@ def import_dialogues(request):
     save_failed = []
     save_price_failed = []
     dg_existed = []
+    dg_updated = []
     count = 0   # number of successfully imported dialogues
 
     # Read variables from the form.
@@ -654,14 +675,15 @@ def import_dialogues(request):
             # Create an object for the dialogue and save it in the DB, unless
             # it has been there already.
             if same_cid_dgs:
-                dg_existed.append(dirname)
-
                 # XXX If only updating the absolute turn numbers,
                 if only_order:
                     # Do update the order.
                     dg_data = Dialogue.objects.get(cid=cid)
                     _read_dialogue_turns(dg_data, tgt_fname, with_trss,
                                          only_order=True)
+                    dg_updated.append(dirname)
+                else:
+                    dg_existed.append(dirname)
 
                 continue
             # Generate codes and other defining attributes of the dialogue.
@@ -715,6 +737,7 @@ def import_dialogues(request):
     context['save_failed'] = save_failed
     context['save_price_failed'] = save_price_failed
     context['dg_existed'] = dg_existed
+    context['dg_updated'] = dg_updated
     if upload_to_cf:
         context['cf_upload'] = True
         context['cf_error'] = cf_error
@@ -724,7 +747,8 @@ def import_dialogues(request):
     context['count'] = count
     context['n_failed'] = (len(session_missing) + len(session_empty)
                            + len(copy_failed) + len(save_failed)
-                           + len(save_price_failed) + len(dg_existed))
+                           + len(save_price_failed) + len(dg_existed)
+                           + len(dg_updated))
     return render(request, "trs/imported.html", context)
 
 
