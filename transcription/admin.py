@@ -23,7 +23,7 @@ from transcription.db_fields import SizedTextField, ROCharField
 from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
 from transcription.models import (Dialogue, DialogueAnnotation, Transcription,
-                                  UserTurn)
+                                  UserTurn, SystemTurn)
 from transcription.tr_normalisation import trss_match
 from transcription.widgets import ROInput
 
@@ -55,6 +55,14 @@ class UTurnInline(admin.TabularInline):
     }
 
 
+class SysTurnInline(admin.TabularInline):
+    model = SystemTurn
+    extra = 0
+    formfield_overrides = {
+        ROCharField: {'widget': ROInput}
+    }
+
+
 class DialogueAdmin(admin.ModelAdmin):
     list_display = ['dirname', 'cid', 'transcription_price', 'code',
                     'code_corr', 'code_incorr']
@@ -63,7 +71,7 @@ class DialogueAdmin(admin.ModelAdmin):
         models.FilePathField: {'widget': ROInput},
         models.ForeignKey: {'form_class': LinkField}
     }
-    inlines = [DgAnnInline, UTurnInline]
+    inlines = [DgAnnInline, UTurnInline, SysTurnInline]
     search_fields = ['cid', 'code', 'dirname']
 
     # Filters #

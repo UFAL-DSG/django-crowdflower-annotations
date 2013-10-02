@@ -1,5 +1,5 @@
 from django import forms
-from transcription.widgets import LinkWidget, PlayWidget
+from transcription.widgets import DatetimeWidget, LinkWidget, PlayWidget
 from django.forms.models import ModelChoiceField
 
 
@@ -50,3 +50,11 @@ class PlayField(forms.fields.Field):
         attrs['db_field'] = self._db_field
         attrs['add_link'] = True
         return attrs
+
+
+class DatetimeField(forms.fields.DateTimeField):
+
+    def __init__(self, *args, **kwargs):
+        super_kwargs = filter_field_kwargs(kwargs)
+        super_kwargs['widget'] = DatetimeWidget
+        super(DatetimeField, self).__init__(*args, **super_kwargs)

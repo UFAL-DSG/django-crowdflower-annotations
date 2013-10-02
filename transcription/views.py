@@ -29,6 +29,7 @@ from crowdflower import (collect_judgments, create_job, delete_job,
     default_job_cml_path, fire_gold_hooks, price_class_handler,
     process_worklog, JsonDialogueUpload, record_worker)
 import dg_util
+from form_fields import DatetimeField
 from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt,
     SystemTurnAbs_nt)
 import settings
@@ -38,6 +39,12 @@ from transcription.models import (Transcription, DialogueAnnotation,
 from util import get_log_path, catch_locked_database
 
 
+# Some auxiliary classes.
+dgstats_nt = namedtuple('DialogueStats', ['list_filename', 'n_annotated_in',
+                                          'n_annotated_out', 'n_clean',
+                                          'n_all'])
+
+# Auxiliary functions.
 def group_by(objects, attrs):
     """Groups `objects' by the values of their attributes `attrs'.
 
@@ -141,7 +148,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
             uturn.turn_abs_number = uturn_nt.turn_abs_number
             return uturn
         def _get_systurn(systurn_nt):
-            systurn = user_turns.get(turn_number=systurn_nt.turn_number)
+            systurn = sys_turns.get(turn_number=systurn_nt.turn_number)
             systurn.turn_abs_number = systurn_nt.turn_abs_number
             return systurn
     else:
@@ -376,7 +383,7 @@ def transcribe(request):
                             cookie_value = 'user:{name}'.format(
                                 name=dg_ann.user.username)
                         else:
-                            n_anns = len(session.iter_annotations())
+                            n_anns = sum(1 for _ in session.iter_annotations())
                             cookie_value = '{cid}_{n_anns}'.format(**locals())
                     else:
                         cookie_value = request.COOKIES[cookie_name]
@@ -750,6 +757,67 @@ def import_dialogues(request):
                            + len(save_price_failed) + len(dg_existed)
                            + len(dg_updated))
     return render(request, "trs/imported.html", context)
+
+
+# TODO Move elsewhere (transcription.forms).
+class DateRangeForm(forms.Form):
+    dt_from = DatetimeField(label='from after (excl.)', required=False)
+    dt_to = DatetimeField(label='until (incl.)', required=False)
+
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def dialogue_stats(request):
+    """Shows how many dialogues have been annotated yet from each filelist."""
+
+    dg_statss = list()  # This will be returned.
+    context = dict()    # Context for rendering the template.
+
+    dt_from = dt_to = None
+
+    # If the user specified any dates, try read them.
+    if request.method == 'POST':
+        form = DateRangeForm(request.POST)
+        if form.is_valid():
+            dt_from = form.cleaned_data['dt_from']
+            dt_to = form.cleaned_data['dt_to']
+            # DEBUG
+            was_valid = True
+    else:
+        form = DateRangeForm()
+    context['form'] = form
+
+    # Prepare the selection criteria for queries.
+    lists = Dialogue.objects.values_list('list_filename', flat=True).distinct()
+    anned_kwargs = dict()
+    if dt_from is not None:
+        anned_kwargs['dialogueannotation__date_saved__gt'] = dt_from
+    if dt_to is not None:
+        anned_kwargs['dialogueannotation__date_saved__lte'] = dt_to
+    if not anned_kwargs:
+        anned_kwargs['dialogueannotation__isnull'] = False
+
+    # Compute the transcription stats.
+    for list_fname in lists:
+        list_dgs = Dialogue.objects.filter(list_filename=list_fname)
+        anned_dgs = list_dgs.filter(
+            dialogueannotation__isnull=False).distinct()
+        n_anned = len(anned_dgs)
+        n_anned_in_range = len(anned_dgs.filter(**anned_kwargs).distinct())
+        n_all = len(list_dgs)
+        dg_statss.append(dgstats_nt(list_fname,
+                                    n_anned_in_range,
+                                    n_anned - n_anned_in_range,
+                                    n_all - n_anned,
+                                    n_all))
+
+    # Sum up the stats for all lists.
+    sums = (sum(dg_stats[idx] for dg_stats in dg_statss)
+            for idx in xrange(1, 5))
+    dg_statss.append(dgstats_nt('ALL', *sums))
+
+    context['dg_statss'] = dg_statss
+    return render(request, 'trs/dialogue-stats.html', context)
 
 
 def temp_test(request):

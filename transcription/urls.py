@@ -22,6 +22,10 @@ pattern_args = ['',
                 url('^import$',
                     'transcription.views.import_dialogues',
                     name="import_dialogues"),
+
+                url('^stats$',
+                    'transcription.views.dialogue_stats',
+                    name="dialogue_stats"),
                ]
 
 if settings.DEBUG:

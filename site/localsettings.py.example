@@ -40,6 +40,11 @@ EMAIL_USE_TLS = True
 # accessible.
 DOMAIN_URL = "http://example.com"
 
+# COOKIES_MAX_AGE: This determines how long we will be able to recognise
+# a transcriber is the same transcriber we saw last time. Specify as a number
+# of seconds.
+COOKIES_MAX_AGE = 366 * 24 * 3600
+
 APP_URL = "/apps/cir_transcription"
 
 # PYLIBS_DIR: Some auxiliary Python modules are made available under this path

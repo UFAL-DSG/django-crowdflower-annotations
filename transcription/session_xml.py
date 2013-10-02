@@ -296,7 +296,15 @@ class XMLSession(object):
             for trs in uturn_el.iterfind(trs_subpath):
                 yield turn_number, trs
 
-    def add_annotation(self, dg_ann):
+    def add_annotation(self, dg_ann, **more_attrs):
+        """Adds an annotation element to the XML log.
+
+        Arguments:
+            dg_ann -- the Django Annotation object to be serialized in the XML
+            more_attrs -- dictionary of any additional attributes to be stored
+                with the annotation element
+
+        """
         # First, get the embedding element for all annotations.
         anns_el = self.find_or_create_annotations()
         # Second, create an appropriate element for the new annotation.
@@ -311,6 +319,8 @@ class XMLSession(object):
             program_version=dg_ann.program_version,
             date_saved=self.format_datetime(dg_ann.date_saved),
             user=username)
+        for name, val in more_attrs.iteritems():
+            ann_el.set(name, val)
         if 'offensive' in settings.EXTRA_QUESTIONS:
             ann_el.set('offensive', str(dg_ann.offensive))
         if 'accent' in settings.EXTRA_QUESTIONS:
@@ -348,7 +358,7 @@ class XMLSession(object):
                         yield UserTurnAbs_nt(turn_abs_num, turn_number, rec)
                         uturnnums_seen.add(turn_number)
             else:
-                turn_number = turn_xml.attrib[self.TURNNUMBER_ATTR]
+                turn_number = int(turn_xml.attrib[self.TURNNUMBER_ATTR])
                 try:
                     text = turn_xml.findtext(self.SYSTEXT_SUBPATH).strip()
                 except AttributeError:
@@ -388,7 +398,7 @@ class XMLSession(object):
 
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):
-            turn_number = systurn_xml.attrib[self.TURNNUMBER_ATTR]
+            turn_number = int(systurn_xml.attrib[self.TURNNUMBER_ATTR])
             try:
                 text = systurn_xml.findtext(self.SYSTEXT_SUBPATH).strip()
             except AttributeError:

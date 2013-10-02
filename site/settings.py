@@ -67,6 +67,10 @@ except AttributeError as er:
 TRANSCRIBE_EXTRA_CONTEXT['EXTRA_QUESTIONS'] = EXTRA_QUESTIONS
 CONVERSATION_DIR = os.path.realpath(CONVERSATION_DIR)
 
+# Settings that don't need be adapted site by site.
+TRANSCRIBER_ID_COOKIE = 'transcriber_id'
+TRANSCRIBER_ID_ATTR = 'trser_cookie_id'
+
 ####################################################
 # Django settings for the `transcription' project. #
 ####################################################

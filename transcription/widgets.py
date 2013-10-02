@@ -1,5 +1,6 @@
 from __future__ import unicode_literals
 
+from django import forms
 from django.core.urlresolvers import reverse, NoReverseMatch
 from django.forms.widgets import HiddenInput, TextInput, Widget
 from django.utils.html import escape
@@ -112,3 +113,16 @@ class LinkWidget(PlayWidget):
             else:
                 player_html = mark_safe(u'')
             return mark_safe(link_html + player_html)
+
+
+class DatetimeWidget(forms.DateTimeInput):
+    def render(self, name, value, attrs=None):
+        # Check whether we can add a play button to this object.
+        html = super(DatetimeWidget, self).render(name, value, attrs)
+        id_ = attrs.pop('id', 'id_{name}'.format(name=name))
+        cal_html = ('<img src="{dtp_dir}/images2/cal.gif" onclick='
+                    '"javascript:NewCssCal(\'{id_}\',\'yyyyMMdd\','
+                    '\'dropdown\',true,\'24\',true)" '
+                    'style="cursor:pointer; margin-left: 6px;" />').format(
+                        dtp_dir=MEDIA_URL + '/js/datetimepicker', id_=id_)
+        return mark_safe(html + cal_html)

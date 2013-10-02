@@ -10,6 +10,10 @@
 <p>
 A total of <strong>{{ count }}</strong> dialogues have been successfully
 imported.
+{% if dg_updated %}
+<strong>{{ dg_updated|length }}</strong> dialogues had only their turn 
+absolute numbers updated.
+{% endif %}
 The CSV file describing the imported dialogues is at <tt>{{ csv_fname }}</tt>.
 </p>
 
@@ -96,6 +100,16 @@ Below is a breakdown according to the cause.
 <table>
 	<tr><th>Name of the directory</th></tr>
 	{% for dirname in dg_existed %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% if dg_updated %}
+<h3>Existed in the DB but the turn absolute numbers were updated</h3>
+<table>
+	<tr><th>Name of the directory</th></tr>
+	{% for dirname in dg_updated %}
 	<tr><td><tt>{{ dirname }}</tt></td></tr>
 	{% endfor %}
 </table>
