@@ -39,6 +39,9 @@ from transcription.models import (Transcription, DialogueAnnotation,
 from util import get_log_path, catch_locked_database
 
 
+# Initialisation.
+random.seed()
+
 # Some auxiliary classes.
 dgstats_nt = namedtuple('DialogueStats', ['list_filename', 'n_annotated_in',
                                           'n_annotated_out', 'n_clean',
@@ -121,6 +124,11 @@ def _gen_codes():
         code_incorr = ''.join(random.choice('0123456789')
                               for _ in xrange(settings.CODE_LENGTH_EXT))
     return (code, code_corr, code_incorr)
+
+
+def _rand_alnum(length=5):
+    alnum = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+    return ''.join(random.choice(alnum) for _ in xrange(length))
 
 
 def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
@@ -384,7 +392,9 @@ def transcribe(request):
                                 name=dg_ann.user.username)
                         else:
                             n_anns = sum(1 for _ in session.iter_annotations())
-                            cookie_value = '{cid}_{n_anns}'.format(**locals())
+                            rand = _rand_alnum(4)
+                            cookie_value = '{cid}{rand}_{n_anns}'.format(
+                                **locals())
                     else:
                         cookie_value = request.COOKIES[cookie_name]
                     # Insert dialogue annotations into the XML.
