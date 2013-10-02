@@ -265,24 +265,32 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         parameter_name = 'trs_count'
 
         def lookups(self, request, model_admin):
-            trs_counts = set(
-                attrs['num_trss'] for attrs in
-                Transcription.objects.values('dialogue_annotation')
-                    .annotate(num_trss=Count('pk')))
-            if (DialogueAnnotation.objects.annotate(Count('transcription'))
-                    .filter(transcription__count=0).exists()):
-                trs_counts.add('0')
-            return sorted(((cnt, cnt) for cnt in trs_counts),
-                          key=lambda tup: int(tup[0]))
+            return (('0', '0'), ('1', '>0'))
+#             trs_counts = set(
+#                 attrs['num_trss'] for attrs in
+#                 Transcription.objects.values('dialogue_annotation')
+#                     .annotate(num_trss=Count('pk')))
+#             if (DialogueAnnotation.objects.annotate(Count('transcription'))
+#                     .filter(transcription__count=0).exists()):
+#                 trs_counts.add('0')
+#             return sorted(((cnt, cnt) for cnt in trs_counts),
+#                           key=lambda tup: int(tup[0]))
 
         def queryset(self, request, queryset):
             val = self.value()
             if not val:
                 return queryset
 
-            val = int(val)
-            return queryset.annotate(Count('transcription')).filter(
-                transcription__count=val)
+            if val == '0':
+                return queryset.filter(transcription__isnull=True)
+            elif val == '1':
+                return queryset.filter(transcription__isnull=False)
+            else:
+                return queryset
+
+#             val = int(val)
+#             return queryset.annotate(Count('transcription')).filter(
+#                 transcription__count=val)
 
     class BreaksGoldListFilter(admin.SimpleListFilter):
         title = 'breaks gold'
