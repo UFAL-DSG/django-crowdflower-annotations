@@ -135,9 +135,12 @@ class DialogueAdmin(admin.ModelAdmin):
             if not val:
                 return queryset
 
-            val = bool(int(val))
-            return queryset.filter(
-                dialogueannotation__transcription__is_gold=val).distinct()
+            if val == '1':
+                return queryset.filter(
+                    dialogueannotation__transcription__is_gold=True).distinct()
+            else:
+                return queryset.exclude(
+                    dialogueannotation__transcription__is_gold=True).distinct()
 
     class AnnotatedListFilter(admin.SimpleListFilter):
         title = 'Is annotated'
@@ -264,8 +267,10 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
             if not val:
                 return queryset
 
-            val = bool(int(val))
-            return queryset.filter(transcription__is_gold=val).distinct()
+            if val == '1':
+                return queryset.filter(transcription__is_gold=True).distinct()
+            else:
+                return queryset.exclude(transcription__is_gold=True).distinct()
 
     class TranscriptionCountListFilter(admin.SimpleListFilter):
         title = 'number of transcriptions'
@@ -304,15 +309,23 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         parameter_name = 'breaks_gold'
 
         def lookups(self, request, model_admin):
-            return (('1', 'true'), ('0', 'false'))
+            return (('1', 'true'), ('0', 'false'), ('-1', 'has no gold'))
 
         def queryset(self, request, queryset):
             val = self.value()
             if not val:
                 return queryset
 
-            val = bool(int(val))
-            return queryset.filter(transcription__breaks_gold=val).distinct()
+            if val == '1':
+                return queryset.filter(transcription__breaks_gold=True
+                                       ).distinct()
+            elif val == '-1':
+                return queryset.exclude(
+                    transcription__turn__transcription__is_gold=True
+                    ).distinct()
+            else:
+                return queryset.exclude(transcription__breaks_gold=True
+                                        ).distinct()
 
     list_filter = [GoldListFilter,
                    BreaksGoldListFilter,
