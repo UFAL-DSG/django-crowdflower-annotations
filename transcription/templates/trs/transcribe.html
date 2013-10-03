@@ -154,14 +154,16 @@ p.user { color: orange; }
 }
 
 #submit {
-	width: 120px;
-	height: 50px;
+	width: 13em;
+	height: 3em;
 	font-weight: bold;
 }
 
 </style>
 <script src="{{ MEDIA_URL }}js/jquery.js"></script>
+{% if USE_ACCORDION %}
 <script src="{{ MEDIA_URL }}js/jquery.multi-open-accordion.js"></script>
+{% endif %}
 <script src="{{ MEDIA_URL }}js/jquery-ui.min.js"></script>
 <script src="{{ MEDIA_URL }}js/jquery.jplayer.min.js"></script>
 <script type="text/javascript">
@@ -181,6 +183,7 @@ p.user { color: orange; }
 			}
 	}
 
+	{% if USE_ACCORDION %}
 	function NextPhase() {
 			var PrevIndex = $('div .current');
 			var NextIndex = PrevIndex.next().next();
@@ -192,13 +195,16 @@ p.user { color: orange; }
 			if(!NextIndex.hasClass("ui-state-active"))
 					NextIndex.click();
 	}
+	{% endif %}
 
 	function PlayerStopped() {
 			if(beenPlaying) {
 					beenPlaying = false;
 					$('#' + curr_btnid).text("Play");
 
+					{% if USE_ACCORDION %}
 					NextPhase();
+					{% endif %}
 			}
 	}
 
@@ -243,8 +249,12 @@ p.user { color: orange; }
 	}
 
 	$(document).ready(function() {
+			{% if USE_ACCORDION %}
 			accordion = $("#phases").multiAccordion({active: 0});
+			{% endif %}
+			{% if "accent" in EXTRA_QUESTIONS %}
 			$("#accent_spec").slideUp();
+			{% endif %}
 
 			$("#player").jPlayer( {
 					swfPath: "{{ MEDIA_URL }}flash/",
@@ -254,8 +264,11 @@ p.user { color: orange; }
 					}
 			});
 
+			{% if USE_ACCORDION %}
 			$("#turn_1").removeClass("ui-state-disabled");
+			{% endif %}
 
+			{% if "accent" in EXTRA_QUESTIONS %}
 			var native_accent = document.getElementById("id_accent_native");
 			var other_accent = document.getElementById("id_accent_other");
 			var accent_name = document.getElementById("id_accent_name");
@@ -271,6 +284,7 @@ p.user { color: orange; }
 					$("#accent_spec").slideDown();
 				}
 			});
+			{% endif %}
 
 			$("#submit").click(function() {
 					// Check that all fields (text areas) are filled in.
@@ -291,15 +305,16 @@ p.user { color: orange; }
 					}
 
 					if(res !== 1) {
-						msg = "Please fill in all the input fields.\n";
-						msg += "In case you heard just silence, type \"(sil)\" ";
-						msg += "into the corresponding field.\n";
-						msg += "See Instructions for transcription of other ";
-						msg += "non-speech sounds.";
+						msg = "Please fill in all the input fields.\n\
+									In case you heard just silence, type \"(sil)\" \
+									into the corresponding field.\n\
+									See Instructions for transcription of other \
+									non-speech sounds.";
 						alert(msg);
 						return false;
 					}
 					
+					{% if "accent" in EXTRA_QUESTIONS %}
 					if(other_accent.checked && accent_name.value.search(/\w/) === -1)
 					{
 						msg = "You say the speaker had a non-native English accent.\n";
@@ -307,6 +322,7 @@ p.user { color: orange; }
 						alert(msg);
 						return false;
 					}
+					{% endif %}
 					return true;
 			});
 
@@ -326,22 +342,26 @@ p.user { color: orange; }
 
 	function play_now(btnid, phase, f) {
 		curr_btnid = btnid;
+		{% if USE_ACCORDION %}
 		$(".current").removeClass("current");
 		$("#" + phase).addClass("current");
+		{% endif %}
 		try{
 				PlayerPlaying();
 				$('#' + btnid).text("Playing...");
 				$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
 		} catch(E){
 				alert(E);
-			}
+		}
 	}
 
 	function pseudo_play_now(btnid, phase, f) {
 			curr_btnid = btnid;
+			{% if USE_ACCORDION %}
 			$(".current").removeClass("current");
 			$("#" + phase).addClass("current");
 			NextPhase();
+			{% endif %}
 	}
 </script>
 
@@ -379,8 +399,7 @@ p.user { color: orange; }
 
 	<div id="dg">
 		{% if success == "True" %}
-			<div class="success_msg">Last annotation has been successfully 
-				saved.</div>
+			<div class="success_msg">Last annotation has been successfully saved.</div>
 		{% endif %}
 		<h2>The dialogue</h2>
 		<div>
@@ -389,25 +408,34 @@ p.user { color: orange; }
 			{% csrf_token %}
 			{{ form.cid }}
 		{% for turn in turns %}
+			{% if not USE_ACCORDION %}
+			<hr>
+			{% else %}
 			<h3 id="turn_{{ turn.turn_number }}" class="head ui-state-disabled">
 				<a href="#">Turn {{ turn.turn_number }}</a>
 			</h3>
+			{% endif %}
 			<div>
 				{% if turn.prompt %}
 				<div class="speaker">
-					Computer:
+					Computer{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
 				</div>
 				<p class="system">{{ turn.prompt }}</p>
 				{% endif %}
 			{% if turn.has_rec %}
 				<div class="speaker">
-					Human:
+					Human{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
+					{% if 'asr' not in TASKS %}
+					<span class="user">{{ turn.hypothesis }}</span>
+					{% endif %}
 				</div>
+				{% if 'asr' in TASKS %}
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
 						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
 						tabindex="{{ turn.dbl_turn_num|add:1 }}"></textarea>
 				</div>
+				{% endif %}
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
 						tabindex="{{ turn.dbl_turn_num }}"
@@ -426,8 +454,11 @@ p.user { color: orange; }
 			</div>
 		{% endfor %}
 	
-			<h3 id="phase_answer" class="head ui-state-disabled">
+			{% if not USE_ACCORDION %}<hr>{% endif %}
+			<h3 id="phase_answer"
+				class="head{% if USE_ACCORDION %} ui-state-disabled">
 				<a href="#">Submit</a>
+				{% else %}">Submit{% endif %}
 			</h3>
 			<div>
 				<table>
@@ -514,7 +545,9 @@ p.user { color: orange; }
 {% if form.errors %}
 <script>
 $(document).ready(function() {
+{% if USE_ACCORDION %}
 $(".ui-state-disabled").removeClass("ui-state-disabled");
+{% endif %}
 $("#phase_answer").click();
 });
 </script>

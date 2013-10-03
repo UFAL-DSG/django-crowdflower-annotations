@@ -163,6 +163,10 @@ LOGGED_JOB_DATA = [
 # questions should be asked in the transcription form.
 EXTRA_QUESTIONS = ('accent', 'quality', 'offensive')
 
+USE_ACCORDION = True
+
+TASKS = ('asr', 'slu')
+
 XML_COMMON = {
     'ANNOTATIONS_ABOVE': ".",
     'ANNOTATIONS_AFTER': "turn",  # This has to point to a direct child of
