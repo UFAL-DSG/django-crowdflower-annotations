@@ -421,7 +421,7 @@ def transcribe(request):
                         is_gold=True)
                     gold_trss = group_by(gold_trss, ('turn', ))
                     mismatch = False
-                    for turn, turn_gold_trss in gold_trss.iteritems():
+                    for (turn, ), turn_gold_trss in gold_trss.iteritems():
                         submismatch = True
                         trs = trss[turn.turn_number - 1]
                         for gold_trs in turn_gold_trss:
@@ -676,7 +676,7 @@ def import_dialogues(request):
             same_cid_dgs = Dialogue.objects.filter(cid=cid)
             salt = -1
             while same_cid_dgs and same_cid_dgs[0].dirname != dirname:
-                salt += 0
+                salt += 1
                 cid = _hash(dirname + str(salt))
                 same_cid_dgs = Dialogue.objects.filter(cid=cid)
 
