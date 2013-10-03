@@ -77,22 +77,22 @@ class TranscriptionForm(forms.Form):
     notes = forms.CharField(required=False)
 
     def __init__(self, *args, **kwargs):
-        uturn_ind = kwargs.pop('uturn_ind', None)
-        if uturn_ind is None:
-            uturn_ind = tuple()
+        turn_dicts = kwargs.pop('turn_dicts', None)
+        if turn_dicts is None:
+            turn_dicts = tuple()
         cid = kwargs.pop('cid', None)
         super(TranscriptionForm, self).__init__(*args, **kwargs)
 
         self.fields['cid'] = forms.CharField(widget=forms.HiddenInput(),
                                              initial=cid)
 
-        for turn_num, has_rec in enumerate(uturn_ind, start=1):
-            if not has_rec:
+        for tpt_turn_num, turn_dict in enumerate(turn_dicts, start=1):
+            if not turn_dict['has_rec']:
                 continue
-            self.fields['trs_{0}'.format(turn_num)] = forms.CharField(
+            self.fields['trs_{0}'.format(tpt_turn_num)] = forms.CharField(
                 widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
-                label=turn_num)
+                label=tpt_turn_num)
 
     def __unicode__(self):
         import pprint
@@ -266,7 +266,14 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
 # TODO Move elsewhere (dg_util? models?).
 def _create_turn_dicts(dialogue):
     """An auxiliary function for gathering important data about dialogue turns
-    for use in the transcription form."""
+    for use in the transcription form.
+
+    Returns a list of dictionaries, one per turn, to be used with the
+    `transcribe.html' template.  The turns are numbered (key `turn_number') but
+    this numbering is only for purposes of the template. It does NOT correspond
+    to the turn database objects' turn_number attribute.
+
+    """
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
     max_turn_num = max(max(uturn.turn_abs_number for uturn in uturns),
@@ -274,7 +281,7 @@ def _create_turn_dicts(dialogue):
     # Transform data from DialogueTurn objects into dicts.
     turns = [dict() for _ in xrange(max_turn_num)]
     for systurn in systurns:
-        # Throw away empty system utterances.
+        # Skip over empty system utterances.
         if systurn.text:
             turns[systurn.turn_abs_number - 1].update(prompt=systurn.text,
                                                       has_rec=False)
@@ -289,14 +296,22 @@ def _create_turn_dicts(dialogue):
         # ...The "-1" is for the different base for indexing.
         for turn_idx in xrange(prev_turn_idx, -1, -1):
             prev_turn = turns[turn_idx]
+            # As soon as the last preceding non-empty turn is found,
             if prev_turn:
+                # Check whether it has its corresponding user turn yet.
+                # If yes,
                 if prev_turn['has_rec']:
+                    # Put this new user turn to its original index.
                     prev_turn_idx = uturn.turn_abs_number - 1
+                # If the last preceding turn is a system turn without a user
+                # turn assigned,
                 else:
+                    # Merge this new user turn to the preceding system turn.
                     prev_turn_idx = turn_idx
                 break
         turns[prev_turn_idx].update(rec=wav_fname_rest,
-                                    has_rec=True)
+                                    has_rec=True,
+                                    uturn_number=uturn.turn_number)
     # Number the turns.
     turns = filter(None, turns)
     for turn_number, turn in enumerate(turns, start=1):
@@ -329,19 +344,28 @@ def transcribe(request):
         # Some dialogues have no records of the user whatsoever. If this
         # dialogue had the user saying anything, index the user turns.
         if uturns:
+            # uturns_list :: [UserTurn.turn_number -> (None or userturn)]
             uturns_list = [None] * max(uturn.turn_number
                                        for uturn in uturns)
             for uturn in uturns:
                 uturns_list[uturn.turn_number - 1] = uturn
-            turn_dicts = _create_turn_dicts(dg_data)
-            uturn_ind = [turn['has_rec'] for turn in turn_dicts]
-            paired_nums = [paired_num for paired_num, has_rec
-                           in enumerate(uturn_ind, start=1)
-                           if has_rec]
-        else:
-            uturn_ind = None
-        form = TranscriptionForm(request.POST, cid=cid, uturn_ind=uturn_ind)
 
+            # turn_dicts :: [<template turn number> -> <turn dict>]
+            # This is a dense list, no member is None.
+            turn_dicts = _create_turn_dicts(dg_data)
+
+            # paired_nums :: [<index to `turn_dicts'>] only for user turns that
+            # have a recording to be transcribed
+            paired_nums = [tpt_turn_number
+                           for tpt_turn_number, turn_dict
+                           in enumerate(turn_dicts, start=1)
+                           if turn_dict['has_rec']]
+        else:
+            turn_dicts = None
+        form = TranscriptionForm(request.POST, cid=cid, turn_dicts=turn_dicts)
+
+        # TODO Check that the following does not break on empty dialogues (i.e.
+        # (not uturns)).
         if form.is_valid():
             dummy_user = None
 
@@ -401,17 +425,17 @@ def transcribe(request):
                     session.add_annotation(
                         dg_ann, **{settings.TRANSCRIBER_ID_ATTR: cookie_value})
                     # Create Transcription objects and save them into DB.
-                    trss = [None] * len(paired_nums)
-                    for turn_num, paired_num in enumerate(paired_nums,
-                                                          start=1):
-                        turn_dict = turn_dicts[paired_num - 1]
-                        if not turn_dict['has_rec']:
-                            continue
+                    # trss :: [UserTurn.turn_number -> (None or transcription)]
+                    trss = [None] * len(uturns_list)
+                    for tpt_turn_number in paired_nums:
+                        turn_dict = turn_dicts[tpt_turn_number - 1]
+                        turn_number = turn_dict['uturn_number']
+                        assert turn_dict['has_rec']
                         trs = Transcription()
-                        trss[turn_num - 1] = trs
+                        trss[turn_number - 1] = trs
                         trs.text = form.cleaned_data[
-                            'trs_{0}'.format(paired_num)]
-                        trs.turn = uturns_list[turn_num - 1]
+                            'trs_{0}'.format(tpt_turn_number)]
+                        trs.turn = uturns_list[turn_number - 1]
                         trs.dialogue_annotation = dg_ann
 
                     # Check the form against any gold items.  If all are OK,
@@ -436,12 +460,11 @@ def transcribe(request):
                     # Update transcriptions in the light of their comparison to
                     # gold transcriptions, and save them both into the
                     # database, and to the XML.
-                    for turn_num, paired_num in enumerate(paired_nums,
-                                                          start=1):
-                        turn_dict = turn_dicts[paired_num - 1]
-                        if not turn_dict['has_rec']:
-                            continue
-                        trs = trss[turn_num - 1]
+                    for tpt_turn_number in paired_nums:
+                        turn_dict = turn_dicts[tpt_turn_number - 1]
+                        turn_number = turn_dict['uturn_number']
+                        assert turn_dict['has_rec']
+                        trs = trss[turn_number - 1]
                         trs.some_breaks_gold = mismatch
                         trs.save()
                         # Reflect the transcription in the XML.
@@ -570,15 +593,13 @@ def transcribe(request):
                            finished=False).save()
 
     # Prepare the data about turns into a form suitable for the template.
-    turns = _create_turn_dicts(dg_data)
-    uturn_ind = [turn['has_rec'] for turn in turns]
-
+    turn_dicts = _create_turn_dicts(dg_data)
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
-    context['turns'] = turns
-    context['dbl_num_turns'] = 2 * len(turns)
+    context['turns'] = turn_dicts
+    context['dbl_num_turns'] = 2 * len(turn_dicts)
     context['codes'] = dg_data.get_codes()
-    context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
+    context['form'] = TranscriptionForm(cid=cid, turn_dicts=turn_dicts)
     context['DOMAIN_URL'] = settings.DOMAIN_URL
     context['APP_PORT'] = settings.APP_PORT
     context['APP_PATH'] = settings.APP_PATH
