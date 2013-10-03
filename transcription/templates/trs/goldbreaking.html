@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Transcriptions that break gold</h1>
+
+{% for turn in comparisons %}
+<h2>Turn <a href="{{ SUB_SITE }}/admin/transcription/userturn/{{ turn.turn_id }}/">{{ turn.turn_name }}</a></h2>
+<ul>
+	{% for gold_trs in turn.gold_trss %}
+	<li><strong>{{ gold_trs.text }}</strong></li>
+	{% endfor %}
+	{% for breaking_trs in turn.breaking_trss %}
+	<li>{{ breaking_trs.text }}</li>
+	{% endfor %}
+</ul>
+{% endfor %}
+
+{% endblock %}

@@ -31,6 +31,20 @@ def get_log_path(dirname):
     return log_path
 
 
+def group_by(objects, attrs):
+    """Groups `objects' by the values of their attributes `attrs'.
+
+    Returns a dictionary mapping from a tuple of attribute values to a list of
+    objects with those attribute values.
+
+    """
+    groups = dict()
+    for obj in objects:
+        key = tuple(getattr(obj, attr) for attr in attrs)
+        groups.setdefault(key, []).append(obj)
+    return groups
+
+
 def catch_locked_database(meth):
     """
     This decorator takes care of catching DatabaseError for a locked database.
