@@ -422,6 +422,10 @@ p.user { color: orange; }
 				</div>
 				<p class="system">{{ turn.prompt }}</p>
 				{% endif %}
+
+			{% comment %}
+			The ASR annotation form follows.
+			{% endcomment %}
 			{% if turn.has_rec %}
 				<div class="speaker">
 					Human{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
@@ -450,7 +454,72 @@ p.user { color: orange; }
 					 onclick="pseudo_play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}', '');" class="btnnext">Next</button>
 				</div>
 			{% endif %}
-			
+
+			{% comment %}
+			The SLU annotation form follows.
+			{% endcomment %}
+			{% if 'slu' in TASKS %}
+				<div>
+					<table>
+					{% for trs, txt in turn.transcript %}
+					{% if trs != "other()" and trs != "null()" %}
+						<tr>
+							<td><input type="checkbox" name="trs_{{turn.turn_number}}_{{forloop.counter}}" checked value="{{trs}}"></td>
+							<td>{{ trs }}</td>
+							<td>{{ txt }}</td>
+
+						</tr>
+					{% endif %}
+					{% endfor %}
+					</table>
+					<table id="select_section_{{turn.turn_number}}">
+					{% for i in "xxx" %}
+						<tr>
+							<td rowspan="2">
+								<input type="checkbox" id="check_{{turn.turn_number}}_{{forloop.counter}}"
+								name="check_{{turn.turn_number}}_{{forloop.counter}}" checked>
+							</td>
+							<td>
+								<select id="dat_{{turn.turn_number}}_{{forloop.counter}}"
+										name="dat_{{turn.turn_number}}_{{forloop.counter}}"
+										class="displayed"
+										onChange="activate(this.options[this.selectedIndex].value, {{turn.turn_number}}, {{forloop.counter}});">
+									<option>
+									{% for d in all_dat %}
+									<option>{{d}}
+									{% endfor %}
+								</select>
+							</td>
+							<td>
+								<select id="slot_{{turn.turn_number}}_{{forloop.counter}}"
+										name="slot_{{turn.turn_number}}_{{forloop.counter}}"
+										class="hidden">
+								<option selected>      
+								{% for s in slot %}
+								<option>{{s}}
+								{% endfor%}
+								</select>
+							</td>
+							<td>
+								<select id="value_{{turn.turn_number}}_{{forloop.counter}}"
+										name="value_{{turn.turn_number}}_{{forloop.counter}}" class="hidden">
+									<option>
+								</select>
+							</td>
+							<td id="error_{{turn.turn_number}}_{{forloop.counter}}" rowspan="2">
+								<font color="red">Error message</font>
+							</td>
+						</tr>
+						<tr>
+							<td colspan="3" id="text_{{turn.turn_number}}_{{forloop.counter}}">
+								TEXT TEXT TEXT TEXT TEXT TEXT TEXT
+							</td>
+						</tr>
+					{% endfor %}
+					</table>
+					<input type="button" value="Add DAI" onclick="add_dai({{turn.turn_number}});">
+				</div>
+			{% endif %}
 			</div>
 		{% endfor %}
 	
