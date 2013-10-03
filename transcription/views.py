@@ -36,7 +36,7 @@ import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn)
-from util import get_log_path, catch_locked_database
+from util import get_log_path, group_by, catch_locked_database
 
 
 # Initialisation.
@@ -48,20 +48,6 @@ dgstats_nt = namedtuple('DialogueStats', ['list_filename', 'n_annotated_in',
                                           'n_all'])
 
 # Auxiliary functions.
-def group_by(objects, attrs):
-    """Groups `objects' by the values of their attributes `attrs'.
-
-    Returns a dictionary mapping from a tuple of attribute values to a list of
-    objects with those attribute values.
-
-    """
-    groups = dict()
-    for obj in objects:
-        key = tuple(getattr(obj, attr) for attr in attrs)
-        groups.setdefault(key, []).append(obj)
-    return groups
-
-
 def _hash(s):
     return hashlib.sha1(s).hexdigest()
 
@@ -364,8 +350,6 @@ def transcribe(request):
             turn_dicts = None
         form = TranscriptionForm(request.POST, cid=cid, turn_dicts=turn_dicts)
 
-        # TODO Check that the following does not break on empty dialogues (i.e.
-        # (not uturns)).
         if form.is_valid():
             dummy_user = None
 
