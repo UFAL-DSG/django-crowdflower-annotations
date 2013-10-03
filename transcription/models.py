@@ -9,8 +9,8 @@ from django.contrib.auth.models import User
 
 from db_fields import ROCharField, WavField, SizedTextField
 from session_xml import XMLSession
-from settings import CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR, \
-    LISTS_DIR, USE_CF, EXTRA_QUESTIONS
+from settings import (CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR,
+    LISTS_DIR, USE_CF, EXTRA_QUESTIONS)
 
 
 class Dialogue(models.Model):

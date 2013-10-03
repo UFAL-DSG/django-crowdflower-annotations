@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: UTF-8 -*-
+from __future__ import unicode_literals
+
 import datetime
 import os
 import os.path
@@ -40,12 +42,13 @@ EMAIL_USE_TLS = True
 # accessible.
 DOMAIN_URL = "http://example.com"
 
+APP_PORT = '8000'
+APP_PATH = '/apps/transcription'
+
 # COOKIES_MAX_AGE: This determines how long we will be able to recognise
 # a transcriber is the same transcriber we saw last time. Specify as a number
 # of seconds.
 COOKIES_MAX_AGE = 366 * 24 * 3600
-
-APP_URL = "/apps/cir_transcription"
 
 # PYLIBS_DIR: Some auxiliary Python modules are made available under this path
 # by default.  You should have gotten them as part of the git clone.   Unless
@@ -58,11 +61,11 @@ DJANGO_PATH = '/webapps/libs/django-1.4.1/django'
 
 # Make this unique, and don't share it with anybody. It can be an arbitrary
 # string; the longer, the better safety of any data transmitted.
-SECRET_KEY = 't\001\016=\272k\305\036\303:\357\220[IY\001\3256p\254\276u]\277'
-             '\355pN\Zn+0\207\306\315M\227i\241\251n\347\206\367Q\221\252Y\215'
-             '\257\267\333\^e\370\202\0064\252"\3711\272\275\001\233\350d1\232'
-             '3\273br\3169!\347{\\036/$\304\330\356?o\000\366\342\226O9(\266'
-             '\177qf\020\021z'
+SECRET_KEY = ('t\001\016=\272k\305\036\303:\357\220[IY\001\3256p\254\276u]\277'
+              '\355pN\Zn+0\207\306\315M\227i\241\251n\347\206\367Q\221\252Y'
+              '\215\257\267\333\^e\370\202\0064\252"\3711\272\275\001\233\350d'
+              '1\2323\273br\3169!\347{\\036/$\304\330\356?o\000\366\342\226O9('
+              '\266\177qf\020\021z')
 
 # Local time zone for this installation. Choices can be found here:
 # http://en.wikipedia.org/wiki/List_of_tz_zones_by_name
@@ -211,3 +214,21 @@ TRANSCRIBE_EXTRA_CONTEXT = {
                              'trs/donotspam.html',
                              )
 }
+
+# INTROS: A collection of dialogue-introductory strings that should be stripped
+# from the first system prompt if it starts with any of them.
+INTROS = ()
+
+# IGNORE_PROMPT_STARTS: A collection of strings, such that system prompts that
+# start in these strings are not shown to the transcriber at all.
+IGNORE_PROMPT_STARTS = ("Thank you for using", "Thank you goodbye")
+
+# TODO To uppercase.
+nullary_dat = ['repeat','restart','null','other','thankyou','bye']
+unary_dat_with_slot = ['pokus']
+unary_dat_with_value = ['inform','experimentalni']
+binary_dat = ['inform']
+name_of_slot = ['from_stop','to_stop']
+
+def dai2text(value):
+    return "TEXT"

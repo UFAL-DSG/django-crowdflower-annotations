@@ -421,7 +421,7 @@ def transcribe(request):
                         is_gold=True)
                     gold_trss = group_by(gold_trss, ('turn', ))
                     mismatch = False
-                    for turn, turn_gold_trss in gold_trss.iteritems():
+                    for (turn, ), turn_gold_trss in gold_trss.iteritems():
                         submismatch = True
                         trs = trss[turn.turn_number - 1]
                         for gold_trs in turn_gold_trss:
@@ -460,7 +460,7 @@ def transcribe(request):
                                   context_instance=RequestContext(request))
                 response.set_cookie(cookie_name, cookie_value,
                                     max_age=settings.COOKIES_MAX_AGE,
-                                    path=settings.APP_URL)
+                                    path=settings.APP_PATH)
                 return response
             # Else, if working locally, continue to serving a blank form.
             else:
@@ -473,10 +473,12 @@ def transcribe(request):
 
             # Populate the context with data from the previous dialogue (form).
             context = settings.TRANSCRIBE_EXTRA_CONTEXT
-            context['app_url'] = settings.APP_URL
-            for key, value in request.POST.iteritems():
-                context[key] = value
+            context.update(request.POST)
+            context['success'] = str(success)
             context['form'] = form
+            context['DOMAIN_URL'] = settings.DOMAIN_URL
+            context['APP_PORT'] = settings.APP_PORT
+            context['APP_PATH'] = settings.APP_PATH
             response = render(request,
                               "trs/transcribe.html",
                               context,
@@ -572,12 +574,14 @@ def transcribe(request):
     uturn_ind = [turn['has_rec'] for turn in turns]
 
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
-    context['app_url'] = settings.APP_URL
     context['success'] = str(success)
     context['turns'] = turns
     context['dbl_num_turns'] = 2 * len(turns)
     context['codes'] = dg_data.get_codes()
     context['form'] = TranscriptionForm(cid=cid, uturn_ind=uturn_ind)
+    context['DOMAIN_URL'] = settings.DOMAIN_URL
+    context['APP_PORT'] = settings.APP_PORT
+    context['APP_PATH'] = settings.APP_PATH
     response = render(request,
                       "trs/transcribe.html",
                       context,
@@ -588,7 +592,7 @@ def transcribe(request):
     if cookie_value is not None:
         response.set_cookie(cookie_name, cookie_value,
                             max_age=settings.COOKIES_MAX_AGE,
-                            path=settings.APP_URL)
+                            path=settings.APP_PATH)
 
     return response
 
@@ -607,8 +611,7 @@ def import_dialogues(request):
 
     # Check whether the form is yet to be served.
     if not request.GET:
-        context = {'use_cf': settings.USE_CF,
-                   'app_url': settings.APP_URL}
+        context = {'use_cf': settings.USE_CF}
         return render(request, "trs/import.html", context,
                       context_instance=RequestContext(request))
 
@@ -676,7 +679,7 @@ def import_dialogues(request):
             same_cid_dgs = Dialogue.objects.filter(cid=cid)
             salt = -1
             while same_cid_dgs and same_cid_dgs[0].dirname != dirname:
-                salt += 0
+                salt += 1
                 cid = _hash(dirname + str(salt))
                 same_cid_dgs = Dialogue.objects.filter(cid=cid)
 

@@ -57,7 +57,9 @@ def catch_locked_database(meth):
         except DatabaseError as ex:
             if str(ex) == 'database is locked':
                 # Send an email to admins.
-                app_url = settings.DOMAIN_URL + settings.APP_URL
+                app_port = (':{port}'.format(port=settings.APP_PORT)
+                            if settings.APP_PORT else '')
+                app_url = settings.DOMAIN_URL + app_port + settings.APP_PATH
                 subj = "[{app}] Problem with database access".format(
                     app=app_url)
                 msg = """\

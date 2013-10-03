@@ -388,13 +388,15 @@ class XMLSession(object):
 
     @classmethod
     def _clean_systurn_text(cls, text):
-        if (text.startswith("Thank you for using")
-                or text.startswith("Thank you goodbye")):
-            return None
-        return text.replace(
-            "Thank you for calling the Cambridge Information system. "
-            "Your call will be recorded for research purposes.",
-            "").strip()
+        text = text.strip()
+        for prompt_start in settings.IGNORE_PROMPT_STARTS:
+            if text.startswith(prompt_start):
+                return None
+        for intro in settings.INTROS:
+            if text.startswith(intro):
+                text = text[len(intro):].strip()
+                break
+        return text
 
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):

@@ -325,15 +325,15 @@ p.user { color: orange; }
 	});
 
 	function play_now(btnid, phase, f) {
-			curr_btnid = btnid;
-			$(".current").removeClass("current");
-			$("#" + phase).addClass("current");
-			try{
-					PlayerPlaying();
-					$('#' + btnid).text("Playing...");
-					$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
-			} catch(E){
-					alert(E);
+		curr_btnid = btnid;
+		$(".current").removeClass("current");
+		$("#" + phase).addClass("current");
+		try{
+				PlayerPlaying();
+				$('#' + btnid).text("Playing...");
+				$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
+		} catch(E){
+				alert(E);
 			}
 	}
 
@@ -376,7 +376,7 @@ p.user { color: orange; }
 
 		</div>
 	</div>
-	
+
 	<div id="dg">
 		{% if success == "True" %}
 			<div class="success_msg">Last annotation has been successfully 
