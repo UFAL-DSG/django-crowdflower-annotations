@@ -327,9 +327,53 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                 return queryset.exclude(transcription__breaks_gold=True
                                         ).distinct()
 
+    class PriceBinListFilter(admin.SimpleListFilter):
+        title = 'price bin'
+        parameter_name = 'price_bin'
+
+        def lookups(self, request, model_admin):
+            price_ranges = price_class_handler.price_ranges
+            # If there are no price ranges to distinguish,
+            if len(price_ranges) == 1:
+                # Do not use this filter at all.
+                return None
+            else:
+                def format_cents(price_usd):
+                    return ('' if abs(price_usd) == float('inf')
+                            else '{0}c'.format(int(100 * price_usd)))
+
+                readable = ['{start}-{end}'.format(start=format_cents(low),
+                                                   end=format_cents(high))
+                            for low, high in price_ranges]
+                return [(readable_mem, readable_mem)
+                        for readable_mem in readable]
+
+        def queryset(self, request, queryset):
+            val = self.value()
+            if not val or val == 'all':
+                return queryset
+            else:
+                new_set = queryset
+                start, end = val.split('-', 1)
+                # Filter by lower bound on the price (inclusive).
+                if start:
+                    # strip the trailing 'c', convert to dollars
+                    start = float(start[:-1]) / 100.
+                    new_set = new_set.filter(
+                        dialogue__transcription_price__gte=start)
+                # Filter by upper bound on the price (exclusive).
+                if end:
+                    # strip the trailing 'c', convert to dollars
+                    end = float(end[:-1]) / 100.
+                    new_set = new_set.filter(
+                        dialogue__transcription_price__lt=end)
+                return new_set
+
+
     list_filter = [GoldListFilter,
                    BreaksGoldListFilter,
                    TranscriptionCountListFilter,
+                   PriceBinListFilter,
                    'user__username',
                    'finished']
     if 'offensive' in settings.EXTRA_QUESTIONS:
