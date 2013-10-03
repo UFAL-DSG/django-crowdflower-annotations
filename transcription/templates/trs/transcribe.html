@@ -145,8 +145,8 @@ form li {
 	padding-top: 10px;
 }
 
-p.system { color: blue; }
-p.user { color: orange; }
+span.system { color: blue; font-weight: normal; }
+span.user { color: red; font-weight: normal; }
 
 .errors {
 		background-color: red;
@@ -157,6 +157,16 @@ p.user { color: orange; }
 	width: 13em;
 	height: 3em;
 	font-weight: bold;
+}
+
+.displayed {
+	display: on;
+	# FIXME This setting should be ignored according to CSS specs, as 'on' is 
+	# not a valid value for 'display'.
+}
+
+.hidden {
+	display: none;
 }
 
 </style>
@@ -286,7 +296,7 @@ p.user { color: orange; }
 			});
 			{% endif %}
 
-			$("#submit").click(function() {
+			$("#phases").submit(function() {
 					// Check that all fields (text areas) are filled in.
 					var res = 1;
 					var fields = document.getElementsByTagName("textarea");
@@ -303,6 +313,59 @@ p.user { color: orange; }
 							break;
 						}
 					}
+
+					var selects = document.getElementsByTagName("select");
+					for(var index = 0; index < selects.length; index++)
+					{
+						select_id = selects[index].id;
+						if (select_id.substring(0,3) != "dat") {
+							continue;
+						}
+						suffix = select_id.substring(3);
+						checkbox = document.getElementById("check" + suffix);
+						if (checkbox.checked){
+							if (selects[index].options[selects[index].selectedIndex].value == ""){
+								alert("CHYBA " +suffix );
+								// TODO dopsat vyjádření chyby
+							}
+							else {
+								dat_select_value = selects[index].options[
+											selects[index].selectedIndex].value;
+								slot_select = document.getElementById("slot"+suffix);
+								slot_select_value = slot_select.options[
+											slot_select.selectedIndex].value;
+								value_select = document.getElementById("value"+suffix);
+								value_select_value = value_select.options[
+											value_select.selectedIndex].value;
+								if ((slot_select_value == "")
+										&& (value_select_value == "" )) {
+									if (nd.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else if ((slot_select_value != "")
+												&& (value_select_value == "" )) {
+									if (udws.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else if ((slot_select_value == "")
+												&& (value_select_value != "" )) {
+									if (udwv.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else // obojí je vyplněné
+								{
+									continue; // ? je to dobře ?
+								}
+							}
+						}
+						else{
+							continue;
+						}
+					}
+				return false; // FIXME až bude hotovo, smazat !!!
 
 					if(res !== 1) {
 						msg = "Please fill in all the input fields.\n\
@@ -338,7 +401,46 @@ p.user { color: orange; }
 					$("div#ins-inner").slideDown("fast", "swing", insShown);
 				}
 			});
+
+		$("select").live("change",function(){
+			select_id = $(this).attr("id")
+
+			// TODO změna textu za roletkami zde
+
+			selected_option = this.options[this.selectedIndex].value
+			if (select_id.substring(0,3) == "dat"){
+				if (udwv.indexOf(selected_option) != -1 ){
+					id = select_id.substring(3)
+					fname = selected_option
+				}
+				else {
+					return;
+				}
+			}
+			else
+			{
+				if (select_id.substring(0,4) != "slot"){
+					return;
+				}
+				id = select_id.substring(4);
+				selector = "#dat" + id + " option:selected";
+				dat_select_value = $(selector).val();
+				if (bd.indexOf(dat_select_value) == -1){
+					return;
+				}
+				if (selected_option == "") {
+					fname = "empty_slot";
+				}
+				else {
+					fname = selected_option;
+				}
+			}
+		  file_name = '{{ DOMAIN_URL }}{% if APP_PORT %}:{{ APP_PORT }}{% endif %}{{ APP_PATH }}static/slotvalues/' + fname + ".txt";
+			value_id = "#value" + id;
+			$(value_id).load(file_name);
+
 	});
+});
 
 	function play_now(btnid, phase, f) {
 		curr_btnid = btnid;
@@ -363,6 +465,114 @@ p.user { color: orange; }
 			NextPhase();
 			{% endif %}
 	}
+
+	// TODO Explain what &#39 is and how it is used here.
+	var nd = "{{nul_dat}}".replace(/&#39;/g, ""),
+	    udws = "{{unar_with_slot}}".replace(/&#39;/g, ""),
+	    udwv = "{{unar_with_value}}".replace(/&#39;/g, ""),
+	    bd = "{{bin_dat}}".replace(/&#39;/g, "");
+
+	function activate(value, number1, number2) {
+		// TODO Document the arguments.
+		slot_id = "slot_" + number1 + "_" + number2;
+		value_id = "value_" + number1 + "_" + number2;
+		if (value == "") {
+			document.getElementById(slot_id).className = "hidden";
+			document.getElementById(slot_id).selectedIndex = 0;
+			document.getElementById(value_id).className = "hidden";
+			document.getElementById(value_id).selectedIndex = 0;
+		}
+		else {
+			document.getElementById(slot_id).selectedIndex = 0;
+			document.getElementById(slot_id).selectedIndex = 0;
+			if (nd.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "hidden"
+				document.getElementById(value_id).className = "hidden"
+			}
+			if (udws.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "displayed"
+				document.getElementById(value_id).className = "hidden"
+			}
+			if (udwv.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "hidden"
+				document.getElementById(value_id).className = "displayed"
+			}
+			if (bd.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "displayed"
+				document.getElementById(value_id).className = "displayed"
+			}
+		}
+	}
+
+function make_select(name, suffix, name_of_class) {
+	var pom = document.createElement("select");
+	pom.setAttribute("id",name+suffix);
+	pom.setAttribute("class",name_of_class);
+	pom.setAttribute("name",name+suffix);
+	return pom;
+}
+
+function make_option(text) {
+	var option_el = document.createElement("option"),
+			txt_el = document.createTextNode(text);
+	option_el.appendChild(txt_el);
+	return option_el;
+}
+
+function make_td(elem) {
+	var td_el = document.createElement("td");
+	td_el.appendChild(elem);
+	return td_el;
+}
+
+function item_name2list(name, startidx, cutoff) {
+	var ret = name.substring(startidx, name.length - cutoff);
+	// TODO Explain what &#39 is and how it is used here.
+	ret = ret.replace(/&#39;/g, "").replace(/ +/g, "");
+	return ret.split(",");
+}
+
+// TODO Explain why 5 and 2 are used here, and 1 and 1 below.
+var name_of_dai = item_name2list("{{all_dat}}", 5, 2),
+    name_of_slot = item_name2list("{{slot}}", 1, 1);
+
+function add_dai(number) {
+	var activate_call, table_id, table_elem, pocet, suffix;
+
+	table_id = "select_section_" + number;
+	table_elem = document.getElementById(table_id);
+	pocet = table_elem.getElementsByTagName("select").length;
+	suffix = "_" + number + "_" + (pocet / 3 + 1);
+	new_select_dat = make_select("dat", suffix, "displayed");
+
+	activate_call = 'activate(this.options[this.selectedIndex]\
+				.value, ' + number + ', ' + (pocet / 3 + 1) + ')';
+	new_select_dat.setAttribute("onChange", activate_call);
+	new_select_slot = make_select("slot", suffix, "hidden");
+	new_select_value = make_select("value", suffix, "hidden");
+	new_select_dat.appendChild(make_option("")) ;
+	for (var i = 0; i < name_of_dai.length; i++)
+		new_select_dat.appendChild(make_option(name_of_dai[i]));
+	new_select_slot.appendChild(make_option(""));
+	for (var i = 0; i < name_of_slot.length; i++)
+		new_select_slot.appendChild(make_option(name_of_slot[i]));
+	checkbox = document.createElement("input");
+	checkbox.type = "checkbox";
+	checkbox.id = "check" + suffix;
+	checkbox.name = checkbox.id;
+	checkbox.checked = true;
+	table_row = document.createElement("tr");
+	table_row.appendChild(make_td(checkbox));
+	table_row.appendChild(make_td(new_select_dat));
+	table_row.appendChild(make_td(new_select_slot));
+	table_row.appendChild(make_td(new_select_value));
+	table_td = document.createElement("td");
+	table_td.innerHTML = "TEXT";
+	table_td.id = "td"+suffix;
+	table_row.appendChild(table_td);
+	table_elem.appendChild(table_row);
+}
+
 </script>
 
 {% endblock head %}
@@ -419,8 +629,8 @@ p.user { color: orange; }
 				{% if turn.prompt %}
 				<div class="speaker">
 					Computer{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
+					<span class="system">{{ turn.prompt }}</span>
 				</div>
-				<p class="system">{{ turn.prompt }}</p>
 				{% endif %}
 
 			{% comment %}

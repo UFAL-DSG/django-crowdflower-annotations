@@ -588,7 +588,8 @@ def transcribe(request):
     context['APP_PORT'] = settings.APP_PORT
     context['APP_PATH'] = settings.APP_PATH
     context['DEBUG'] = settings.DEBUG
-    context['USE_ACCORDION'] = settings.USE_ACCORDION
+    context['USE_ACCORDION'] = (settings.USE_ACCORDION
+                                and 'asr' in settings.TASKS)
     context['TASKS'] = settings.TASKS
     response = render(request,
                       "trs/transcribe.html",
