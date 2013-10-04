@@ -328,7 +328,56 @@ class XMLSession(object):
             return trs_xml
 
     def add_sem_annotation(self, sem_ann):
-        raise NotImplementedError()
+
+        # Find the appropriate place for the annotation in the XML tree.
+        dg_ann = sem_ann.dialogue_annotation
+        user_turns = self.sess_xml.findall(self.USERTURN_PATH)
+        turn_xml = filter(
+            lambda turn_xml: \
+                int(turn_xml.get(self.TURNNUMBER_ATTR)) \
+                    == sem_ann.turn.turn_number,
+            user_turns)[0]
+        if self.ANNOTATIONS_ELEM is not None:
+            anns_xml = turn_xml.find(self.ANNOTATIONS_ELEM)
+            if anns_xml is None:
+                anns_left_sib = turn_xml.find(self.ANNOTATIONS_BEFORE)
+                if anns_left_sib is None:
+                    insert_idx = len(turn_xml)
+                else:
+                    insert_idx = turn_xml.index(anns_left_sib) + 1
+                anns_xml = etree.Element(self.ANNOTATIONS_ELEM)
+                turn_xml.insert(insert_idx, anns_xml)
+        else:
+            anns_xml = turn_xml
+
+        # Create the XML element for the transcription.
+        ann_xml = etree.Element(
+            self.ANNOTATION_ELEM,
+            annotation=str(dg_ann.pk),
+            is_gold="0",
+            breaks_gold="1" if sem_ann.breaks_gold else "0",
+            some_breaks_gold="1" if sem_ann.some_breaks_gold else "0",
+            program_version=dg_ann.program_version)
+        if dg_ann.user is not None:
+            username = dg_ann.user.username
+        else:
+            username = ''
+        ann_xml.set(self.AUTHOR_ATTR, username)
+        ann_xml.set(self.DATE_ATTR,
+                    self.format_datetime(dg_ann.date_saved))
+        ann_xml.text = sem_ann.da_str
+
+        # Insert the new XML element at its place, and return it.
+        if self.ANNOTATION_BEFORE:
+            ann_left_sib = anns_xml.find(self.ANNOTATION_BEFORE)
+        else:
+            ann_left_sib = None
+        if ann_left_sib is None:
+            insert_idx = len(anns_xml)
+        else:
+            insert_idx = anns_xml.index(ann_left_sib) + 1
+        anns_xml.insert(insert_idx, ann_xml)
+        return ann_xml
 
     def find_annotations(self):
         anns_above = self.sess_xml.find(self.ANNOTATIONS_ABOVE)
