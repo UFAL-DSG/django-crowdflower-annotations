@@ -161,8 +161,8 @@ span.user { color: red; font-weight: normal; }
 
 .displayed {
 	display: on;
-	# FIXME This setting should be ignored according to CSS specs, as 'on' is 
-	# not a valid value for 'display'.
+	/* FIXME This setting should be ignored according to CSS specs, as 'on' is */
+	/* not a valid value for 'display'. */
 }
 
 .hidden {
@@ -318,13 +318,14 @@ span.user { color: red; font-weight: normal; }
 					for(var index = 0; index < selects.length; index++)
 					{
 						select_id = selects[index].id;
-						if (select_id.substring(0,3) != "dat") {
+						if (select_id.substring(0, 3) != "dat") {
 							continue;
 						}
 						suffix = select_id.substring(3);
 						checkbox = document.getElementById("check" + suffix);
 						if (checkbox.checked){
-							if (selects[index].options[selects[index].selectedIndex].value == ""){
+							if (selects[index].options[
+										selects[index].selectedIndex].value == "") {
 								alert("CHYBA " +suffix );
 								// TODO dopsat vyjádření chyby
 							}
@@ -344,7 +345,7 @@ span.user { color: red; font-weight: normal; }
 									}
 								}
 								else if ((slot_select_value != "")
-												&& (value_select_value == "" )) {
+												 && (value_select_value == "" )) {
 									if (udws.indexOf(dat_select_value) == -1) {
 										alert("CHYBA: " + suffix);
 									}
@@ -380,8 +381,8 @@ span.user { color: red; font-weight: normal; }
 					{% if "accent" in EXTRA_QUESTIONS %}
 					if(other_accent.checked && accent_name.value.search(/\w/) === -1)
 					{
-						msg = "You say the speaker had a non-native English accent.\n";
-						msg += "Please, specify what accent you think he/she had.";
+						msg = "You say the speaker had a non-native English accent.\n\
+									 Please, specify what accent you think he/she had.";
 						alert(msg);
 						return false;
 					}
@@ -435,7 +436,7 @@ span.user { color: red; font-weight: normal; }
 					fname = selected_option;
 				}
 			}
-		  file_name = '{{ DOMAIN_URL }}{% if APP_PORT %}:{{ APP_PORT }}{% endif %}{{ APP_PATH }}static/slotvalues/' + fname + ".txt";
+			file_name = '{{ DOMAIN_URL }}{% if APP_PORT %}:{{ APP_PORT }}/{% endif %}{{ APP_PATH }}static/slotvalues/' + fname + ".txt";
 			value_id = "#value" + id;
 			$(value_id).load(file_name);
 
@@ -486,20 +487,20 @@ span.user { color: red; font-weight: normal; }
 			document.getElementById(slot_id).selectedIndex = 0;
 			document.getElementById(slot_id).selectedIndex = 0;
 			if (nd.indexOf(value) != -1) {
-				document.getElementById(slot_id).className = "hidden"
-				document.getElementById(value_id).className = "hidden"
+				document.getElementById(slot_id).className = "hidden";
+				document.getElementById(value_id).className = "hidden";
 			}
 			if (udws.indexOf(value) != -1) {
-				document.getElementById(slot_id).className = "displayed"
-				document.getElementById(value_id).className = "hidden"
+				document.getElementById(slot_id).className = "displayed";
+				document.getElementById(value_id).className = "hidden";
 			}
 			if (udwv.indexOf(value) != -1) {
-				document.getElementById(slot_id).className = "hidden"
-				document.getElementById(value_id).className = "displayed"
+				document.getElementById(slot_id).className = "hidden";
+				document.getElementById(value_id).className = "displayed";
 			}
 			if (bd.indexOf(value) != -1) {
-				document.getElementById(slot_id).className = "displayed"
-				document.getElementById(value_id).className = "displayed"
+				document.getElementById(slot_id).className = "displayed";
+				document.getElementById(value_id).className = "displayed";
 			}
 		}
 	}
@@ -536,6 +537,7 @@ function item_name2list(name, startidx, cutoff) {
 var name_of_dai = item_name2list("{{all_dat}}", 5, 2),
     name_of_slot = item_name2list("{{slot}}", 1, 1);
 
+// TODO Document.
 function add_dai(number) {
 	var activate_call, table_id, table_elem, pocet, suffix;
 

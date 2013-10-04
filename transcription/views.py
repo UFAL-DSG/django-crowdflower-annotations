@@ -37,7 +37,7 @@ from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn)
 from util import get_log_path, group_by, catch_locked_database
-
+from validator import validate_slu
 
 # Initialisation.
 random.seed()
@@ -578,12 +578,28 @@ def transcribe(request):
 
     # Prepare the data about turns into a form suitable for the template.
     turn_dicts = _create_turn_dicts(dg_data)
+
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
     context['turns'] = turn_dicts
     context['dbl_num_turns'] = 2 * len(turn_dicts)
     context['codes'] = dg_data.get_codes()
     context['form'] = TranscriptionForm(cid=cid, turn_dicts=turn_dicts)
+
+    # SLU-specific.
+    # TODO Rename to something more telling.
+    set1 = set.union(set(settings.nullary_dat),
+                     set(settings.unary_dat_with_slot))
+    set2 = set.union(set(settings.unary_dat_with_value),
+                     set(settings.binary_dat))
+    context['all_dat'] = set1 | set2
+    context['nul_dat'] = settings.nullary_dat
+    context['unar_with_slot'] = settings.unary_dat_with_slot
+    context['unar_with_value'] = settings.unary_dat_with_value
+    context['bin_dat'] = settings.binary_dat
+    context['slot'] = settings.name_of_slot
+
+    # Add selected config variables.
     context['DOMAIN_URL'] = settings.DOMAIN_URL
     context['APP_PORT'] = settings.APP_PORT
     context['APP_PATH'] = settings.APP_PATH
