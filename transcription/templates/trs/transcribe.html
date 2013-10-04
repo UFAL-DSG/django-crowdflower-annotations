@@ -318,10 +318,10 @@ span.user { color: red; font-weight: normal; }
 					for(var index = 0; index < selects.length; index++)
 					{
 						select_id = selects[index].id;
-						if (select_id.substring(0, 3) != "dat") {
+						if (select_id.substring(0, 6) != "newdat") {
 							continue;
 						}
-						suffix = select_id.substring(3);
+						suffix = select_id.substring(6);
 						checkbox = document.getElementById("check" + suffix);
 						if (checkbox.checked){
 							if (selects[index].options[
@@ -409,9 +409,9 @@ span.user { color: red; font-weight: normal; }
 			// TODO změna textu za roletkami zde
 
 			selected_option = this.options[this.selectedIndex].value
-			if (select_id.substring(0,3) == "dat"){
+			if (select_id.substring(0, 6) == "newdat"){
 				if (udwv.indexOf(selected_option) != -1 ){
-					id = select_id.substring(3)
+					id = select_id.substring(6)
 					fname = selected_option
 				}
 				else {
@@ -420,11 +420,11 @@ span.user { color: red; font-weight: normal; }
 			}
 			else
 			{
-				if (select_id.substring(0,4) != "slot"){
+				if (select_id.substring(0, 4) != "slot"){
 					return;
 				}
 				id = select_id.substring(4);
-				selector = "#dat" + id + " option:selected";
+				selector = "#newdat" + id + " option:selected";
 				dat_select_value = $(selector).val();
 				if (bd.indexOf(dat_select_value) == -1){
 					return;
@@ -545,7 +545,7 @@ function add_dai(number) {
 	table_elem = document.getElementById(table_id);
 	pocet = table_elem.getElementsByTagName("select").length;
 	suffix = "_" + number + "_" + (pocet / 3 + 1);
-	new_select_dat = make_select("dat", suffix, "displayed");
+	new_select_dat = make_select("newdat", suffix, "displayed");
 
 	activate_call = 'activate(this.options[this.selectedIndex]\
 				.value, ' + number + ', ' + (pocet / 3 + 1) + ')';
@@ -673,11 +673,15 @@ function add_dai(number) {
 			{% if 'slu' in TASKS %}
 				<div>
 					<table>
-					{% for trs, txt in turn.transcript %}
-					{% if trs != "other()" and trs != "null()" %}
+					{% for dai, txt in turn.transcript %}
+					{% if dai != "other()" and dai != "null()" %}
 						<tr>
-							<td><input type="checkbox" name="trs_{{turn.turn_number}}_{{forloop.counter}}" checked value="{{trs}}"></td>
-							<td>{{ trs }}</td>
+							<td>
+								<input type="checkbox" 
+												name="sludai_{{turn.turn_number}}_{{forloop.counter}}" 
+												checked value="{{dai}}">
+							</td>
+							<td>{{ dai }}</td>
 							<td>{{ txt }}</td>
 
 						</tr>
@@ -692,8 +696,9 @@ function add_dai(number) {
 								name="check_{{turn.turn_number}}_{{forloop.counter}}" checked>
 							</td>
 							<td>
-								<select id="dat_{{turn.turn_number}}_{{forloop.counter}}"
-										name="dat_{{turn.turn_number}}_{{forloop.counter}}"
+								<select 
+										id="newdat_{{turn.turn_number}}_{{forloop.counter}}"
+										name="newdat_{{turn.turn_number}}_{{forloop.counter}}"
 										class="displayed"
 										onChange="activate(this.options[this.selectedIndex].value, {{turn.turn_number}}, {{forloop.counter}});">
 									<option>

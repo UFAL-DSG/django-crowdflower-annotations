@@ -67,11 +67,17 @@ class TranscriptionForm(forms.Form):
         if turn_dicts is None:
             turn_dicts = tuple()
         cid = kwargs.pop('cid', None)
+        if args:
+            data = args.pop()
+        else:
+            data = kwargs.get('data', None)
         super(TranscriptionForm, self).__init__(*args, **kwargs)
 
         self.fields['cid'] = forms.CharField(widget=forms.HiddenInput(),
                                              initial=cid)
 
+        # FIXME These variable-number data are not regenerated currently.
+        # Recover transcriptions.
         for tpt_turn_num, turn_dict in enumerate(turn_dicts, start=1):
             if not turn_dict['has_rec']:
                 continue
@@ -79,6 +85,37 @@ class TranscriptionForm(forms.Form):
                 widget=forms.Textarea(
                     attrs={'style': 'width: 90%', 'rows': '3'}),
                 label=tpt_turn_num)
+
+        # Recover semantic annotations.
+        if data is not None:
+            checklist = filter(lambda item: item[0].startswith('check'),
+                               data.iteritems())
+            for tpt_turn_num, turn_dict in enumerate(turn_dicts, start=1):
+                if not turn_dict['has_rec']:
+                    continue
+                sem_prefix = 'sludai_{0}_'.format(tpt_turn_num)
+                dat_prefix = 'newdat_{0}_'.format(tpt_turn_num)
+                sem_trss = filter(lambda item: item[0].startswith(sem_prefix),
+                                  data.iteritems())
+                for trs_name, text in sem_trss:
+                    # FIXME This is weird, using the checkbox widget for a text
+                    # input field. Why is this so?
+                    self.fields[trs_name] = forms.CharField(
+                        widget=forms.CheckboxInput())
+                newdat_trss = filter(
+                    lambda item: item[0].startswith(dat_prefix),
+                    data.iteritems())
+                for trs_name, text in newdat_trss:
+                    if text != '':
+                        coords = trs_name[len('newdat_'):]
+                        check_name = 'check_{coo}'.format(coo=coords)
+                        if check_name in checklist:
+                            self.fields['newdat_{0}'.format(coords)] = (
+                                forms.CharField(widget=forms.Select()))
+                            self.fields['slot_{0}'.format(coords)] = (
+                                forms.CharField(widget=forms.Select()))
+                            self.fields['value_{0}'.format(coords)] = (
+                                forms.CharField(widget=forms.Select()))
 
     def __unicode__(self):
         import pprint
