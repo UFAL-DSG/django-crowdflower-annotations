@@ -127,6 +127,7 @@ class SystemTurn(DialogueTurn):
 class UserTurn(DialogueTurn):
     """A user turn, provided with a path to the recorded sound."""
     wav_fname = WavField(path=CONVERSATION_DIR, recursive=True, unique=True)
+    asr_hyp = ROCharField(max_length=255, blank=True, default='')
     slu_hyp = ROCharField(max_length=255, blank=True, default='')
 
     def __unicode__(self):

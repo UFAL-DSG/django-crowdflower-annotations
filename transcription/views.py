@@ -190,6 +190,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                             turn_number=turnnum,
                             turn_abs_number=uturn_nt.turn_abs_number,
                             wav_fname=wav_path,
+                            asr_hyp=uturn_nt.asr_hyp,
                             slu_hyp=uturn_nt.slu_hyp)
 
         def _get_systurn(systurn_nt):
