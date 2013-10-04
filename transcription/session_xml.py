@@ -10,10 +10,13 @@ import os.path
 import settings
 
 
-UserTurn_nt = namedtuple('UserTurn_nt', ['turn_number', 'wav_fname'])
+UserTurn_nt = namedtuple(
+    'UserTurn_nt',
+    ['turn_number', 'wav_fname', 'slu_hyp'])
 SystemTurn_nt = namedtuple('SystemTurn_nt', ['turn_number', 'text'])
-UserTurnAbs_nt = namedtuple('UserTurnAbs_nt', ['turn_abs_number',
-                                               'turn_number', 'wav_fname'])
+UserTurnAbs_nt = namedtuple(
+    'UserTurnAbs_nt',
+    ['turn_abs_number', 'turn_number', 'wav_fname', 'slu_hyp'])
 SystemTurnAbs_nt = namedtuple('SystemTurnAbs_nt', ['turn_abs_number',
                                                    'turn_number', 'text'])
 
@@ -235,6 +238,9 @@ class XMLSession(object):
         else:
             return trs_xml
 
+    def add_sem_annotation(self, sem_ann):
+        raise NotImplementedError()
+
     def find_annotations(self):
         anns_above = self.sess_xml.find(self.ANNOTATIONS_ABOVE)
         anns_after = anns_above.find(self.ANNOTATIONS_AFTER)
@@ -355,7 +361,9 @@ class XMLSession(object):
                     pass
                 else:
                     if turn_number not in uturnnums_seen:
-                        yield UserTurnAbs_nt(turn_abs_num, turn_number, rec)
+                        # FIXME: Include slu_hyp.
+                        yield UserTurnAbs_nt(turn_abs_num, turn_number,
+                                             rec, '')
                         uturnnums_seen.add(turn_number)
             else:
                 turn_number = int(turn_xml.attrib[self.TURNNUMBER_ATTR])
@@ -383,7 +391,8 @@ class XMLSession(object):
                 pass
             else:
                 if turn_number not in turnnums_seen:
-                    yield UserTurn_nt(turn_number, rec)
+                    # FIXME: Include slu_hyp.
+                    yield UserTurn_nt(turn_number, rec, '')
                     turnnums_seen.add(turn_number)
 
     @classmethod

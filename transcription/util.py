@@ -45,6 +45,11 @@ def group_by(objects, attrs):
     return groups
 
 
+# TODO Define a proper DA matching function.
+def das_match(da1, da2, *args, **kwargs):
+    return True
+
+
 def catch_locked_database(meth):
     """
     This decorator takes care of catching DatabaseError for a locked database.

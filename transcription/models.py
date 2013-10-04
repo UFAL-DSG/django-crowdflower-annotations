@@ -11,6 +11,7 @@ from db_fields import ROCharField, WavField, SizedTextField
 from session_xml import XMLSession
 from settings import (CODE_LENGTH, CODE_LENGTH_EXT, CONVERSATION_DIR,
     LISTS_DIR, USE_CF, EXTRA_QUESTIONS)
+from validator import validate_slu
 
 
 class Dialogue(models.Model):
@@ -71,7 +72,7 @@ class DialogueAnnotation(models.Model):
         off_tpt = ''
     # uni_tpt: template for self.__unicode__
     uni_tpt = ('(u: {{u}}; saved: {{ds}};{q_tpt}{acc_tpt}{off_tpt} dg: {{dg}})'
-               .format(q_tpt = qual_tpt, acc_tpt = acc_tpt, off_tpt = off_tpt))
+               .format(q_tpt=qual_tpt, acc_tpt=acc_tpt, off_tpt=off_tpt))
     del qual_tpt, acc_tpt, off_tpt
 
     # Common fields.
@@ -126,6 +127,7 @@ class SystemTurn(DialogueTurn):
 class UserTurn(DialogueTurn):
     """A user turn, provided with a path to the recorded sound."""
     wav_fname = WavField(path=CONVERSATION_DIR, recursive=True, unique=True)
+    slu_hyp = ROCharField(max_length=255, blank=True, default='')
 
     def __unicode__(self):
         return '<UserTurn: n:{num}; f:"{file_}">'.format(
@@ -133,9 +135,9 @@ class UserTurn(DialogueTurn):
             file_=self.wav_fname)
 
 
-class Transcription(models.Model):
-    """Transcription of one dialogue turn."""
-    text = SizedTextField(rows='3')
+class AbstractTranscription(models.Model):
+    """An abstraction for ASR and SLU transcriptions (or annotations)."""
+
     turn = models.ForeignKey(UserTurn)
     dialogue_annotation = models.ForeignKey(DialogueAnnotation)
     is_gold = models.BooleanField(default=False)
@@ -144,6 +146,9 @@ class Transcription(models.Model):
     """`some_breaks_gold' says whether any of all the transcriptions for the
     current dialogue from the current user mismatched a gold item."""
     date_updated = models.DateTimeField(auto_now=True)
+
+    class Meta(object):
+        abstract = True
 
     def __unicode__(self):
         return '({g}{b}{B} u:{u}, t:{t}, d:{d}, "{trs}")'\
@@ -164,8 +169,7 @@ class Transcription(models.Model):
         trs = kwargs.pop('instance')
         # Other transcriptions of the same dialogue annotation.
         this_ann_trss = Transcription.objects.filter(
-            dialogue_annotation=trs.dialogue_annotation)\
-                .exclude(pk=trs.pk)
+            dialogue_annotation=trs.dialogue_annotation).exclude(pk=trs.pk)
         # `is_gold = True' shall dictate values for `breaks_gold' and
         # `some_breaks_gold'
         if trs.breaks_gold:
@@ -208,7 +212,6 @@ class Transcription(models.Model):
                 this_ann_trss.update(some_breaks_gold=False)
                 trs.some_breaks_gold = False
 
-
     @staticmethod
     def post_save(sender, **kwargs):
         # Only continue if this is an update -- ignore inserts.
@@ -233,8 +236,20 @@ class Transcription(models.Model):
             trs_xml.text = trs.text
 
 
-pre_save.connect(Transcription.pre_save, sender=Transcription)
-post_save.connect(Transcription.post_save, sender=Transcription)
+pre_save.connect(AbstractTranscription.pre_save, sender=AbstractTranscription)
+post_save.connect(AbstractTranscription.post_save,
+                  sender=AbstractTranscription)
+
+
+class Transcription(AbstractTranscription):
+    """Transcription of one dialogue turn."""
+    text = SizedTextField(rows='3')
+
+
+class SemanticAnnotation(AbstractTranscription):
+    """Semantic annotation of one dialogue turn."""
+    da_str = models.TextField(max_length=255, validators=[validate_slu])
+
 
 class AbstractPriceClass(models.Model):
     """Stores the available dialogue prices."""

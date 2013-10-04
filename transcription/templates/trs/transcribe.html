@@ -673,7 +673,7 @@ function add_dai(number) {
 			{% if 'slu' in TASKS %}
 				<div>
 					<table>
-					{% for dai, txt in turn.transcript %}
+					{% for dai, txt in turn.dais_txts %}
 					{% if dai != "other()" and dai != "null()" %}
 						<tr>
 							<td>

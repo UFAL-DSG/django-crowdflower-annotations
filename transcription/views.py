@@ -35,7 +35,7 @@ import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn, SemanticAnnotation)
-from util import get_log_path, group_by, catch_locked_database
+from util import das_match, get_log_path, group_by, catch_locked_database
 
 # Initialisation.
 random.seed()
@@ -556,10 +556,6 @@ def transcribe(request):
 
                     # - Check semantic annotations (SLU).
                     if 'slu' in settings.TASKS:
-                        # TODO Define a proper DA matching function.
-                        def anns_match(ann1, ann2):
-                            return True
-
                         slu_mismatch = False
                         gold_anns = SemanticAnnotation.objects.filter(
                             dialogue_annotation__dialogue=dg_data,
@@ -569,7 +565,7 @@ def transcribe(request):
                             submismatch = True
                             ann = sem_anns[turn.turn_number - 1]
                             for gold_trs in turn_gold_trss:
-                                if anns_match(trs, gold_trs):
+                                if das_match(trs, gold_trs):
                                     submismatch = False
                                     break
                             if submismatch:
