@@ -687,6 +687,12 @@ def record_worker(post_dict):
             Crowdflower's HTTP request
 
     """
+
+    # If we got a Django QueryDict in the argument, adjust it from
+    # a multi-value dictionary to an ordinary dictionary.
+    if hasattr(post_dict, 'dict'):
+        post_dict = post_dict.dict()
+
     cf_data = json.loads(post_dict['payload'])
 
     # There are two known paths towards the 'judgments' value.
@@ -728,16 +734,14 @@ def process_worklog(log_fname):
     # Read contents of the log file.
     with open(log_fname) as log_file:
         contents = log_file.read()
-    # Strip the leading "<QueryDict: " and trailing ">".
-    sered_dict = contents[contents.index('{'):-1]
     # Deserialize the dict.
     try:
-        post_dict = eval(sered_dict)
+        post_dict = eval(contents)
         post_dict['payload'] = json.dumps(post_dict['payload'])
     except:
         return CF_LOG_NOT_APPLICABLE
     # Check that this log describes unit completion.
-    if post_dict.get('signal', [None])[0] != 'unit_complete':
+    if post_dict.get('signal', None) != 'unit_complete':
         return CF_LOG_NOT_APPLICABLE
     # Record worker based on this reconstructed POST dict.
     try:

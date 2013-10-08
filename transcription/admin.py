@@ -294,9 +294,9 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                 return queryset
 
             if val == '0':
-                return queryset.filter(transcription__isnull=True)
+                return queryset.filter(transcription__isnull=True).distinct()
             elif val == '1':
-                return queryset.filter(transcription__isnull=False)
+                return queryset.filter(transcription__isnull=False).distinct()
             else:
                 return queryset
 

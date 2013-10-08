@@ -1307,7 +1307,7 @@ if settings.USE_CF:
     @csrf_exempt
     def log_work(request):
         try:
-            signal = request.POST.get('signal', [None])[0]
+            signal = request.POST.get('signal', None)
             # Try: be robust
             # a.k.a. Pokemon exception handling: catch 'em all
             try:
@@ -1315,7 +1315,7 @@ if settings.USE_CF:
                     # Save the request data to a log.
                     log_path = get_log_path(settings.WORKLOGS_DIR)
                     with open(log_path, 'w') as log_file:
-                        log_file.write(repr(request.POST)
+                        log_file.write(repr(request.POST.dict())
                                        if hasattr(request, 'POST') else 'None')
             except Exception:
                 pass
