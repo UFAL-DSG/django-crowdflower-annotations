@@ -2,7 +2,7 @@
 # -*- coding: UTF-8 -*-
 
 from collections import namedtuple
-from datetime import datetime
+from datetime import datetime, timedelta
 from lxml import etree
 import os
 import os.path
@@ -16,6 +16,10 @@ UserTurnAbs_nt = namedtuple('UserTurnAbs_nt', ['turn_abs_number',
                                                'turn_number', 'wav_fname'])
 SystemTurnAbs_nt = namedtuple('SystemTurnAbs_nt', ['turn_abs_number',
                                                    'turn_number', 'text'])
+
+CF_DT_FORMAT = "%m/%d/%Y %H:%M:%S"
+DT_MATCH_TOL = timedelta(minutes=9999)
+CF_TD_SHIFT = timedelta(hours=-2)
 
 
 def is_dialogue_dirname(fname):
@@ -44,6 +48,57 @@ def update_worker_stats(gold_stats):
             n_els += session.update_worker_stats(gold_stats)
             n_files += (n_els > 0)
     return n_files, n_els
+
+
+def fill_in_worker_ids():
+    """
+    Uses cookie IDs stored with annotations to fill in worker IDs to
+    annotations that don't have them but have the cookie ID.
+    """
+    dg_dirs = filter(is_dialogue_dirname,
+                     os.listdir(settings.CONVERSATION_DIR))
+    cookie2ids = dict()
+    cids_to_fill = list()
+    # First pass: collect the mapping cookie -> worker_id.
+    for dg_dir in dg_dirs:
+        needs_be_filled = False
+        with XMLSession(cid=dg_dir) as session:
+            for ann in session.iter_annotations():
+                cookie = ann.get(settings.TRANSCRIBER_ID_ATTR, None)
+                if cookie is not None:
+                    wid = ann.get('worker_id', None)
+                    needs_be_filled |= (wid is None)
+                    cookie2ids.setdefault(cookie, set()).add(wid)
+        if needs_be_filled:
+            cids_to_fill.append(dg_dir)
+    # Determine a single worker ID for each cookie.
+    cookie2id = dict()
+    for cookie, ids in cookie2ids.iteritems():
+        if None in ids and len(ids) > 1:
+            # Take another worker ID than None.
+            cookie2id[cookie] = filter(None, ids)[0]
+    # Second pass: fill in worker_ids which we can deduce.
+    for cid in cids_to_fill:
+        with XMLSession(cid=cid) as session:
+            for ann in session.iter_annotations():
+                cookie = ann.get(settings.TRANSCRIBER_ID_ATTR, None)
+                wid = ann.get('worker_id', None)
+                if wid is None and cookie in cookie2id:
+                    ann.set('worker_id', cookie2id[cookie])
+
+
+def record_judgments(dgs_anns):
+    dg_dirs = set(filter(is_dialogue_dirname,
+                         os.listdir(settings.CONVERSATION_DIR)))
+    for cid, dg_anns in dgs_anns.iteritems():
+        if cid in dg_dirs:
+            with XMLSession(cid=cid) as session:
+                for judgment in dg_anns:
+                    try:
+                        session.record_judgment(judgment, match_date=True)
+                    except Exception as ex:
+                        print '{fname}: {ex}'.format(fname=session.sess_path,
+                                                     ex=ex)
 
 
 class FileNotFoundError(Exception):
@@ -130,6 +185,7 @@ class XMLSession(object):
                 except ValueError:
                     return datetime.strptime(dt_str, iso_format0)
         self.format_datetime = format_datetime
+        self.parse_datetime = parse_datetime
 
         return self
 
@@ -411,7 +467,7 @@ class XMLSession(object):
                 continue
             yield SystemTurn_nt(turn_number, text)
 
-    def record_judgment(self, judgment):
+    def record_judgment(self, judgment, match_date=False):
         """Records data about a judgment to this XML session log.
 
         It can be configured what all kinds of information is recorded, using
@@ -421,6 +477,9 @@ class XMLSession(object):
         Arguments:
             judgment -- an object describing one judgment, as created by
                 Crowdflower
+            match_date -- if True, the judgment will be recorded only if an
+                unassigned annotation element is present that matches the date
+                noted in the judgment (default: False)
 
         Returns True if the corresponding annotation element was found and
         updated, False otherwise (namely if an existing annotation element from
@@ -430,6 +489,10 @@ class XMLSession(object):
 
         # Get this worker's ID.
         worker_id = str(judgment["worker_id"])
+        # Get the desired date to match.
+        if match_date:
+            date = (datetime.strptime(judgment['created_at'], CF_DT_FORMAT)
+                    - CF_TD_SHIFT)
 
         # Find the relevant dialogue annotation element.
         # Heuristic: take the first one of the potential dialogue annotation
@@ -437,12 +500,30 @@ class XMLSession(object):
         unassigned_el = None
         for ann_el in self.iter_annotations(user=''):
             cur_worker_id = ann_el.get('worker_id', None)
-            if cur_worker_id is None and unassigned_el is None:
-                unassigned_el = ann_el
-            elif cur_worker_id == worker_id:
-                # Cancel the operation if it seems we would record the worker
-                # for the second time.
-                return False
+            if match_date:
+                if cur_worker_id is None or cur_worker_id == worker_id:
+                    date_saved = self.parse_datetime(ann_el.get('date_saved'))
+                    if abs(date - date_saved) < DT_MATCH_TOL:
+                        if unassigned_el is None:
+                            unassigned_el = ann_el
+                        else:
+                            # Cancel the operation if it seems we would record
+                            # the worker for the second time.
+                            return False
+                    # DEBUG
+                    else:
+                        dt_format = '%m. %d. %H:%M:%S'
+                        print '{created: >15} {saved: >15} {td: >4}'.format(
+                            created=date.strftime(dt_format),
+                            saved=date_saved.strftime(dt_format),
+                            td=abs(date - date_saved).seconds)
+            else:
+                if cur_worker_id is None and unassigned_el is None:
+                    unassigned_el = ann_el
+                elif cur_worker_id == worker_id:
+                    # Cancel the operation if it seems we would record the
+                    # worker for the second time.
+                    return False
 
         # Check that there is an element for the judgment we are about to
         # assign.

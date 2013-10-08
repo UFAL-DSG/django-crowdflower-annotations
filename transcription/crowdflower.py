@@ -22,11 +22,26 @@ if settings.USE_CF:
 else:
     from models import PriceClass
 from settings import SettingsException
-from session_xml import XMLSession, update_worker_stats
+from session_xml import XMLSession, record_judgments, update_worker_stats
 from transcription.models import UserTurn
 from util import get_log_path
 
 CF_URL_START = "https://api.crowdflower.com"
+HOOKNAMES2CSVNAMES = {
+    "city": "_city",
+    "region": "_region",
+    "created_at": "_created_at",
+    "unit_id": "_unit_id",
+    "country": "_country",
+    "tainted": "_tainted",
+    "trust": "_trust",
+    "id": "_id",
+    "external_type": "_channel",
+    "worker_id": "_worker_id",
+    "missed": "_missed",
+    "started_at": "_started_at",
+    "golden": "_golden",
+}
 
 default_job_cml_path = os.path.join(settings.PROJECT_DIR, 'transcription',
                                     'templates', 'crowdflower',
@@ -251,6 +266,55 @@ def _contact_cf(cf_url_part, data=None, type_ours='data', type_theirs='json',
     # Return the returned object in case of success.
     cf_msg = CrowdflowerMessage(status=status, obj=cf_outobj)
     return cf_msg
+
+
+def _wait_for_cf(*args, **kwargs):
+    """Calls _contact_cf as long as the response is not 200 OK.
+
+    Keyword arguments:
+        max_waits -- maximum number of tries to contact Crowdflower (and get
+            the 200 OK response)
+        wait_secs -- number of seconds between subsequent tries
+        other arguments -- will be passed on to _contact_cf
+
+    """
+
+    # Interpret the arguments.
+    max_waits = kwargs.get('max_waits', settings.CF_MAX_WAITS)
+    wait_secs = kwargs.get('wait_secs', settings.CF_WAIT_SECS)
+
+    # Wait for an OK response from CF.
+    for _ in xrange(max_waits):
+        try:
+            cf_msg = _contact_cf(*args, **kwargs)
+        except CrowdflowerException as cex:
+            return False, '\n'.join(cex.er_msgs)
+        else:
+            if str(cf_msg.status) != '200':
+                time.sleep(wait_secs)
+                continue
+            else:
+                return True, cf_msg
+    else:
+        msg = 'Timed out when waiting for Crowdflower.'
+        return False, msg
+
+
+def _get_job_report(job_id):
+    cf_url = 'jobs/{jobid}'.format(jobid=job_id)
+
+    # Wait for an OK response from CF.
+    success, msg = _wait_for_cf(cf_url, type_theirs='csv', out_zipped=True,
+                                out_enc=None)
+    # Process the response -- exceptions.
+    if not success:
+        return False, msg
+    if msg.obj is None:
+        msg = 'No judgments reported by Crowdflower.'
+        return False, msg
+
+    # In case of success, return the message.
+    return True, msg
 
 
 def _cf_json_getitem(cf_json, key, deser=True):
@@ -798,32 +862,14 @@ def collect_judgments(job_id):
     Returns a tuple (success?, reason).
 
     """
-    cf_url = 'jobs/{jobid}'.format(jobid=job_id)
 
-    # Wait for an OK response from CF.
-    for _ in xrange(settings.CF_MAX_WAITS):
-        try:
-            cf_msg = _contact_cf(cf_url, type_theirs='csv', out_zipped=True,
-                                 out_enc=None)
-        except CrowdflowerException as cex:
-            return False, '\n'.join(cex.er_msgs)
-        else:
-            if str(cf_msg.status) != '200':
-                time.sleep(settings.CF_WAIT_SECS)
-                continue
-            else:
-                break
-    else:
-        msg = 'Timed out when waiting for Crowdflower to generate the report.'
-        return False, msg
-
-    if cf_msg.obj is None:
-        msg = 'No judgments reported by Crowdflower.'
+    success, msg = _get_job_report(job_id)
+    if not success:
         return False, msg
 
     # Divide the first row as a CSV header.
-    header = cf_msg.obj[0]
-    recs = cf_msg.obj[1:]
+    header = msg.obj[0]
+    recs = msg.obj[1:]
 
     # Prepare for counting gold/missed items.
     gold_stats = dict()  # :: {worker_id -> [n_missed, n_gold]}
@@ -864,6 +910,42 @@ def collect_judgments(job_id):
            'session logs and {n_anns} individual annotations were updated.'
            ).format(n_workers=len(gold_stats), n_files=n_files, n_anns=n_anns)
     return True, msg
+
+
+def reconstruct_worker_ids(job_id):
+    """
+    Tries to fill in the worker_id attribute of annotations in XML logs based
+    on an overall job report retrieved from Crowdflower.
+
+    Arguments:
+        job_id -- ID of the Crowdflower job
+
+    """
+    # Get the job report.
+    success, msg = _get_job_report(job_id)
+    if not success:
+        return False, msg
+
+    # Divide the first row as a CSV header, read the column names.
+    header = msg.obj[0]
+    recs = msg.obj[1:]
+    header_dic = {name: idx for idx, name in enumerate(header)}
+    cid_idx = header_dic['cid']
+    field_idxs = {hook_name: header_dic[HOOKNAMES2CSVNAMES[hook_name]]
+                  for hook_name in settings.LOGGED_JOB_DATA
+                  if hook_name in HOOKNAMES2CSVNAMES}
+    field_idxs['created_at'] = header_dic['_created_at']
+    field_idxs['worker_id'] = header_dic['_worker_id']
+
+    # Transform the information into a suitable form.
+    dgs_anns = dict()  # :: {cid -> [annotation data]}
+    for rec in recs:
+        cid = rec[cid_idx]
+        dg_ann = {hook_name: rec[field_idxs[hook_name]]
+                  for hook_name in field_idxs}
+        dgs_anns.setdefault(cid, list()).append(dg_ann)
+
+    record_judgments(dgs_anns)
 
 
 class JsonDialogueUpload(object):
