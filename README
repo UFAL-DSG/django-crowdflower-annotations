@@ -34,7 +34,7 @@ How to set up the transcription environment on the server:
 	below the root <VirtualHost> element:
 
 		WSGIDaemonProcess app_transcript
-		WSGIScriptAlias /apps/transcription /webapps/transcription/site/wsgi.py
+		WSGIScriptAlias /apps/transcription /webapps/transcription/trs_site/wsgi.py
 		<Location /apps/transcription>
 			WSGIProcessGroup app_transcript
 		</Location>
@@ -57,6 +57,17 @@ How to set up the transcription environment on the server:
 	# PROJECT_PATH=/webapps/transcription
 	# cd $PROJECT_PATH &&\
 		chown www-data db{,trss.db} data/{,conversations,import,lists} log/{curl,work}_logs
+
+# [Optional] Save the name and domain of your new site to the database.  
+	The name of the site appears in password-reset emails, and defaults to 
+	example.com.
+
+	You can change the domain and name of the site using the following 
+	commands:
+
+	# cd $PROJECT_PATH && ./manage.py dbshell
+	SQL> UPDATE django_site SET name = '<your chosen site name>';
+	SQL> UPDATE django_site SET domain = '<your site domain>';
 
 # Collect static files using the following command:
 

@@ -6,7 +6,7 @@ import sys
 if __name__ == "__main__":
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
     sys.path.insert(0, os.path.join(os.path.dirname(
-        os.path.abspath(__file__)), 'site'))
+        os.path.abspath(__file__)), 'trs_site'))
 
     sys.path.extend(['/webapps/cf_transcription/libs/python',
                      '/webapps/cf_transcription/libs/django-1.4.1',

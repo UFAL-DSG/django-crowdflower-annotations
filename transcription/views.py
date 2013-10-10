@@ -312,6 +312,7 @@ def transcribe(request):
 
     success = None  # whether annotation data have been successfully stored
     cookie_value = None  # value for the transcriber-tracking cookie
+    user_anon = not request.user.is_authenticated()
 
     # If the form has been submitted,
     if request.method == "POST":
@@ -355,7 +356,7 @@ def transcribe(request):
 
             # Create the DialogueAnnotation object and save it into DB.
             dg_ann = None
-            if request.user.is_authenticated():
+            if not user_anon:
                 open_dg_ann = DialogueAnnotation.objects.filter(
                     user=request.user, dialogue=dg_data, finished=False)
                 if open_dg_ann.exists():
@@ -379,11 +380,11 @@ def transcribe(request):
             if 'offensive' in settings.EXTRA_QUESTIONS:
                 dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
             dg_ann.notes = form.cleaned_data['notes']
-            if request.user.is_authenticated():
-                dg_ann.user = request.user
-            else:
+            if user_anon:
                 # A dummy user.
                 dg_ann.user = dummy_user
+            else:
+                dg_ann.user = request.user
             dg_ann.save()
 
             # Read the XML session file.

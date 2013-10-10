@@ -36,15 +36,18 @@ div#content {
   </head>
 <body>
 
+{% block headbar %}
 {% if not user.is_anonymous %}
 <div id="headbar">
 <a href="{% url "home" %}">Home</a> | 
 Login: {{ user.username }} | 
-<a href="{% url "logout" %}">Log Out</a>
+<a href="{% url "logout" %}">Log Out</a> |
+<a href="{% url "password_change" %}">Change password</a>
 {% block heading %}
 {% endblock heading %}
 </div>
 {% endif %}
+{% endblock %}
 
 <div id="content">
 {% block content %}

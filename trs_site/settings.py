@@ -204,7 +204,7 @@ LOGGING = {
     }
 }
 
-WSGI_APPLICATION = "site.wsgi.application"
+WSGI_APPLICATION = "trs_site.wsgi.application"
 SUB_SITE = APP_URL
 # FORCE_SCRIPT_NAME = "/transcription"
 LOGIN_URL = APP_URL + "/accounts/login/"
