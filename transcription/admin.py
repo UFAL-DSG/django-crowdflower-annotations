@@ -155,8 +155,11 @@ class DialogueAdmin(admin.ModelAdmin):
                 return queryset
 
             is_anned = bool(int(val))
-            return queryset.filter(
-                dialogueannotation__isnull=not is_anned).distinct()
+            if is_anned:
+                return queryset.filter(dialogueannotation__finished=True
+                                       ).distinct()
+            else:
+                return queryset.exclude(dialogueannotation__finished=True)
 
     list_filter = ('list_filename', GoldListFilter, AnnotatedListFilter,
                    PriceBinListFilter)

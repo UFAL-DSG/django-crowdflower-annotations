@@ -43,6 +43,7 @@ div#content {
 Login: {{ user.username }} | 
 <a href="{% url "logout" %}">Log Out</a> |
 <a href="{% url "password_change" %}">Change password</a>
+<span style="float: right;">Transcribed (by me / by anyone / total # dialogues): {{ n_trsed_by_me }} / {{ n_trsed }} / {{ n_trss }}</span>
 {% block heading %}
 {% endblock heading %}
 </div>
