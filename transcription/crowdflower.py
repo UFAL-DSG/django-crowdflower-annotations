@@ -723,9 +723,16 @@ def delete_job(jobid, force_delete_from_db=True):
     return success, ret_msg
 
 
-def update_gold(dg):
-    """Updates the gold status of `dg' on Crowdflower."""
-    job_id = price_class_handler.get_job_id(dg)
+def update_gold(dg, job_id=None):
+    """Updates the gold status of `dg' on Crowdflower.
+
+    Arguments:
+        dg -- the Dialogue object for the dialogue
+        job_id -- if another job ID than the one computed for `dg' by the price
+            class handler should be used, specify it here
+
+    """
+    job_id = job_id or price_class_handler.get_job_id(dg)
     success, unit_pair = unit_pair_from_cid(job_id, dg.cid)
     if not success:
         msg = unit_pair
@@ -956,7 +963,7 @@ class JsonDialogueUpload(object):
     """
     # TODO: Implementing __len__ might be helpful...
 
-    def __init__(self, dg_datas=None):
+    def __init__(self, dg_datas=None, to_higher=False):
         """
         Creates a new JSON object to be uploaded to Crowdflower as job data
         for a dialogue.
@@ -965,17 +972,17 @@ class JsonDialogueUpload(object):
         self._uploaded = False
         self.data = dict()
         if dg_datas is not None:
-            self.extend(dg_datas)
+            self.extend(dg_datas, to_higher)
 
-    def add(self, dg):
+    def add(self, dg, to_higher=False):
         uturns = UserTurn.objects.filter(dialogue=dg)
         if len(uturns) >= settings.MIN_TURNS:
-            job_id = price_class_handler.get_job_id(dg)
+            job_id = price_class_handler.get_job_id(dg, one_higher=to_higher)
             self.data.setdefault(job_id, []).append(dg)
 
-    def extend(self, dg_datas):
+    def extend(self, dg_datas, to_higher=False):
         for dg in dg_datas:
-            self.add(dg)
+            self.add(dg, to_higher)
 
     def upload(self, force=False, check_existing=True):
         """
@@ -996,7 +1003,7 @@ class JsonDialogueUpload(object):
             success, cur_units = list_units(job_id)
             if success:
                 cur_cids = tuple(unit['cid']
-                                 for unit in cur_units.values())
+                                 for unit in cur_units.itervalues())
             else:
                 error_msgs.append('Could not retrieve existing units for '
                                   'job ID {jobid}.'.format(jobid=job_id))
@@ -1023,13 +1030,18 @@ class JsonDialogueUpload(object):
                                             content_type='csv')
                 if success:
                     num_dgs_successful += len(dgs_to_upload)
-                    # Wait for CF to update its records.
-                    time.sleep(settings.CF_WAIT_SECS)
 
-                    for dg in filter(is_gold, self.data[job_id]):
-                        success, msg = update_gold(dg)
-                        if not success:
-                            error_msgs.append(msg)
+                    # Update gold status for the new golden dialogues if there
+                    # are any.
+                    gold_dgs = filter(is_gold, self.data[job_id])
+                    if gold_dgs:
+                        # Wait for CF to update its records.
+                        time.sleep(settings.CF_WAIT_SECS)
+
+                        for dg in gold_dgs:
+                            success, msg = update_gold(dg, job_id)
+                            if not success:
+                                error_msgs.append(msg)
             if not success:
                 error_msgs.append(msg)
 
@@ -1118,13 +1130,15 @@ class _PriceClassHandler(object):
 
             CrowdflowerJob.objects.create(cents=cents, job_id=str(job_id))
 
-    def get_job_id(self, dg):
+    def get_job_id(self, dg, one_higher=False):
         """
         Returns the Crowdflower job ID (a string) for the job where a given
         dialogue would fit.
 
         Arguments:
             dg -- a Django dialogue object
+            one_higher -- if True, the job ID for the next higher price
+                class will be returned instead (default: False)
 
         """
 
@@ -1137,15 +1151,26 @@ class _PriceClassHandler(object):
             raise ValueError('No active Crowdflower jobs are defined.')
         # If several price classes are distinguished,
         else:
-            try:
-                # This selects the nearest lower price step.
-                price_cat = max(filter(
-                    lambda step: step <= dg.transcription_price,
-                    price_classes))
-            except ValueError:
-                # Or, in case no price step is lower, the lowest price step
-                # absolute.
-                price_cat = min(price_classes)
+            if one_higher:
+                try:
+                    # This selects the nearest higher price step.
+                    price_cat = min(filter(
+                        lambda step: step > dg.transcription_price,
+                        price_classes))
+                except ValueError:
+                    # Or, in case no price step is higher, the highest price
+                    # step absolute.
+                    price_cat = max(price_classes)
+            else:
+                try:
+                    # This selects the nearest lower price step.
+                    price_cat = max(filter(
+                        lambda step: step <= dg.transcription_price,
+                        price_classes))
+                except ValueError:
+                    # Or, in case no price step is lower, the lowest price step
+                    # absolute.
+                    price_cat = min(price_classes)
             return price_classes[price_cat]
 
     def get_job_ids(self):

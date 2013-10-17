@@ -238,8 +238,25 @@ class DialogueAdmin(admin.ModelAdmin):
             'Upload to CrowdFlower (only those dialogues that have not been '
             'uploaded yet)')
 
+        def upload_to_higher_job(modeladmin, request, queryset):
+            success, msg = JsonDialogueUpload(queryset, to_higher=True
+                                              ).upload()
+            if success:
+                modeladmin.message_user(
+                    request,
+                    '{num} dialogues have been successfully uploaded to '
+                    'Crowdflower to a higher price class.'.format(num=msg))
+            else:
+                messages.error(request,
+                               ('Failed to upload the dialogues: {msg}'
+                                .format(msg=msg)))
+
+        upload_to_higher_job.short_description = (
+            'Upload to CrowdFlower (to a higher price class)')
+
         actions = [update_price_action, export_annotations,
-                   upload_to_crowdflower, update_gold_action]
+                   upload_to_crowdflower, update_gold_action,
+                   upload_to_higher_job]
     else:
         actions = [update_price_action, export_annotations]
 
