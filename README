@@ -159,3 +159,59 @@ How to import dialogues:
 	Upload to Crowdflower action from the Dialogues admin page.  There, you 
 	will be provided with various filters to help you specify exactly the 
 	set of dialogues you wish to have annotated.
+
+	Note that the CSV file you are asked to provide name for may be very 
+	helpful when the transcriptions are done and you want to delete the 
+	dialogue logs from the filesystem. Therefore, you should enter a name for 
+	it by which you will be able to recognize what data subset it belongs to.  
+	This CSV file is stored in the directory configured as CONVERSATION_DIR.
+
+
+How to get data out of the system:
+----------------------------------
+
+There are two ways to export the data from the database Django uses 
+internally:
+
+	A) Make a database dump.
+
+	B) Export the dialogue logs.
+
+
+(A) is done by simply running the script scripts/dumpdata.sh. This exports 
+the data from the Transcription app and data about the Django users, to the 
+data/dumps directory in the JSON format.
+
+	This is a good option to backup your data (they can be loaded again using 
+./manage.py loaddata dump.json) but not the right option if you want to 
+further process the transcriptions. In the latter case, follow the option 
+(B).
+
+
+(B) is done from the Admin site ("Admin" option in the main menu) for 
+Dialogues (click the link Dialogues at the main admin page). Select 
+dialogues you wish to export using the checkboxes left of dialogue names, 
+possibly with the help of filters or the search field. (Note also the 
+"Select all N dialogues" link right of the search field if you check the 
+checkbox in the header row.) From the Action rolldown menu, select the 
+"Export annotations" option and click Go.  The dialogue logs with 
+annotations will be exported to data/export.  Check the message at the top 
+of the page that loads after the export is done for the exact path to the 
+annotated logs directory.
+
+	After you have exported the data, you probably want to copy them back to 
+the dialogue directories, possibly on a remote server.
+
+	Note that by exporting the data, you do NOT remove them either from the 
+app's database nor from the filesystem. If you want to remove them from the 
+database, choose the appropriate action from the Admin site where you 
+exported them. If you want to remove them from the filesystem, go ahead and 
+remove them after you removed them from the Django database (otherwise, the 
+app might be looking for them in the "transcribe" view, and not finding 
+them). All the dialogue logs are stored in the directory configured as 
+CONVERSATION_DIR.
+
+	BEFORE YOU REMOVE THE DATA from the database, you might want to measure 
+work done for all the annotators, unless a different awarding scheme is in 
+force. Use the Transcriptions admin page and the "Measure work done" action 
+to get a report about the amount of work done by each annotator.
