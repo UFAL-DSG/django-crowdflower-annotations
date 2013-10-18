@@ -17,7 +17,13 @@
 <li><a href="{% url "reuse_worklogs" %}">Reuse work logs</a></li>
 {% endif %}
 <li><a href="{% url "admin:index" %}">Admin</a></li>
-<!-- <li><a href="{% url "test_view" %}">Test view</a></li> -->
+{% comment %}
+	{% if settings.DEBUG %}
+	<!-- The test view is by default hidden. If you want to use it to 
+	debug, remove the %comment% tags. -->
+	<li><a href="{% url "test_view" %}">Test view</a></li>
+	{% endif %}
+{% endcomment %}
 {% endif %}
 </ul>
 {% endblock content %}

@@ -159,6 +159,8 @@ TEMPLATE_DIRS = (
     # Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
     os.path.join(PROJECT_DIR, "transcription/templates").replace('\\', '/'),
+    os.path.join(DJANGO_PATH,
+                 "contrib/admin/templates/admin").replace('\\', '/'),
 )
 
 INSTALLED_APPS = (
@@ -204,15 +206,9 @@ LOGGING = {
     }
 }
 
-TEMPLATE_CONTEXT_PROCESSORS = (
-    "django.contrib.auth.context_processors.auth",
-    "django.core.context_processors.debug",
-    "django.core.context_processors.i18n",
-    "django.core.context_processors.media",
-    "django.core.context_processors.static",
-    "django.core.context_processors.tz",
-    "django.contrib.messages.context_processors.messages",
-    "transcription.context_processors.trs_stats")
+from django.conf.global_settings import TEMPLATE_CONTEXT_PROCESSORS
+TEMPLATE_CONTEXT_PROCESSORS += ("transcription.context_processors.config_vars",
+                                "transcription.context_processors.trs_stats", )
 
 WSGI_APPLICATION = "trs_site.wsgi.application"
 SUB_SITE = APP_URL

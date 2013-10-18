@@ -481,7 +481,6 @@ def transcribe(request):
 
             # Populate the context with data from the previous dialogue (form).
             context = settings.TRANSCRIBE_EXTRA_CONTEXT
-            context['app_url'] = settings.APP_URL
             for key, value in request.POST.iteritems():
                 context[key] = value
             context['form'] = form
@@ -578,7 +577,6 @@ def transcribe(request):
     # Prepare the data about turns into a form suitable for the template.
     turn_dicts = _create_turn_dicts(dg_data)
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
-    context['app_url'] = settings.APP_URL
     context['success'] = str(success)
     context['turns'] = turn_dicts
     context['dbl_num_turns'] = 2 * len(turn_dicts)
@@ -601,8 +599,7 @@ def transcribe(request):
 
 @login_required
 def home(request):
-    context = {'USE_CF': settings.USE_CF}
-    return render(request, "trs/home.html", context)
+    return render(request, "trs/home.html")
 
 
 @login_required
@@ -612,10 +609,7 @@ def import_dialogues(request):
 
     # Check whether the form is yet to be served.
     if not request.GET:
-        context = {'use_cf': settings.USE_CF,
-                   'app_url': settings.APP_URL}
-        return render(request, "trs/import.html", context,
-                      context_instance=RequestContext(request))
+        return render(request, "trs/import.html")
 
     # Initialisation.
     session_missing = []
@@ -752,7 +746,6 @@ def import_dialogues(request):
     # Render the response.
     context = dict()
     context['MIN_TURNS'] = settings.MIN_TURNS
-    context['SUB_SITE'] = settings.SUB_SITE
     context['session_missing'] = session_missing
     context['session_empty'] = session_empty
     context['copy_failed'] = copy_failed

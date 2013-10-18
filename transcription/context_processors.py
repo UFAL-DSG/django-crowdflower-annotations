@@ -4,6 +4,13 @@
 from __future__ import unicode_literals
 
 from transcription.models import Dialogue, DialogueAnnotation
+import settings
+
+
+def config_vars(request):
+    return {'USE_CF': settings.USE_CF,
+            'APP_URL': settings.APP_URL,
+            'SUB_SITE': settings.SUB_SITE}
 
 
 def trs_stats(request):

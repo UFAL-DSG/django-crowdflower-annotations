@@ -12,7 +12,7 @@ input[type="checkbox"] {
 {% block content %}
 <h1>Dialogue import</h1>
 
-<form action="{{ app_url }}/import" method="GET">
+<form action="{{ APP_URL }}/import" method="GET">
 	<table>
 		<tr>
 			<td><label for="id_list_fname">Filelist filename</label></td>
@@ -34,7 +34,7 @@ input[type="checkbox"] {
 			<td><input type="checkbox" name="ignore_exdirs" value="on" id="id_ignore_exdirs"></td>
 			<td><label for="id_ignore_exdirs">Ignore copy errors due to existing directories?</label></td>
 		</tr>
-		{% if use_cf %}
+		{% if USE_CF %}
 		<tr>
 			<td><input type="checkbox" name="upload" value="on" id="id_upload" checked></td>
 			<td><label for="id_upload">Upload to CrowdFlower?</label></td>

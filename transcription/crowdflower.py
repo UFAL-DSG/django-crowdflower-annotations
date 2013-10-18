@@ -512,11 +512,13 @@ def upload_units(job_id, data, content_type='json'):
     except CrowdflowerException as cex:
         lead = 'job {jobid}: '.format(jobid=job_id)
         error_msg = '\n'.join((lead + msg) for msg in cex.er_msgs)
-        return False, error_msg
+        ret = False, error_msg
     else:
-        list_units.cache_clear()
-        unit_id_from_cid.cache_clear()
-        return True, None
+        ret = True, None
+
+    list_units.cache_clear()
+    unit_id_from_cid.cache_clear()
+    return ret
 
 
 def unit_pair_from_cid(job_id, cid):
