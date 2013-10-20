@@ -239,7 +239,7 @@ class XMLSession(object):
         user_turns = self.sess_xml.findall(self.USERTURN_PATH)
         turn_xml = filter(
             lambda turn_xml: \
-                int(turn_xml.get(self.TURNNUMBER_ATTR)) \
+                int(turn_xml.get(self.TURNNUMBER_ATTR, -1)) \
                     == trs.turn.turn_number,
             user_turns)[0]
         if self.TRANSCRIPTIONS_ELEM is not None:
@@ -346,7 +346,12 @@ class XMLSession(object):
 
         # Iterate user turns and yield their respective transcriptions.
         for uturn_el in self.sess_xml.iterfind(self.USERTURN_PATH):
-            turn_number = int(uturn_el.get(self.TURNNUMBER_ATTR))
+            try:
+                turn_number = int(uturn_el.get(self.TURNNUMBER_ATTR, -1))
+            except TypeError:
+                # Some turns in the XML logs don't have the turn number
+                # attribute, which leads to a TypeError. Skip such turns.
+                continue
             # Find transcriptions in this turn (assumably, there will be
             # one, but there may be none).
             for trs in uturn_el.iterfind(trs_subpath):
