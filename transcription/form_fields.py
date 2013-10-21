@@ -1,3 +1,6 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
+
 from django import forms
 from transcription.widgets import DatetimeWidget, LinkWidget, PlayWidget
 from django.forms.models import ModelChoiceField
@@ -58,3 +61,12 @@ class DatetimeField(forms.fields.DateTimeField):
         super_kwargs = filter_field_kwargs(kwargs)
         super_kwargs['widget'] = DatetimeWidget
         super(DatetimeField, self).__init__(*args, **super_kwargs)
+
+
+class ListField(forms.Field):
+    def to_python(self, value):
+        """Normalises data to a list of strings."""
+        # Return None if no input was given.
+        if not value:
+            return list()
+        return sorted(set(map(unicode.strip, value.split(','))))
