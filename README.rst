@@ -1,6 +1,7 @@
 Prerequisites
 -------------
 - Python 2 (version 2.7.3 proven to work)
+
   ::
 
     # apt-get install python2.7
@@ -36,11 +37,13 @@ How to set up the transcription environment on the server
 
 3. Set up your webserver to find your new transcription web application.  
    For Apache, this can be done by inserting a snippet like the following to
+
    ::
 
      /etc/apache2/sites-available/default
 
    and
+
    ::
 
      /etc/apache2/sites-enabled/000-default
