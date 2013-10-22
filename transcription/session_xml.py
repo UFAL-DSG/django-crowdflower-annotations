@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: UTF-8 -*-
 
-from collections import namedtuple
+from collections import defaultdict, namedtuple
 from datetime import datetime, timedelta
 from lxml import etree
 import os
@@ -16,6 +16,10 @@ UserTurnAbs_nt = namedtuple('UserTurnAbs_nt', ['turn_abs_number',
                                                'turn_number', 'wav_fname'])
 SystemTurnAbs_nt = namedtuple('SystemTurnAbs_nt', ['turn_abs_number',
                                                    'turn_number', 'text'])
+
+WorkerIDStats = namedtuple('WorkerIDStats',
+                           ['cid', 'n_kept_full', 'n_conflicting', 'n_updated',
+                            'n_kept_empty'])
 
 CF_DT_FORMAT = "%m/%d/%Y %H:%M:%S"
 DT_MATCH_TOL = timedelta(minutes=9999)
@@ -50,15 +54,36 @@ def update_worker_stats(gold_stats):
     return n_files, n_els
 
 
-def fill_in_worker_ids():
+def fill_in_worker_ids(force=False):
     """
     Uses cookie IDs stored with annotations to fill in worker IDs to
     annotations that don't have them but have the cookie ID.
+
+    Keyword arguments:
+        force -- if True, existing worker IDs are overwritten with those we
+            think should be there based (default: False)
+
+    Returns a tuple (ambig_cookies, resolved_cookies, cid_stats), where:
+        ambig_cookies is a set of cookie values that were seen with different
+            worker IDs and could not be disambiguated;
+        resolved_cookies is a set of cookie values that were seen with
+            different worker IDs and were disambiguated (non-empty only if
+            force=True); and
+        cid_stats is a list of WorkerIDStats, describing how many annotation
+            elements had seen their worker IDs updated, not updated, or
+            conflicting.
+
     """
+
     dg_dirs = filter(is_dialogue_dirname,
                      os.listdir(settings.CONVERSATION_DIR))
-    cookie2ids = dict()
+    cookie2ids = defaultdict(lambda: defaultdict(int))
     cids_to_fill = list()
+    ambig_cookies = set()
+    resolved_cookies = set()
+    cid_stats = list()  # :: (cid, n_kept_full, n_conflicting, n_updated,
+                        #     n_kept_empty)
+
     # First pass: collect the mapping cookie -> worker_id.
     for dg_dir in dg_dirs:
         needs_be_filled = False
@@ -68,24 +93,68 @@ def fill_in_worker_ids():
                 if cookie is not None:
                     wid = ann.get('worker_id', None)
                     needs_be_filled |= (wid is None)
-                    cookie2ids.setdefault(cookie, set()).add(wid)
+                    cookie2ids[cookie][wid] += 1
         if needs_be_filled:
             cids_to_fill.append(dg_dir)
+
     # Determine a single worker ID for each cookie.
     cookie2id = dict()
     for cookie, ids in cookie2ids.iteritems():
-        if None in ids and len(ids) > 1:
+        needs_be_filled = None in ids
+        n_known_ids = len(ids) - int(needs_be_filled)
+        if needs_be_filled and n_known_ids == 1:
             # Take another worker ID than None.
             cookie2id[cookie] = filter(None, ids)[0]
+        # If this cookie was seen with several worker IDs,
+        elif n_known_ids > 1:
+            if force:
+                # Try to determine which worker ID is the correct one.
+                # The criterion we use is: when there is a single worker ID
+                # that appeared with this cookie at least thrice, and all other
+                # worker IDs appeared with this cookie at most once, we take
+                # the thrice-and-more occurring worker ID for the correct one.
+                likely_ids = [wid
+                              for wid, n_occs in cookie2ids[cookie].iteritems()
+                              if wid is not None and n_occs >= 3]
+                possible_ids = [wid for wid, n_occs
+                                in cookie2ids[cookie].iteritems()
+                                if wid is not None and n_occs >= 2]
+                if len(possible_ids) == 1 == len(likely_ids):
+                    cookie2id[cookie] = likely_ids[0]
+                    resolved_cookies.add(cookie)
+                    continue
+            ambig_cookies.add(cookie)
+
     # Second pass: fill in worker_ids which we can deduce.
     for cid in cids_to_fill:
+        n_kept_full = n_conflicting = n_updated = n_kept_empty = 0
         with XMLSession(cid=cid) as session:
             for ann in session.iter_annotations():
                 cookie = ann.get(settings.TRANSCRIBER_ID_ATTR, None)
                 wid = ann.get('worker_id', None)
-                if wid is None and cookie in cookie2id:
-                    ann.set('worker_id', cookie2id[cookie])
+                # If a worker ID has been assigned to this annotation,
+                if wid is not None:
+                    # Check whether it is not in contrary to what we would put
+                    # there based on the cookie.
+                    conflicts = (cookie2id.get(cookie, wid) != wid)
+                    if conflicts:
+                        n_conflicting += 1
+                        if force:
+                            ann.set('worker_id', cookie2id[cookie])
+                    else:
+                        n_kept_full += 1
+                # If no worker ID has been assigned to this annotation,
+                else:
+                    # If we know the worker ID that should be here,
+                    if cookie in cookie2id:
+                        ann.set('worker_id', cookie2id[cookie])
+                        n_updated += 1
+                    else:
+                        n_kept_empty += 1
+        cid_stats.append(WorkerIDStats(cid, n_kept_full, n_conflicting,
+                                       n_updated, n_kept_empty))
 
+    return ambig_cookies, resolved_cookies, cid_stats
 
 def record_judgments(dgs_anns):
     dg_dirs = set(filter(is_dialogue_dirname,
@@ -500,8 +569,8 @@ class XMLSession(object):
                     - CF_TD_SHIFT)
 
         # Find the relevant dialogue annotation element.
-        # Heuristic: take the first one of the potential dialogue annotation
-        # XML elements.
+        # XXX Heuristic: take the first one of the potential dialogue
+        # annotation XML elements.
         unassigned_el = None
         for ann_el in self.iter_annotations(user=''):
             cur_worker_id = ann_el.get('worker_id', None)

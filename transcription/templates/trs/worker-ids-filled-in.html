@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block head %}
+<script src="{{ MEDIA_URL }}js/jquery.js"></script>
+<script type="text/javascript">
+$(document).ready(function() {
+	var controls = document.getElementsByClassName('hideControl'),
+			idx,
+			control;
+  for(idx = 0; idx < controls.length; idx++)
+  {
+    control = controls[idx];
+    control.onclick = function() {
+      var mytab = $(this).nextAll().filter("table").first();
+      this.disabled = true;
+      if( mytab.is(':hidden') )
+      {
+        $(this).text('Showing...');
+        mytab.slideDown(
+          'fast', 'swing',
+          function() {
+            var mycontrol = $(this).prevAll().filter('.hideControl').first();
+            mycontrol.text('Hide');
+            mycontrol.attr('disabled', false);});
+      }
+      else
+      {
+        $(this).text('Hiding...');
+        mytab.slideUp(
+          'fast', 'swing',
+          function() {
+            var mycontrol = $(this).prevAll().filter('.hideControl').first();
+            mycontrol.text('Show');
+            mycontrol.attr('disabled', false);});
+      }
+    };
+  }  
+});
+</script>
+{% endblock %}
+
+{% block content %}
+<h1>Worker ID reconstruction report</h1>
+
+<p>
+A total of <strong>{{ cid_stats|length }}</strong> work log{{ cid_stats|length|pluralize }} have been processed.
+</p>
+
+{% if ambig_cookies or resolved_cookies %}
+<h2>Ambiguous cookies</h2>
+<p><strong>{{ n_ambig_both }}</strong> cookie{{ n_ambig_both|pluralize }} were seen with at least two different worker IDs:</p>
+<h3>Resolved</h3>
+{% if resolved_cookies %}
+<p><strong>{{ resolved_cookies|length }}</strong> cookies' worker ID ambiguity was resolved:</p>
+<button class="hideControl">Hide</button>
+<table>
+	{% for cookie in resolved_cookies %}
+	<tr><td>{{ cookie }}</td></tr>
+	{% endfor %}
+<table>
+{% else %}
+<p>There were no cookies with their worker ID ambiguity resolved.</p>
+{% endif %}
+
+<h3>Not resolved</h3>
+{% if ambig_cookies %}
+<p><strong>{{ ambig_cookies|length }}</strong> cookies' worker ID ambiguity was ambig:</p>
+<button class="hideControl">Hide</button>
+<table>
+	{% for cookie in ambig_cookies %}
+	<tr><td>{{ cookie }}</td></tr>
+	{% endfor %}
+</table>
+{% else %}
+<p>There were no cookies with their worker ID ambiguity unresolved.</p>
+{% endif %}
+{% endif %}
+
+{% if conflicting_cid_stats or updated_cid_stats or kept_empty_cid_stats %}
+	<h2>Per-dialogue stats</h2>
+	{% if conflicting_cid_stats %}
+	<h3>Dialogues with a worker ID conflicting with the cookie ID</h3>
+		<p>
+		There have been a total of
+		<strong>{{ n_conflicting }}</strong> dialogue
+		annotation{{ n_conflicting|pluralize }}
+		in <strong>{{ conflicting_cid_stats|length }}</strong> dialogues
+		where the worker
+		ID was different from what we would deduce from the cookie.
+		</p>
+		<button class="hideControl">Hide</button>
+		<table>
+			<tr>
+				<th><abbr title="conversation ID">CID</abbr></th>
+				<th># kept assigned</th>
+				<th># conflicting</th>
+				<th># newly assigned</th>
+				<th># kept unassigned</th>
+			</tr>
+			{% for stats in conflicting_cid_stats %}
+			<tr>
+				<td>{{ stats.cid }}</td>
+				<td>{{ stats.n_kept_full }}</td>
+				<td><strong>{{ stats.n_conflicting }}</strong></td>
+				<td>{{ stats.n_updated }}</td>
+				<td>{{ stats.n_kept_empty }}</td>
+			</tr>
+			{% endfor %}
+		</table>
+	{% endif %}
+
+	{% if updated_cid_stats %}
+	<h3>Dialogues with updated worker IDs</h3>
+		<p>
+		There have been a total of
+		<strong>{{ n_updated }}</strong> dialogue
+		annotation{{ n_updated|pluralize }}
+		in <strong>{{ updated_cid_stats|length }}</strong> dialogues
+		where the worker
+		ID was updated based on the cookie.
+		</p>
+		<button class="hideControl">Hide</button>
+		<table>
+			<tr>
+				<th><abbr title="conversation ID">CID</abbr></th>
+				<th># kept assigned</th>
+				<th># conflicting</th>
+				<th># newly assigned</th>
+				<th># kept unassigned</th>
+			</tr>
+			{% for stats in updated_cid_stats %}
+			<tr>
+				<td>{{ stats.cid }}</td>
+				<td>{{ stats.n_kept_full }}</td>
+				<td>{{ stats.n_conflicting }}</td>
+				<td><strong>{{ stats.n_updated }}</strong></td>
+				<td>{{ stats.n_kept_empty }}</td>
+			</tr>
+			{% endfor %}
+		</table>
+	{% endif %}
+
+	{% if kept_empty_cid_stats %}
+	<h3>Dialogues still without worker IDs</h3>
+		<p>
+		There have been a total of
+		<strong>{{ n_kept_empty }}</strong> dialogue
+		annotation{{ n_kept_empty|pluralize }}
+		in <strong>{{ kept_empty_cid_stats|length }}</strong> dialogues
+		where the worker
+		ID could not be reconstructed from the cookie.
+		</p>
+		<button class="hideControl">Hide</button>
+		<table>
+			<tr>
+				<th><abbr title="conversation ID">CID</abbr></th>
+				<th># kept assigned</th>
+				<th># conflicting</th>
+				<th># newly assigned</th>
+				<th># kept unassigned</th>
+			</tr>
+			{% for stats in kept_empty_cid_stats %}
+			<tr>
+				<td>{{ stats.cid }}</td>
+				<td>{{ stats.n_kept_full }}</td>
+				<td>{{ stats.n_conflicting }}</td>
+				<td>{{ stats.n_updated }}</td>
+				<td><strong>{{ stats.n_kept_empty }}</strong></td>
+			</tr>
+			{% endfor %}
+		</table>
+	{% endif %}
+{% endif %}
+
+{% endblock %}

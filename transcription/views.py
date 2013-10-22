@@ -28,6 +28,7 @@ from crowdflower import (collect_judgments, create_job, delete_job,
     fire_gold_hooks, price_class_handler, process_worklog, JsonDialogueUpload,
     record_worker)
 import dg_util
+import session_xml
 from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt,
     SystemTurnAbs_nt)
 import settings
@@ -35,7 +36,7 @@ from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn)
 from transcription.forms import (DateRangeForm, WorkLogsForm, CreateJobForm,
-    DeleteJobForm)
+    DeleteJobForm, TranscriptionForm)
 from util import get_log_path, group_by, catch_locked_database
 
 
@@ -471,7 +472,10 @@ def transcribe(request):
         open_annions = DialogueAnnotation.objects.filter(user=request.user,
                                                          finished=False)
         if open_annions.exists():
-            assert len(open_annions) == 1
+            # This assertion is broken when someone started several annotations
+            # under his user account, i.e., some of them by explicitly asking
+            # for that CID.
+            # assert len(open_annions) == 1
             dg_data = open_annions[0].dialogue
             cid = dg_data.cid
 
@@ -853,6 +857,34 @@ if settings.USE_CF:
             response = render(request, 'trs/reuse-worklogs.html', context,
                               context_instance=RequestContext(request))
             return response
+
+
+    def fill_in_worker_ids(request):
+        ambig_cookies, resolved_cookies, cid_stats = (
+            session_xml.fill_in_worker_ids(force=True))
+        conflicting_cid_stats = [stats for stats in cid_stats
+                                 if stats.n_conflicting]
+        n_conflicting = sum(stats.n_conflicting for stats in cid_stats)
+        updated_cid_stats = [stats for stats in cid_stats
+                             if stats.n_updated]
+        n_updated = sum(stats.n_updated for stats in cid_stats)
+        kept_empty_cid_stats = [stats for stats in cid_stats
+                                if stats.n_kept_empty]
+        n_kept_empty = sum(stats.n_kept_empty for stats in cid_stats)
+        context = {'ambig_cookies': sorted(ambig_cookies),
+                   'resolved_cookies': sorted(resolved_cookies),
+                   'n_ambig_both': len(ambig_cookies) + len(resolved_cookies),
+                   'cid_stats': sorted(cid_stats),
+                   'conflicting_cid_stats': sorted(conflicting_cid_stats),
+                   'updated_cid_stats': sorted(updated_cid_stats),
+                   'kept_empty_cid_stats': sorted(kept_empty_cid_stats),
+                   'n_conflicting': n_conflicting,
+                   'n_updated': n_updated,
+                   'n_kept_empty': n_kept_empty,
+                   }
+        response = render(request, 'trs/worker-ids-filled-in.html', context,
+                          context_instance=RequestContext(request))
+        return response
 
 
     @login_required

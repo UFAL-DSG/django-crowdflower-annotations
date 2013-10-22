@@ -44,6 +44,9 @@ if settings.USE_CF:
                        url('^collect-reports$',
                            'transcription.views.collect_reports',
                            name="collect_reports"),
+                       url('^fill-in-worker-ids$',
+                           'transcription.views.fill_in_worker_ids',
+                           name="fill_in_worker_ids"),
                        ]
     pattern_args.extend(cf_pattern_args)
     if settings.USE_WEBHOOKS:

@@ -14,7 +14,6 @@ from django.db import models
 # from django.db.models import Count
 from django.shortcuts import render
 
-# from dg_util import is_gold
 from session_xml import XMLSession
 import settings
 from transcription.crowdflower import price_class_handler
@@ -256,6 +255,9 @@ class DialogueAdmin(admin.ModelAdmin):
 
         upload_to_higher_job.short_description = (
             'Upload to CrowdFlower (to a higher price class)')
+
+        def compute_ers(modeladmin, request, queryset):
+            """Computes average error rates for workers."""
 
         actions = [update_price_action, export_annotations,
                    upload_to_crowdflower, update_gold_action,
