@@ -383,8 +383,41 @@ def edit_dist(str1, str2):
     return dist[len2]
 
 
+def char_er(trs1, trs2):
+    """Computes the character error rate between two transcriptions.
+
+    The character error rate is the minimum edit distance by length of the
+    longer string.  Hence, it is always a number from [0, 1].  The character
+    error rate for two empty strings is by definition 0.
+
+    Arguments:
+        trs1, trs2 -- Transcription objects to compare (the transcription text
+            itself is looked for in the `text' attribute)
+
+    """
+
+    # a shortcut
+    if trs1.text == trs2.text:
+        return 0.
+
+    # Normalise.
+    norm1 = normalise_trs_text(trs1.text)
+    norm2 = normalise_trs_text(trs2.text)
+
+    # a shortcut
+    # (This also prevents ZeroDivisionError below.)
+    if norm1 == norm2:
+        return 0.
+
+    # the proper evaluation
+    len1 = len(norm1)
+    len2 = len(norm2)
+    char_er = edit_dist(norm1, norm2) / float(max(len1, len2))
+    return char_er
+
+
 def trss_match(trs1, trs2, max_char_er=0.):
-    """Checks whether two given transcriptions can be considered equal.
+    """Checks whether two transcriptions can be considered equal.
 
     Keyword arguments:
         trs1: first Transcription to compare
@@ -393,20 +426,4 @@ def trss_match(trs1, trs2, max_char_er=0.):
             relatively are allowed to differ, after normalisation)
 
     """
-    # a shortcut
-    if trs1.text == trs2.text:
-        return True
-
-    norm1 = normalise_trs_text(trs1.text)
-    norm2 = normalise_trs_text(trs2.text)
-    if max_char_er <= 0.:
-        return norm1 == norm2
-    else:
-        # a shortcut
-        if norm1 == norm2:
-            return True
-        # the proper evaluation
-        len1 = len(norm1)
-        len2 = len(norm2)
-        char_er = edit_dist(norm1, norm2) / float(max(len1, len2))
-        return char_er <= max_char_er
+    return char_er(trs1, trs2) <= max_char_er

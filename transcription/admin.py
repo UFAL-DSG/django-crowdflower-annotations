@@ -14,7 +14,7 @@ from django.db import models
 # from django.db.models import Count
 from django.shortcuts import render
 
-from session_xml import XMLSession
+from session_xml import update_worker_cers, XMLSession
 import settings
 from transcription.crowdflower import price_class_handler
 if settings.USE_CF:
@@ -24,7 +24,7 @@ from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
 from transcription.models import (Dialogue, DialogueAnnotation, Transcription,
                                   UserTurn, SystemTurn)
-from transcription.tr_normalisation import trss_match
+from transcription.tr_normalisation import char_er, trss_match
 from transcription.util import group_by
 from transcription.widgets import ROInput
 
@@ -206,6 +206,42 @@ class DialogueAdmin(admin.ModelAdmin):
 
     export_annotations.short_description = "Export annotations"
 
+    def compute_ers(modeladmin, request, queryset):
+        """Computes average error rates for workers."""
+        # TODO Test.
+        ann2w_cer = dict()  # :: {dg_ann.pk -> [trs_char_er]}
+
+        # Compute ann2w_cer for queryset
+        gold_turns = (UserTurn.objects.filter(transcription__is_gold=True,
+                                              dialogue__in=queryset)
+                        .distinct())
+        trss = Transcription.objects.filter(turn__in=gold_turns)
+        trss_by_turn = group_by(trss, ('turn', ))
+
+        for (turn, ), trss in trss_by_turn.iteritems():
+            gold_trss = [trs for trs in trss if trs.is_gold]
+            for trs in trss:
+                if trs.is_gold:
+                    min_char_er = 0.
+                else:
+                    min_char_er = min(char_er(trs, gold_trs)
+                                      for gold_trs in gold_trss)
+                dg_ann = trs.dialogue_annotation.pk
+                ann2w_cer.setdefault(dg_ann, list()).append(min_char_er)
+
+        # Pass ann2w_cer to a session_xml method that saves it to the XML
+        # logs.
+        n_files, n_workers, n_anns = update_worker_cers(ann2w_cer)
+
+        # Return a success message.
+        msg = ('Worker average character error rates for {n_workers} '
+               'workers have been updated.  {n_files} session logs and '
+               '{n_anns} individual annotations were updated.'
+               ).format(n_workers=n_workers, n_files=n_files, n_anns=n_anns)
+        self.message_user(request, msg)
+
+    compute_ers.short_description = 'Compute average character error rates'
+
     if settings.USE_CF:
         def update_gold_action(modeladmin, request, queryset):
             for dg in queryset:
@@ -256,16 +292,11 @@ class DialogueAdmin(admin.ModelAdmin):
         upload_to_higher_job.short_description = (
             'Upload to CrowdFlower (to a higher price class)')
 
-        def compute_ers(modeladmin, request, queryset):
-            """Computes average error rates for workers."""
-            # TODO Implement.
-            raise NotImplementedError()
-
-        actions = [update_price_action, export_annotations,
+        actions = [update_price_action, export_annotations, compute_ers,
                    upload_to_crowdflower, update_gold_action,
                    upload_to_higher_job]
     else:
-        actions = [update_price_action, export_annotations]
+        actions = [update_price_action, compute_ers, export_annotations]
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):

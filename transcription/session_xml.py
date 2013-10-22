@@ -54,6 +54,59 @@ def update_worker_stats(gold_stats):
     return n_files, n_els
 
 
+def update_worker_cers(ann2w_cer):
+    """Updates the gold hit statistic in all available session files.
+
+    Arguments:
+        ann2w_cer -- a mapping {annotation ID -> [transcription char er]}
+
+    Returns a tuple (number of files affected,
+                     number of workers affected,
+                     number of XML elements affected)
+    where an XML element corresponds to one dialogue annotation (by one
+    worker).
+
+    """
+
+    dg_dirs = filter(is_dialogue_dirname,
+                     os.listdir(settings.CONVERSATION_DIR))
+
+    # Build the mapping worker_id -> char_er.
+    wid2cers = dict()  # :: {worker_id -> [character error rate]}
+    afected_dirs = list()
+    for dg_dir in dg_dirs:
+        dir_affected = False
+        with XMLSession(cid=dg_dir) as session:
+            for ann_el in session.iter_annotations():
+                ann_id = ann_el.get('id')
+                worker_id = ann_el.get('worker_id', None)
+                if worker_id is not None and ann_id in ann2w_cer:
+                    ann_cers = ann2w_cer[ann_id]
+                    wid2cers.setdefault(worker_id, list()).extend(ann_cers)
+                    dir_affected = True
+        if dir_affected:
+            affected_dirs.append(dg_dir)
+    # Compute the average character error rate over all error rates for each
+    # worker.
+    wid2cer = {wid: sum(cers) / len(cers)
+               for wid, cers in wid2cers.iteritems()}
+
+    # Update the average error rates in the logs.
+    n_files = len(affected_dirs)
+    n_els = 0
+    n_workers = len(wid2cer)
+    for dg_dir in affected_dirs:
+        with XMLSession(cid=dg_dir) as session:
+            for ann_el in session.iter_annotations():
+                worker_id = ann_el.get('worker_id', None)
+                if worker_id in wid2cer:
+                    ann_el.set('avg_char_er', wid2cer[worker_id])
+                    n_els += 1
+
+    # Return.
+    return n_files, n_workers, n_els
+
+
 def fill_in_worker_ids(force=False):
     """
     Uses cookie IDs stored with annotations to fill in worker IDs to
