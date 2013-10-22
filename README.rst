@@ -1,5 +1,6 @@
+=============
 Prerequisites
--------------
+=============
 - Python 2 (version 2.7.3 proven to work)
 
   ::
@@ -26,8 +27,9 @@ Prerequisites
     # apt-get install libapache2-mod-wsgi
 
 
+=========================================================
 How to set up the transcription environment on the server
----------------------------------------------------------
+=========================================================
 1. Update the ``localsettings.py`` config file (create this by copying 
    ``localsettings.py.example``) to suit your environment. Meaning and 
    format of all configuration variables should be clear from the comments 
@@ -110,8 +112,9 @@ How to set up the transcription environment on the server
    account you created.
 
 
+===========================================
 How to set up transcription via Crowdflower
--------------------------------------------
+===========================================
 
 1. Get yourself an account with Crowdflower (http://crowdflower.com).
   
@@ -143,6 +146,16 @@ How to set up transcription via Crowdflower
    
 4. Order your units through the Crowdflower web interface. You want to set 
    the price for each job the same as what the title specifies.
+
+   **Update**: Crowdflower requires that the jobs don't specify the price 
+   in their title. Therefore, you should change the title before ordering 
+   the job. A good option is writing
+
+    Dialogue transcription – price level K
+
+   instead of
+
+    Dialogue transcription – K0 cents.
   
 5. If fully annotated transcription elements are desired also for gold 
    units, fire gold hooks (an option in the main menu) when finished with 
@@ -152,8 +165,9 @@ How to set up transcription via Crowdflower
 .. TODO: update the instruction above.
 
 
+=======================
 How to import dialogues
------------------------
+=======================
 
 1. Make the dialogue log directories available at the server's filesystem.
    If the dialogue logs are on a remote filesystem, you can use the
@@ -195,8 +209,9 @@ How to import dialogues
    ``CONVERSATION_DIR``.
 
 
+=================================
 How to get data out of the system
----------------------------------
+=================================
 
 There are two ways to export the data from the database Django uses 
 internally:
@@ -210,6 +225,9 @@ internally:
   B) Export the dialogue logs.
 
 
+---------------------------
+Dumping the Django database
+---------------------------
 `(A)`_ is done by simply running the script ``scripts/dumpdata.sh``. This 
 exports the data from the Transcription app and data about the Django 
 users, to the ``data/dumps`` directory in the JSON format.
@@ -220,28 +238,63 @@ further process the transcriptions. In the latter case, follow the option
 `(B)`_.
 
 
-`(B)`_ is done from the Admin site (`Admin` option in the main menu) for 
-Dialogues (click the link `Dialogues` at the main admin page). Select 
-dialogues you wish to export using the checkboxes left of dialogue names, 
-possibly with the help of filters or the search field. (Note also the 
-`Select all N dialogues` link right of the search field if you check the 
-checkbox in the header row.) From the `Action` rolldown menu, select the 
-`Export annotations` option and click `Go`.  The dialogue logs with 
-annotations will be exported to ``data/export``.  Check the message at the 
-top of the page that loads after the export is done for the exact path to 
-the annotated logs directory.
+-----------------------
+Exporting dialogue logs
+-----------------------
+`(B)`_ is done from the Admin site (`Admin` option in the main menu). See 
+`How to export`_ below for details.
 
+Before you export
+~~~~~~~~~~~~~~~~~
+There are two mechanisms to track workers:
+
+A) Crowdflower webhooks
+
+B) cookies.
+
+Crowdflower webhooks should track workers more smartly but they do not work 
+as smoothly as plain cookies. Anyway, it is good to try to take the best of 
+both. The app implements two special actions for this purpose:
+
+1. reconstructing missing worker IDs from stored cookie data
+
+2. firing Crowdflower webhooks for gold items (which are not ever fired by 
+   default).
+
+Thus, when you are finished with a batch of transcriptions, you should run 
+these two actions. The former is accessible from the Main menu as 
+`Reconstruct worker IDs`, and takes some time to complete – please be 
+patient waiting for the page to reload. The same applies for the latter 
+action. The link's name is `Fire hooks for gold items`. This action should 
+not be triggered before the formerly mentioned one, as the assignment of 
+worker IDs to annotations is based on a heuristic and may be faulty.
+
+How to export
+~~~~~~~~~~~~~
+Go to the Admin site (`Admin` option in the main menu) for Dialogues (click 
+the link `Dialogues` at the main admin page).  Select dialogues you wish to 
+export using the checkboxes left of dialogue names, possibly with the help 
+of filters or the search field.  (Note also the `Select all N dialogues` 
+link right of the search field if you check the checkbox in the header 
+row.) From the `Action` rolldown menu, select the `Export annotations` 
+option and click `Go`.  The dialogue logs with annotations will be exported 
+to ``data/export``.  Check the message at the top of the page that loads 
+after the export is done for the exact path to the annotated logs 
+directory.
+
+After you export
+~~~~~~~~~~~~~~~~
 After you have exported the data, you probably want to copy them back to 
 the dialogue directories, possibly on a remote server.
 
 Note that by exporting the data, you do *not* remove them either from the 
 app's database nor from the filesystem. If you want to remove them from the 
 database, choose the appropriate action from the Admin site where you 
-exported them. If you want to remove them from the filesystem, go ahead and 
-remove them after you removed them from the Django database (otherwise, the 
-app might be looking for them in the `transcribe` view, and not finding 
-them). All the dialogue logs are stored in the directory configured as 
-``CONVERSATION_DIR``.
+exported them (but see the next paragraph). If you want to remove them from 
+the filesystem, go ahead and remove them after you removed them from the 
+Django database (otherwise, the app might be looking for them in the 
+`transcribe` view, and not finding them). All the dialogue logs are stored 
+in the directory configured as ``CONVERSATION_DIR``.
 
 **BEFORE YOU REMOVE THE DATA** from the database, you might want to measure 
 work done for all the annotators, unless a different awarding scheme is in 

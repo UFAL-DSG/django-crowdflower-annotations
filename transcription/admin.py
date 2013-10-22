@@ -258,6 +258,8 @@ class DialogueAdmin(admin.ModelAdmin):
 
         def compute_ers(modeladmin, request, queryset):
             """Computes average error rates for workers."""
+            # TODO Implement.
+            raise NotImplementedError()
 
         actions = [update_price_action, export_annotations,
                    upload_to_crowdflower, update_gold_action,
