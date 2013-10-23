@@ -1,5 +1,6 @@
 # -*- coding: UTF-8 -*-
-# This code is PEP8-compliant. See http://www.python.org/dev/peps/pep-0008/.
+# This code is mostly PEP8-compliant. See
+# http://www.python.org/dev/peps/pep-0008/.
 from __future__ import unicode_literals
 
 from collections import namedtuple
@@ -214,7 +215,7 @@ class DialogueAdmin(admin.ModelAdmin):
         # Compute ann2w_cer for queryset
         gold_turns = (UserTurn.objects.filter(transcription__is_gold=True,
                                               dialogue__in=queryset)
-                        .distinct())
+                      .distinct())
         trss = Transcription.objects.filter(turn__in=gold_turns)
         trss_by_turn = group_by(trss, ('turn', ))
 
@@ -238,7 +239,7 @@ class DialogueAdmin(admin.ModelAdmin):
                'workers have been updated.  {n_files} session logs and '
                '{n_anns} individual annotations were updated.'
                ).format(n_workers=n_workers, n_files=n_files, n_anns=n_anns)
-        self.message_user(request, msg)
+        modeladmin.message_user(request, msg)
 
     compute_ers.short_description = 'Compute average character error rates'
 
@@ -424,7 +425,6 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                         dialogue__transcription_price__lt=end)
                 return new_set
 
-
     list_filter = [GoldListFilter,
                    BreaksGoldListFilter,
                    TranscriptionCountListFilter,
@@ -504,6 +504,7 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         # Generate the template.
         dummy_trs = {'text': '!!!MISSING!!!'}
         turn_name_tpt = '{dirname}:{turn_number}'
+
         def turn_key2str(turn_key):
             turn, = turn_key
             return turn_name_tpt.format(dirname=turn.dialogue.dirname,

@@ -73,34 +73,39 @@ def update_worker_cers(ann2w_cer):
 
     # Build the mapping worker_id -> char_er.
     wid2cers = dict()  # :: {worker_id -> [character error rate]}
-    afected_dirs = list()
+    dir2wids = dict()  # :: {dir -> [worker ID]}
     for dg_dir in dg_dirs:
-        dir_affected = False
+        dir_wids = list()
         with XMLSession(cid=dg_dir) as session:
             for ann_el in session.iter_annotations():
-                ann_id = ann_el.get('id')
+                ann_id = int(ann_el.get('id'))
                 worker_id = ann_el.get('worker_id', None)
-                if worker_id is not None and ann_id in ann2w_cer:
-                    ann_cers = ann2w_cer[ann_id]
-                    wid2cers.setdefault(worker_id, list()).extend(ann_cers)
-                    dir_affected = True
-        if dir_affected:
-            affected_dirs.append(dg_dir)
+                if worker_id is not None:
+                    dir_wids.append(worker_id)
+                    if ann_id in ann2w_cer:
+                        ann_cers = ann2w_cer[ann_id]
+                        wid2cers.setdefault(worker_id, list()).extend(ann_cers)
+        dir2wids[dg_dir] = dir_wids
+
     # Compute the average character error rate over all error rates for each
     # worker.
-    wid2cer = {wid: sum(cers) / len(cers)
-               for wid, cers in wid2cers.iteritems()}
+    wid2cer_str = {wid: '{0:.3f}'.format(sum(cers) / len(cers))
+                   for wid, cers in wid2cers.iteritems()}
+
+    # Determine which directories we need to visit again.
+    affected_dirs = [dg_dir for dg_dir in dir2wids
+                     if any((wid in wid2cer_str) for wid in dir2wids[dg_dir])]
 
     # Update the average error rates in the logs.
     n_files = len(affected_dirs)
     n_els = 0
-    n_workers = len(wid2cer)
+    n_workers = len(wid2cer_str)
     for dg_dir in affected_dirs:
         with XMLSession(cid=dg_dir) as session:
             for ann_el in session.iter_annotations():
                 worker_id = ann_el.get('worker_id', None)
-                if worker_id in wid2cer:
-                    ann_el.set('avg_char_er', wid2cer[worker_id])
+                if worker_id in wid2cer_str:
+                    ann_el.set('avg_char_er', wid2cer_str[worker_id])
                     n_els += 1
 
     # Return.
@@ -208,6 +213,7 @@ def fill_in_worker_ids(force=False):
                                        n_updated, n_kept_empty))
 
     return ambig_cookies, resolved_cookies, cid_stats
+
 
 def record_judgments(dgs_anns):
     dg_dirs = set(filter(is_dialogue_dirname,
