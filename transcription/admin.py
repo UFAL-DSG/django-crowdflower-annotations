@@ -24,9 +24,9 @@ from transcription.db_fields import SizedTextField, ROCharField
 from transcription.dg_util import update_price
 from transcription.form_fields import LinkField
 from transcription.models import (Dialogue, DialogueAnnotation, Transcription,
-                                  UserTurn, SystemTurn)
+                                  SemanticAnnotation, UserTurn, SystemTurn)
 from transcription.tr_normalisation import char_er, trss_match
-from transcription.util import group_by
+from transcription.util import das_match, group_by
 from transcription.widgets import ROInput
 
 
@@ -172,7 +172,6 @@ class DialogueAdmin(admin.ModelAdmin):
         if extra_context is None:
             extra_context = dict()
         extra_context['use_cf'] = settings.USE_CF
-        extra_context['app_url'] = settings.APP_URL
         return super(DialogueAdmin, self).add_view(
             request, form_url, extra_context)
 
@@ -300,6 +299,30 @@ class DialogueAdmin(admin.ModelAdmin):
         actions = [update_price_action, compute_ers, export_annotations]
 
 
+class RelatedCountListFilter(admin.SimpleListFilter):
+    obj_manager = None
+
+    def __init__(self, *args, **kwargs):
+        super(RelatedCountListFilter, self).__init__(*args, **kwargs)
+        obj_name_lower = self.obj_manager.__name__.lower()
+        self._query_key_name = '{obj}__isnull'.format(obj=obj_name_lower)
+
+    def lookups(self, request, model_admin):
+        return (('0', '0'), ('1', '>0'))
+
+    def queryset(self, request, queryset):
+        val = self.value()
+        if not val:
+            return queryset
+
+        if val == '0':
+            return queryset.filter(**{self._query_key_name: True})
+        elif val == '1':
+            return queryset.filter(**{self._query_key_name: False})
+        else:
+            return queryset
+
+
 class DialogueAnnotationAdmin(admin.ModelAdmin):
     formfield_overrides = {
         ROCharField: {'widget': ROInput},
@@ -324,16 +347,18 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                 return queryset
 
             if val == '1':
-                return queryset.filter(transcription__is_gold=True).distinct()
+                w_gold_trss = queryset.filter(transcription__is_gold=True)
+                w_gold_anns = queryset.filter(semanticannotation__is_gold=True)
+                return (w_gold_trss | w_gold_anns).distinct()
             else:
                 return queryset.exclude(transcription__is_gold=True).distinct()
 
-    class TranscriptionCountListFilter(admin.SimpleListFilter):
+    class TranscriptionCountListFilter(RelatedCountListFilter):
         title = 'number of transcriptions'
         parameter_name = 'trs_count'
+        obj_manager = Transcription
 
-        def lookups(self, request, model_admin):
-            return (('0', '0'), ('1', '>0'))
+#         def lookups(self, request, model_admin):
 #             trs_counts = set(
 #                 attrs['num_trss'] for attrs in
 #                 Transcription.objects.values('dialogue_annotation')
@@ -360,6 +385,11 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
 #             return queryset.annotate(Count('transcription')).filter(
 #                 transcription__count=val)
 
+    class SemannCountListFilter(RelatedCountListFilter):
+        title = 'number of semantic annotations'
+        parameter_name = 'semann_count'
+        obj_manager = SemanticAnnotation
+
     class BreaksGoldListFilter(admin.SimpleListFilter):
         title = 'breaks gold'
         parameter_name = 'breaks_gold'
@@ -373,14 +403,19 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
                 return queryset
 
             if val == '1':
-                return queryset.filter(transcription__breaks_gold=True
-                                       ).distinct()
+                trs_breaks = queryset.filter(transcription__breaks_gold=True)
+                ann_breaks = queryset.filter(
+                    semanticannotation__breaks_gold=True)
+                return (trs_breaks | ann_breaks).distinct()
             elif val == '-1':
-                return queryset.exclude(
-                    transcription__turn__transcription__is_gold=True
-                    ).distinct()
+                nogolds = queryset.exclude(transcription__is_gold=True
+                                           ).distinct()
+                return nogolds.exclude(semanticannotation__is_gold=True
+                                       ).distinct()
             else:
-                return queryset.exclude(transcription__breaks_gold=True
+                nobreaks = queryset.exclude(transcription__breaks_gold=True
+                                            ).distinct()
+                return nobreaks.exclude(semanticannotation__breaks_gold=True
                                         ).distinct()
 
     class PriceBinListFilter(admin.SimpleListFilter):
@@ -427,10 +462,13 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
 
     list_filter = [GoldListFilter,
                    BreaksGoldListFilter,
-                   TranscriptionCountListFilter,
-                   PriceBinListFilter,
-                   'user__username',
-                   'finished']
+                   PriceBinListFilter]
+    list_filter = [GoldListFilter, BreaksGoldListFilter]
+    if 'asr' in settings.TASKS:
+        list_filter.append(TranscriptionCountListFilter)
+    if 'slu' in settings.TASKS:
+        list_filter.append(SemannCountListFilter)
+    list_filter.extend(['user__username', 'finished'])
     if 'offensive' in settings.EXTRA_QUESTIONS:
         list_filter.append('offensive')
     if 'accent' in settings.EXTRA_QUESTIONS:
@@ -438,45 +476,57 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
 
     # Actions #
     ###########
+    @classmethod
+    def _update_gold_statuses(cls, dialogue, obj_manager, match_func):
+        n_changed = [0, 0]  # to not breaks, to breaks
+        dg_trss = obj_manager.objects.filter(
+            dialogue_annotation__dialogue=dialogue)
+        gold_trss = dg_trss.filter(is_gold=True)
+        gold_trss_turns = (
+            gold_trss.values_list('turn__turn_number', flat=True)
+            .distinct())
+        plain_trss = dg_trss.filter(is_gold=False)
+
+        # Transcriptions for turns with no gold do not break gold.
+        n_changed[0] += plain_trss.filter(breaks_gold=True)\
+            .exclude(turn__turn_number__in=gold_trss_turns)\
+            .update(breaks_gold=False)
+
+        # Transcriptions for turns that have gold need to be checked.
+        to_check_trss = plain_trss.filter(
+            turn__turn_number__in=gold_trss_turns)
+        gold4turn = {turnnum: gold_trss.filter(turn__turn_number=turnnum)
+                     for turnnum in gold_trss_turns}
+
+        for plain_trs in to_check_trss:
+            broke_gold = plain_trs.breaks_gold
+
+            breaks_gold = True
+            for gold_trs in gold4turn[plain_trs.turn.turn_number]:
+                if match_func(plain_trs, gold_trs,
+                              max_char_er=settings.MAX_CHAR_ER):
+                    breaks_gold = False
+                    break
+
+            if breaks_gold != broke_gold:
+                plain_trs.breaks_gold = breaks_gold
+                plain_trs.save()
+                n_changed[breaks_gold] += 1
+
+        return n_changed
+
     def update_gold_status_action(modeladmin, request, queryset):
         n_changed = [0, 0]  # to not breaks, to breaks
 
         dgs = queryset.values_list('dialogue', flat=True).distinct()
         for dg in dgs:
-            dg_trss = Transcription.objects.filter(
-                dialogue_annotation__dialogue=dg)
-            gold_trss = dg_trss.filter(is_gold=True)
-            gold_trss_turns = (
-                gold_trss.values_list('turn__turn_number', flat=True)
-                .distinct())
-            plain_trss = dg_trss.filter(dialogue_annotation__in=queryset,
-                                        is_gold=False)
-
-            # Transcriptions for turns with no gold do not break gold.
-            n_changed[0] += plain_trss.filter(breaks_gold=True)\
-                .exclude(turn__turn_number__in=gold_trss_turns)\
-                .update(breaks_gold=False)
-
-            # Transcriptions for turns that have gold need to be checked.
-            to_check_trss = plain_trss.filter(
-                turn__turn_number__in=gold_trss_turns)
-            gold4turn = {turnnum: gold_trss.filter(turn__turn_number=turnnum)
-                         for turnnum in gold_trss_turns}
-
-            for plain_trs in to_check_trss:
-                broke_gold = plain_trs.breaks_gold
-
-                breaks_gold = True
-                for gold_trs in gold4turn[plain_trs.turn.turn_number]:
-                    if trss_match(plain_trs, gold_trs,
-                                  max_char_er=settings.MAX_CHAR_ER):
-                        breaks_gold = False
-                        break
-
-                if breaks_gold != broke_gold:
-                    plain_trs.breaks_gold = breaks_gold
-                    plain_trs.save()
-                    n_changed[breaks_gold] += 1
+            n_trss_changed = modeladmin._update_gold_statuses(
+                dg, Transcription, trss_match)
+            n_anns_changed = modeladmin._update_gold_statuses(
+                dg, SemanticAnnotation, das_match)
+            # XXX Here we are losing information whether transcriptions or
+            # semantic annotations were changed.
+            n_changed = map(sum, zip(n_trss_changed, n_anns_changed))
 
         msg = ('{n} transcriptions had their gold breaking status changed, '
                '{good} to OK, {bad} to gold-breaking.').format(
@@ -488,21 +538,22 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     update_gold_status_action.short_description = (
         "Update gold breaking statuses")
 
-    def show_gold_breaking_trss(modeladmin, request, queryset):
+    @classmethod
+    def _find_gold_breaking_items(cls, obj_manager, queryset):
         # Find the transcriptions from the queryset that break gold.
-        breaking_trss = Transcription.objects.filter(
+        breaking_trss = obj_manager.objects.filter(
             breaks_gold=True, dialogue_annotation__in=queryset)
         broken_turn_pks = breaking_trss.values_list('turn',
                                                     flat=True).distinct()
         # Find gold transcriptions for corresponding turns.
-        gold_trss = Transcription.objects.filter(
+        gold_trss = obj_manager.objects.filter(
             is_gold=True, turn__in=broken_turn_pks).distinct()
         # Group them by the turn.
         brss_by_turn = group_by(breaking_trss, ('turn', ))
         goss_by_turn = group_by(gold_trss, ('turn', ))
 
         # Generate the template.
-        dummy_trs = {'text': '!!!MISSING!!!'}
+        # dummy_trs = {'text': '!!!MISSING!!!'}
         turn_name_tpt = '{dirname}:{turn_number}'
 
         def turn_key2str(turn_key):
@@ -510,13 +561,18 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
             return turn_name_tpt.format(dirname=turn.dialogue.dirname,
                                         turn_number=turn.turn_abs_number)
 
-        comparisons = [TrsComparison_nt(
-            turn_key[0].pk,
-            turn_key2str(turn_key),
-            goss_by_turn.get(turn_key, [dummy_trs]),
-            brss_by_turn.get(turn_key, [dummy_trs]))
-            for turn_key in brss_by_turn]
-        context = {'comparisons': comparisons,
+        return [TrsComparison_nt(turn_key[0].pk, turn_key2str(turn_key),
+                                 goss_by_turn[turn_key],
+                                 brss_by_turn[turn_key])
+                for turn_key in brss_by_turn]
+
+    def show_gold_breaking_trss(modeladmin, request, queryset):
+        trs_comparisons = modeladmin._find_gold_breaking_items(
+            Transcription, queryset)
+        ann_comparisons = modeladmin._find_gold_breaking_items(
+            SemanticAnnotation, queryset)
+        context = {'trs_comparisons': trs_comparisons,
+                   'ann_comparisons': ann_comparisons,
                    'SUB_SITE': settings.SUB_SITE}
         return render(request, 'trs/goldbreaking.html', context)
 
@@ -542,9 +598,9 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
         actions = (update_gold_status_action, show_gold_breaking_trss)
 
 
-class TranscriptionAdmin(admin.ModelAdmin):
+class AbstractTranscriptionAdmin(admin.ModelAdmin):
     date_hierarchy = 'date_updated'
-    fields = ('text', 'turn', 'dialogue_annotation', 'is_gold', 'breaks_gold')
+    fields = ('turn', 'dialogue_annotation', 'is_gold', 'breaks_gold')
     raw_id_fields = ('turn', 'dialogue_annotation')
     formfield_overrides = {
         ROCharField: {'widget': ROInput},
@@ -565,6 +621,13 @@ class TranscriptionAdmin(admin.ModelAdmin):
             trs.save()
 
     toggle_gold.short_description = "Toggle gold status"
+
+    actions = [toggle_gold]
+
+
+class TranscriptionAdmin(AbstractTranscriptionAdmin):
+    fields = ('text', 'turn', 'dialogue_annotation', 'is_gold', 'breaks_gold')
+    search_fields = ['text', 'dialogue_annotation__dialogue__cid']
 
     def work_measures(modeladmin, request, queryset):
         # Group the transcriptions and their dialogues according to the author.
@@ -603,7 +666,13 @@ class TranscriptionAdmin(admin.ModelAdmin):
 
     work_measures.short_description = "Measure work done"
 
-    actions = [toggle_gold, work_measures]
+    actions = [AbstractTranscriptionAdmin.toggle_gold, work_measures]
+
+
+class SemanticAnnotationAdmin(AbstractTranscriptionAdmin):
+    fields = ('da_str', 'turn', 'dialogue_annotation', 'is_gold',
+              'breaks_gold')
+    search_fields = ['da_str', 'dialogue_annotation__dialogue__cid']
 
 
 class UserTurnAdmin(admin.ModelAdmin):
@@ -619,3 +688,4 @@ admin.site.register(UserTurn, UserTurnAdmin)
 admin.site.register(Dialogue, DialogueAdmin)
 admin.site.register(DialogueAnnotation, DialogueAnnotationAdmin)
 admin.site.register(Transcription, TranscriptionAdmin)
+admin.site.register(SemanticAnnotation, SemanticAnnotationAdmin)

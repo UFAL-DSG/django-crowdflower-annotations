@@ -27,6 +27,10 @@ div.success_msg {
 	border: 2px solid green;
 }
 
+div.failure_msg {
+	border: 2px solid red;
+}
+
 div#ins, div#dg {
 	display: inline-block;
 	vertical-align: top;
@@ -145,8 +149,8 @@ form li {
 	padding-top: 10px;
 }
 
-p.system { color: blue; }
-p.user { color: orange; }
+span.system { color: blue; font-weight: normal; }
+span.user { color: red; font-weight: normal; }
 
 .errors {
 		background-color: red;
@@ -154,14 +158,26 @@ p.user { color: orange; }
 }
 
 #submit {
-	width: 120px;
-	height: 50px;
+	width: 13em;
+	height: 3em;
 	font-weight: bold;
+}
+
+.displayed {
+	display: on;
+	/* FIXME This setting should be ignored according to CSS specs, as 'on' is */
+	/* not a valid value for 'display'. */
+}
+
+.hidden {
+	display: none;
 }
 
 </style>
 <script src="{{ MEDIA_URL }}js/jquery.js"></script>
+{% if USE_ACCORDION %}
 <script src="{{ MEDIA_URL }}js/jquery.multi-open-accordion.js"></script>
+{% endif %}
 <script src="{{ MEDIA_URL }}js/jquery-ui.min.js"></script>
 <script src="{{ MEDIA_URL }}js/jquery.jplayer.min.js"></script>
 <script type="text/javascript">
@@ -181,6 +197,7 @@ p.user { color: orange; }
 			}
 	}
 
+	{% if USE_ACCORDION %}
 	function NextPhase() {
 			var PrevIndex = $('div .current');
 			var NextIndex = PrevIndex.next().next();
@@ -192,13 +209,16 @@ p.user { color: orange; }
 			if(!NextIndex.hasClass("ui-state-active"))
 					NextIndex.click();
 	}
+	{% endif %}
 
 	function PlayerStopped() {
 			if(beenPlaying) {
 					beenPlaying = false;
 					$('#' + curr_btnid).text("Play");
 
+					{% if USE_ACCORDION %}
 					NextPhase();
+					{% endif %}
 			}
 	}
 
@@ -243,8 +263,12 @@ p.user { color: orange; }
 	}
 
 	$(document).ready(function() {
+			{% if USE_ACCORDION %}
 			accordion = $("#phases").multiAccordion({active: 0});
+			{% endif %}
+			{% if "accent" in EXTRA_QUESTIONS %}
 			$("#accent_spec").slideUp();
+			{% endif %}
 
 			$("#player").jPlayer( {
 					swfPath: "{{ MEDIA_URL }}flash/",
@@ -254,8 +278,11 @@ p.user { color: orange; }
 					}
 			});
 
+			{% if USE_ACCORDION %}
 			$("#turn_1").removeClass("ui-state-disabled");
+			{% endif %}
 
+			{% if "accent" in EXTRA_QUESTIONS %}
 			var native_accent = document.getElementById("id_accent_native");
 			var other_accent = document.getElementById("id_accent_other");
 			var accent_name = document.getElementById("id_accent_name");
@@ -271,8 +298,9 @@ p.user { color: orange; }
 					$("#accent_spec").slideDown();
 				}
 			});
+			{% endif %}
 
-			$("#submit").click(function() {
+			$("#phases").submit(function() {
 					// Check that all fields (text areas) are filled in.
 					var res = 1;
 					var fields = document.getElementsByTagName("textarea");
@@ -290,23 +318,79 @@ p.user { color: orange; }
 						}
 					}
 
+					var selects = document.getElementsByTagName("select");
+					for(var index = 0; index < selects.length; index++)
+					{
+						select_id = selects[index].id;
+						if (select_id.substring(0, 6) != "newdat") {
+							continue;
+						}
+						suffix = select_id.substring(6);
+						checkbox = document.getElementById("check" + suffix);
+						if (checkbox.checked){
+							if (selects[index].options[
+										selects[index].selectedIndex].value == "") {
+								alert("CHYBA " +suffix );
+								// TODO dopsat vyjádření chyby
+							}
+							else {
+								dat_select_value = selects[index].options[
+											selects[index].selectedIndex].value;
+								slot_select = document.getElementById("slot"+suffix);
+								slot_select_value = slot_select.options[
+											slot_select.selectedIndex].value;
+								value_select = document.getElementById("value"+suffix);
+								value_select_value = value_select.options[
+											value_select.selectedIndex].value;
+								if ((slot_select_value == "")
+										&& (value_select_value == "" )) {
+									if (nd.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else if ((slot_select_value != "")
+												 && (value_select_value == "" )) {
+									if (udws.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else if ((slot_select_value == "")
+												&& (value_select_value != "" )) {
+									if (udwv.indexOf(dat_select_value) == -1) {
+										alert("CHYBA: " + suffix);
+									}
+								}
+								else // obojí je vyplněné
+								{
+									continue; // ? je to dobře ?
+								}
+							}
+						}
+						else{
+							continue;
+						}
+					}
+				// return false; // FIXME až bude hotovo, smazat !!!
+
 					if(res !== 1) {
-						msg = "Please fill in all the input fields.\n";
-						msg += "In case you heard just silence, type \"(sil)\" ";
-						msg += "into the corresponding field.\n";
-						msg += "See Instructions for transcription of other ";
-						msg += "non-speech sounds.";
+						msg = "Please fill in all the input fields.\n\
+									In case you heard just silence, type \"(sil)\" \
+									into the corresponding field.\n\
+									See Instructions for transcription of other \
+									non-speech sounds.";
 						alert(msg);
 						return false;
 					}
 					
+					{% if "accent" in EXTRA_QUESTIONS %}
 					if(other_accent.checked && accent_name.value.search(/\w/) === -1)
 					{
-						msg = "You say the speaker had a non-native English accent.\n";
-						msg += "Please, specify what accent you think he/she had.";
+						msg = "You say the speaker had a non-native English accent.\n\
+									 Please, specify what accent you think he/she had.";
 						alert(msg);
 						return false;
 					}
+					{% endif %}
 					return true;
 			});
 
@@ -322,27 +406,179 @@ p.user { color: orange; }
 					$("div#ins-inner").slideDown("fast", "swing", insShown);
 				}
 			});
+
+		$("select").live("change",function(){
+			select_id = $(this).attr("id")
+
+			// TODO změna textu za roletkami zde
+
+			selected_option = this.options[this.selectedIndex].value
+			if (select_id.substring(0, 6) == "newdat"){
+				if (udwv.indexOf(selected_option) != -1 ){
+					id = select_id.substring(6)
+					fname = selected_option
+				}
+				else {
+					return;
+				}
+			}
+			else
+			{
+				if (select_id.substring(0, 4) != "slot"){
+					return;
+				}
+				id = select_id.substring(4);
+				selector = "#newdat" + id + " option:selected";
+				dat_select_value = $(selector).val();
+				if (bd.indexOf(dat_select_value) == -1){
+					return;
+				}
+				if (selected_option == "") {
+					fname = "empty_slot";
+				}
+				else {
+					fname = selected_option;
+				}
+			}
+			file_name = '{{ DOMAIN_URL }}{% if APP_PORT %}:{{ APP_PORT }}/{% endif %}{{ APP_PATH }}static/slotvalues/' + fname + ".txt";
+			value_id = "#value" + id;
+			$(value_id).load(file_name);
+
 	});
+});
 
 	function play_now(btnid, phase, f) {
-			curr_btnid = btnid;
-			$(".current").removeClass("current");
-			$("#" + phase).addClass("current");
-			try{
-					PlayerPlaying();
-					$('#' + btnid).text("Playing...");
-					$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
-			} catch(E){
-					alert(E);
-			}
+		curr_btnid = btnid;
+		{% if USE_ACCORDION %}
+		$(".current").removeClass("current");
+		$("#" + phase).addClass("current");
+		{% endif %}
+		try{
+				PlayerPlaying();
+				$('#' + btnid).text("Playing...");
+				$("#player").jPlayer("setMedia", {wav: f}).jPlayer("play");
+		} catch(E){
+				alert(E);
+		}
 	}
 
 	function pseudo_play_now(btnid, phase, f) {
 			curr_btnid = btnid;
+			{% if USE_ACCORDION %}
 			$(".current").removeClass("current");
 			$("#" + phase).addClass("current");
 			NextPhase();
+			{% endif %}
 	}
+
+	// TODO Explain what &#39 is and how it is used here.
+	var nd = "{{nul_dat}}".replace(/&#39;/g, ""),
+	    udws = "{{unar_with_slot}}".replace(/&#39;/g, ""),
+	    udwv = "{{unar_with_value}}".replace(/&#39;/g, ""),
+	    bd = "{{bin_dat}}".replace(/&#39;/g, "");
+
+	function activate(value, number1, number2) {
+		// TODO Document the arguments.
+		slot_id = "slot_" + number1 + "_" + number2;
+		value_id = "value_" + number1 + "_" + number2;
+		if (value == "") {
+			document.getElementById(slot_id).className = "hidden";
+			document.getElementById(slot_id).selectedIndex = 0;
+			document.getElementById(value_id).className = "hidden";
+			document.getElementById(value_id).selectedIndex = 0;
+		}
+		else {
+			document.getElementById(slot_id).selectedIndex = 0;
+			document.getElementById(slot_id).selectedIndex = 0;
+			if (nd.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "hidden";
+				document.getElementById(value_id).className = "hidden";
+			}
+			if (udws.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "displayed";
+				document.getElementById(value_id).className = "hidden";
+			}
+			if (udwv.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "hidden";
+				document.getElementById(value_id).className = "displayed";
+			}
+			if (bd.indexOf(value) != -1) {
+				document.getElementById(slot_id).className = "displayed";
+				document.getElementById(value_id).className = "displayed";
+			}
+		}
+	}
+
+function make_select(name, suffix, name_of_class) {
+	var pom = document.createElement("select");
+	pom.setAttribute("id",name+suffix);
+	pom.setAttribute("class",name_of_class);
+	pom.setAttribute("name",name+suffix);
+	return pom;
+}
+
+function make_option(text) {
+	var option_el = document.createElement("option"),
+			txt_el = document.createTextNode(text);
+	option_el.appendChild(txt_el);
+	return option_el;
+}
+
+function make_td(elem) {
+	var td_el = document.createElement("td");
+	td_el.appendChild(elem);
+	return td_el;
+}
+
+function item_name2list(name, startidx, cutoff) {
+	var ret = name.substring(startidx, name.length - cutoff);
+	// TODO Explain what &#39 is and how it is used here.
+	ret = ret.replace(/&#39;/g, "").replace(/ +/g, "");
+	return ret.split(",");
+}
+
+// TODO Explain why 5 and 2 are used here, and 1 and 1 below.
+var name_of_dai = item_name2list("{{all_dat}}", 5, 2),
+    name_of_slot = item_name2list("{{slot}}", 1, 1);
+
+// TODO Document.
+function add_dai(number) {
+	var activate_call, table_id, table_elem, pocet, suffix;
+
+	table_id = "select_section_" + number;
+	table_elem = document.getElementById(table_id);
+	pocet = table_elem.getElementsByTagName("select").length;
+	suffix = "_" + number + "_" + (pocet / 3 + 1);
+	new_select_dat = make_select("newdat", suffix, "displayed");
+
+	activate_call = 'activate(this.options[this.selectedIndex]\
+				.value, ' + number + ', ' + (pocet / 3 + 1) + ')';
+	new_select_dat.setAttribute("onChange", activate_call);
+	new_select_slot = make_select("slot", suffix, "hidden");
+	new_select_value = make_select("value", suffix, "hidden");
+	new_select_dat.appendChild(make_option("")) ;
+	for (var i = 0; i < name_of_dai.length; i++)
+		new_select_dat.appendChild(make_option(name_of_dai[i]));
+	new_select_slot.appendChild(make_option(""));
+	for (var i = 0; i < name_of_slot.length; i++)
+		new_select_slot.appendChild(make_option(name_of_slot[i]));
+	checkbox = document.createElement("input");
+	checkbox.type = "checkbox";
+	checkbox.id = "check" + suffix;
+	checkbox.name = checkbox.id;
+	checkbox.checked = true;
+	table_row = document.createElement("tr");
+	table_row.appendChild(make_td(checkbox));
+	table_row.appendChild(make_td(new_select_dat));
+	table_row.appendChild(make_td(new_select_slot));
+	table_row.appendChild(make_td(new_select_value));
+	table_td = document.createElement("td");
+	table_td.innerHTML = "TEXT";
+	table_td.id = "td"+suffix;
+	table_row.appendChild(table_td);
+	table_elem.appendChild(table_row);
+}
+
 </script>
 
 {% endblock head %}
@@ -375,11 +611,14 @@ p.user { color: orange; }
 
 		</div>
 	</div>
-	
+
 	<div id="dg">
 		{% if success == "True" %}
-			<div class="success_msg">Last annotation has been successfully 
-				saved.</div>
+			<div class="success_msg">Last annotation has been successfully saved.</div>
+		{% else %}
+			{% if success == "False" %}
+			<div class="failure_msg">Last annotation has <strong>not</strong> been saved.</div>
+			{% endif %}
 		{% endif %}
 		<h2>The dialogue</h2>
 		<div>
@@ -388,31 +627,44 @@ p.user { color: orange; }
 			{% csrf_token %}
 			{{ form.cid }}
 		{% for turn in turns %}
+			{% if not USE_ACCORDION %}
+			<hr>
+			{% else %}
 			<h3 id="turn_{{ turn.turn_number }}" class="head ui-state-disabled">
 				<a href="#">Turn {{ turn.turn_number }}</a>
 			</h3>
+			{% endif %}
 			<div>
 				{% if turn.prompt %}
 				<div class="speaker">
-					Computer:
+					Computer{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
+					<span class="system">{{ turn.prompt }}</span>
 				</div>
-				<p class="system">{{ turn.prompt }}</p>
 				{% endif %}
+
+			{% comment %}
+			The ASR annotation form follows.
+			{% endcomment %}
 			{% if turn.has_rec %}
 				<div class="speaker">
-					Human:
+					Human{% if not USE_ACCORDION %} &ndash; {{ turn.turn_number }}{% endif %}:
+					{% if 'asr' not in TASKS %}
+					<span class="user">{{ turn.hypothesis }}</span>
+					{% endif %}
 				</div>
+				{% if 'asr' in TASKS %}
 				<div>
 					<textarea cols="60" rows="2" style="width: 90%; max-width: 60em;"
 						id="id_trs_{{ turn.turn_number }}" name="trs_{{ turn.turn_number }}"
 						tabindex="{{ turn.dbl_turn_num|add:1 }}"></textarea>
 				</div>
+				{% endif %}
 				<div>
 					<button type="button" id="btnnext{{ turn.turn_number }}" class="btnnext"
 						tabindex="{{ turn.dbl_turn_num }}"
 						onclick="play_now('btnnext{{ turn.turn_number }}',
 														  'turn_{{ turn.turn_number }}',
-															'{{ APP_URL }}/data/recs{{ turn.rec }}');">Play</button>
+															'{{ APP_PATH }}/data/recs{{ turn.rec }}');">Play</button>
 				</div>
 			{% else %}
 				<div>
@@ -421,12 +673,85 @@ p.user { color: orange; }
 					 onclick="pseudo_play_now('btnnext{{ turn.turn_number }}', 'turn_{{ turn.turn_number }}', '');" class="btnnext">Next</button>
 				</div>
 			{% endif %}
-			
+
+			{% comment %}
+			The SLU annotation form follows.
+			{% endcomment %}
+			{% if 'slu' in TASKS %}
+				<div>
+					<table>
+					{% for dai, txt in turn.dais_txts %}
+					{% if dai != "other()" and dai != "null()" %}
+						<tr>
+							<td>
+								<input type="checkbox" 
+												name="sludai_{{turn.turn_number}}_{{forloop.counter}}" 
+												checked value="{{dai}}">
+							</td>
+							<td>{{ dai }}</td>
+							<td>{{ txt }}</td>
+
+						</tr>
+					{% endif %}
+					{% endfor %}
+					</table>
+					<table id="select_section_{{turn.turn_number}}">
+					{% for i in "xxx" %}
+						<tr>
+							<td rowspan="2">
+								<input type="checkbox" id="check_{{turn.turn_number}}_{{forloop.counter}}"
+								name="check_{{turn.turn_number}}_{{forloop.counter}}" checked>
+							</td>
+							<td>
+								<select 
+										id="newdat_{{turn.turn_number}}_{{forloop.counter}}"
+										name="newdat_{{turn.turn_number}}_{{forloop.counter}}"
+										class="displayed"
+										onChange="activate(this.options[this.selectedIndex].value, {{turn.turn_number}}, {{forloop.counter}});">
+									<option>
+									{% for d in all_dat %}
+									<option>{{d}}
+									{% endfor %}
+								</select>
+							</td>
+							<td>
+								<select id="slot_{{turn.turn_number}}_{{forloop.counter}}"
+										name="slot_{{turn.turn_number}}_{{forloop.counter}}"
+										class="hidden">
+								<option selected>      
+								{% for s in slot %}
+								<option>{{s}}
+								{% endfor%}
+								</select>
+							</td>
+							<td>
+								<select id="value_{{turn.turn_number}}_{{forloop.counter}}"
+										name="value_{{turn.turn_number}}_{{forloop.counter}}" class="hidden">
+									<option>
+								</select>
+							</td>
+							<td id="error_{{turn.turn_number}}_{{forloop.counter}}" rowspan="2">
+								<font color="red">Error message</font>
+							</td>
+						</tr>
+						<tr>
+							<td colspan="3" id="text_{{turn.turn_number}}_{{forloop.counter}}">
+								TEXT TEXT TEXT TEXT TEXT TEXT TEXT
+							</td>
+						</tr>
+					{% endfor %}
+					</table>
+					<input type="button" value="Add DAI" onclick="add_dai({{turn.turn_number}});">
+				</div>
+			{% endif %}
 			</div>
 		{% endfor %}
 	
-			<h3 id="phase_answer" class="head ui-state-disabled">
+			{% if not USE_ACCORDION %}<hr>{% endif %}
+			<h3 id="phase_answer"
+				class="head{% if USE_ACCORDION %} ui-state-disabled">
 				<a href="#">Submit</a>
+				{% else %}">Submit{% endif %}
 			</h3>
 			<div>
 				<table>
@@ -513,7 +838,9 @@ p.user { color: orange; }
 {% if form.errors %}
 <script>
 $(document).ready(function() {
+{% if USE_ACCORDION %}
 $(".ui-state-disabled").removeClass("ui-state-disabled");
+{% endif %}
 $("#phase_answer").click();
 });
 </script>

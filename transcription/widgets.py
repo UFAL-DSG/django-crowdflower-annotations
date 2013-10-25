@@ -7,7 +7,7 @@ from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 
-from settings import APP_URL, CONVERSATION_DIR, MEDIA_URL
+from settings import CONVERSATION_DIR, MEDIA_URL
 
 
 class ROInput(TextInput):
@@ -23,13 +23,13 @@ def get_object_link(model, attrs):
     try:
         db_obj = model.objects.get(**attrs)
     except model.DoesNotExist:
-        return None, mark_safe(u'<span class="warning">Object not found</span>')
+        return (None,
+                mark_safe(u'<span class="warning">Object not found</span>'))
     except model.MultipleObjectsReturned:
         return None, mark_safe(u'<span class="warning">Ambiguous</span>')
     # clsname = db_obj._meta.object_name.lower()
     clsname = model.__name__.lower()
-    url_str = ('admin:transcription_{cls}_change'
-                .format(cls=clsname))
+    url_str = ('admin:transcription_{cls}_change'.format(cls=clsname))
     try:
         # Construct the URL from the base URL string plus the object ID.
         url = reverse(url_str, args=(db_obj.pk, ))
@@ -82,8 +82,7 @@ class PlayWidget(Widget):
         wav_rest = value[len(CONVERSATION_DIR):]
         context = {'wav_fname': wav_rest,
                    'script_id': unicode(PlayWidget.num_wavs),
-                   'MEDIA_URL': MEDIA_URL,
-                   'app_url': APP_URL}
+                   'MEDIA_URL': MEDIA_URL}
         PlayWidget.num_wavs += 1
         player_html = render_to_string("trs/wav_player.html",
                                        dictionary=context)

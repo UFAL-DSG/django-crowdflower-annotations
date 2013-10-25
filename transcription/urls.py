@@ -1,7 +1,6 @@
 from django.conf.urls import patterns, url
 
 import settings
-from crowdflower import price_class_handler
 
 pattern_args = ['',
                 url('^transcribe$',
@@ -26,7 +25,7 @@ pattern_args = ['',
                 url('^stats$',
                     'transcription.views.dialogue_stats',
                     name="dialogue_stats"),
-               ]
+                ]
 
 if settings.DEBUG:
     pattern_args.append(url(r'^test-view$',

@@ -9,6 +9,7 @@ from django.forms.models import ModelChoiceField
 field_kwargs = ('required', 'label', 'initial', 'help_text', 'error_messages',
                 'show_hidden_initial', 'validators', 'localize', 'widget')
 
+
 def filter_field_kwargs(kwargs):
     """Filters kwargs to only such that are accepted by the Field
     initialiser."""

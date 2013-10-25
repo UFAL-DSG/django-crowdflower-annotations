@@ -45,6 +45,11 @@ def group_by(objects, attrs):
     return groups
 
 
+# TODO Define a proper DA matching function.
+def das_match(da1, da2, *args, **kwargs):
+    return True
+
+
 def catch_locked_database(meth):
     """
     This decorator takes care of catching DatabaseError for a locked database.
@@ -71,7 +76,9 @@ def catch_locked_database(meth):
         except DatabaseError as ex:
             if str(ex) == 'database is locked':
                 # Send an email to admins.
-                app_url = settings.DOMAIN_URL + settings.APP_URL
+                app_port = (':{port}'.format(port=settings.APP_PORT)
+                            if settings.APP_PORT else '')
+                app_url = settings.DOMAIN_URL + app_port + settings.APP_PATH
                 subj = "[{app}] Problem with database access".format(
                     app=app_url)
                 msg = """\
