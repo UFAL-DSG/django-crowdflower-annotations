@@ -16,7 +16,7 @@ import sys
 
 # Update the Python path, then do some more imports.
 _script_dir = os.path.realpath(os.path.dirname(__file__))
-_site_dir = os.path.realpath(os.path.join(_script_dir, os.pardir, 'site'))
+_site_dir = os.path.realpath(os.path.join(_script_dir, os.pardir, 'trs_site'))
 
 if _site_dir not in sys.path:
     sys.path.insert(0, _site_dir)

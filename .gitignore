@@ -40,7 +40,7 @@ nosetests.xml
 .*.sw[op]
 
 # transcription specific
-/site/localsettings.py
+/trs_site/localsettings.py
 nohup.out
 /data
 /db/

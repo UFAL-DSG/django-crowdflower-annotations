@@ -34,7 +34,7 @@ How to set up the transcription environment on the server:
 	below the root <VirtualHost> element:
 
 		WSGIDaemonProcess app_transcript
-		WSGIScriptAlias /apps/transcription /webapps/transcription/site/wsgi.py
+		WSGIScriptAlias /apps/transcription /webapps/transcription/trs_site/wsgi.py
 		<Location /apps/transcription>
 			WSGIProcessGroup app_transcript
 		</Location>
