@@ -285,7 +285,10 @@ directory.
 After you export
 ~~~~~~~~~~~~~~~~
 After you have exported the data, you probably want to copy them back to 
-the dialogue directories, possibly on a remote server.
+the dialogue directories, possibly on a remote server. You can use the 
+``scripts/copyback_transcriptions.sh`` script for copying the XML logs back 
+to their directories after you put them back to the target server. You will 
+see the script's usage instructions by running it without arguments.
 
 Note that by exporting the data, you do *not* remove them either from the 
 app's database nor from the filesystem. If you want to remove them from the 
