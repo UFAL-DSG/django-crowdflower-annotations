@@ -35,8 +35,9 @@ import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn)
-from transcription.forms import (DateRangeForm, WorkLogsForm, CreateJobForm,
-    DeleteJobForm, TranscriptionForm)
+from transcription.forms import DateRangeForm, TranscriptionForm
+if settings.USE_CF:
+    from transcription.forms import WorkLogsForm, CreateJobForm, DeleteJobForm
 from util import get_log_path, group_by, catch_locked_database
 
 
