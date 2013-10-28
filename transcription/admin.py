@@ -207,6 +207,24 @@ class DialogueAdmin(admin.ModelAdmin):
 
     export_annotations.short_description = "Export annotations"
 
+    def export_logs(self, request, queryset):
+        tgt_dir = os.path.join(settings.EXPORT_DIR, '{dt}-logs'.format(
+            dt=datetime.strftime(datetime.now(), '%y%m%d%H%M')))
+        os.makedirs(tgt_dir)
+        for dg in queryset:
+            dg_dir = os.path.join(settings.CONVERSATION_DIR, dg.cid)
+            tgt_dg_dir = os.path.join(tgt_dir, dg.dirname)
+            shutil.copytree(dg_dir, tgt_dg_dir)
+        # Output a message to the user.
+        self.message_user(request,
+                          '{num} dialogue log{shashave} been '
+                          'successfully exported to {outdir}.'.format(
+                          num=len(queryset),
+                          shashave=' has' if len(queryset) == 1 else 's have',
+                          outdir=tgt_dir))
+
+    export_logs.short_description = "Export logs (annotations and audio)"
+
     def compute_ers(modeladmin, request, queryset):
         """Computes average error rates for workers."""
         # TODO Test.
@@ -293,11 +311,12 @@ class DialogueAdmin(admin.ModelAdmin):
         upload_to_higher_job.short_description = (
             'Upload to CrowdFlower (to a higher price class)')
 
-        actions = [update_price_action, export_annotations, compute_ers,
-                   upload_to_crowdflower, update_gold_action,
+        actions = [update_price_action, export_annotations, export_logs,
+                   compute_ers, upload_to_crowdflower, update_gold_action,
                    upload_to_higher_job]
     else:
-        actions = [update_price_action, compute_ers, export_annotations]
+        actions = [update_price_action, compute_ers, export_annotations,
+                   export_logs]
 
 
 class DialogueAnnotationAdmin(admin.ModelAdmin):

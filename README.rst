@@ -300,3 +300,9 @@ in the directory configured as ``CONVERSATION_DIR``.
 work done for all the annotators, unless a different awarding scheme is in 
 force. Use the `Transcriptions` admin page and the `Measure work done` 
 action to get a report about the amount of work done by each annotator.
+
+You may also want to export all dialogues with transcriptions currently 
+marked as gold. Do that by setting the `By gold status` filter in `Admin -> 
+Dialogues` to `true`, selecting all the dialogues after filtering and 
+choosing the `Export logs (annotations and audio)` action. The logs will be 
+exported to ``settings.EXPORT_DIR`` (``data/export`` by default).

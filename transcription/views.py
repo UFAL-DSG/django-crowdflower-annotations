@@ -647,6 +647,8 @@ def import_dialogues(request):
             # Copy the dialogue files.
             tgt_fname = os.path.join(settings.CONVERSATION_DIR, cid)
             try:
+                # TODO Read the session log, check what recording files are
+                # needed, and copy only the log and these recordings.
                 shutil.copytree(src_fname, tgt_fname)
             except:
                 if not ignore_exdirs:
