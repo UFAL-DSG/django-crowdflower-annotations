@@ -73,7 +73,7 @@ How to set up the transcription environment on the server
 
      cd /webapps/transcription && ./manage.py syncdb
 
-.. _`creating superuser`:
+   .. _`creating superuser`:
 
    You may be asked to enter a login, a password, and an email for 
    a superuser account. It is a good idea to do so, unless you want to 
