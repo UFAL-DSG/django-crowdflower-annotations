@@ -766,11 +766,18 @@ def import_dialogues(request):
                 session_missing.append(src_fname)
                 continue
             # Check that there are enough user turns in the session.
+            # As a by-product, collect names of audio files referred to from
+            # the session.
+            rec_fnames = list()
             with XMLSession(fname=sess_fname, mode='r') as session:
-                try:
-                    for uturn_idx in xrange(settings.MIN_TURNS):
-                        next(session.iter_uturns())
-                except StopIteration:
+                n_empty_turns = 0
+                for uturn_num, uturn_nt in enumerate(session.iter_uturns(),
+                                                     start=1):
+                    if not uturn_nt.wav_fname:
+                        n_empty_turns += 1
+                    else:
+                        rec_fnames.append(uturn_nt.wav_fname)
+                if uturn_num - n_empty_turns < settings.MIN_TURNS:
                     session_empty.append(src_fname)
                     continue
 
@@ -789,9 +796,15 @@ def import_dialogues(request):
             # Copy the dialogue files.
             tgt_fname = os.path.join(settings.CONVERSATION_DIR, cid)
             try:
-                # TODO Read the session log, check what recording files are
-                # needed, and copy only the log and these recordings.
-                shutil.copytree(src_fname, tgt_fname)
+                # Make the target directory.
+                os.mkdir(tgt_fname)
+                # Copy the session XML log.
+                shutil.copy2(sess_fname, tgt_fname)
+                # Copy all the audio needed.
+                for rec_fname in rec_fnames:
+                    rec_path = os.path.join(src_fname, rec_fname)
+                    shutil.copy2(rec_path, tgt_fname)
+                # shutil.copytree(src_fname, tgt_fname)
             except:
                 if not ignore_exdirs:
                     copy_failed.append(src_fname)
