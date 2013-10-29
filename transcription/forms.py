@@ -11,7 +11,14 @@ from django.utils.datastructures import SortedDict
 
 from crowdflower import default_job_cml_path, price_class_handler
 from form_fields import DatetimeField, ListField
+from models import Dialogue
 import settings
+
+
+class CustomFieldsForm(forms.Form):
+    def __init__(self, fields, data=None):
+        super(CustomFieldsForm, self).__init__(data)
+        self.fields.update(fields)
 
 
 class TranscriptionForm(forms.Form):
@@ -58,6 +65,16 @@ class DateRangeForm(forms.Form):
     dt_to = DatetimeField(label='until (incl.)', required=False)
 
 
+class FileListForm(CustomFieldsForm):
+
+    def __init__(self, data=None):
+        dg_lists = sorted(Dialogue.objects
+                          .values_list('list_filename', flat=True).distinct())
+        dg_flist_tups = [(list_fname, list_fname) for list_fname in dg_lists]
+        fields = {'file_list': forms.ChoiceField(choices=dg_flist_tups)}
+        super(FileListForm, self).__init__(fields, data)
+
+
 if settings.USE_CF:
     class WorkLogsForm(forms.Form):
         logs_list_path = forms.FilePathField(
@@ -65,12 +82,6 @@ if settings.USE_CF:
             label="Path to the worklogs list file",
             help_text=('Select the file that lists paths towards worklog '
                        'files that should be reused.'))
-
-
-    class CustomFieldsForm(forms.Form):
-        def __init__(self, fields, data=None):
-            super(CustomFieldsForm, self).__init__(data)
-            self.fields.update(fields)
 
 
     class CreateJobForm(forms.Form):

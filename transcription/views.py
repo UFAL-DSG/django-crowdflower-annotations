@@ -12,11 +12,13 @@ import os
 import os.path
 import random
 import re
+import shutil
 from subprocess import check_output
 
 from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
+from django.db import DatabaseError
 from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
@@ -35,8 +37,9 @@ import settings
 from tr_normalisation import trss_match
 from transcription.models import (Transcription, DialogueAnnotation,
     Dialogue, UserTurn, SystemTurn)
-from transcription.forms import (DateRangeForm, WorkLogsForm, CreateJobForm,
-    DeleteJobForm, TranscriptionForm)
+from transcription.forms import DateRangeForm, FileListForm, TranscriptionForm
+if settings.USE_CF:
+    from transcription.forms import WorkLogsForm, CreateJobForm, DeleteJobForm
 from util import get_log_path, group_by, catch_locked_database
 
 
@@ -570,8 +573,6 @@ def home(request):
 @login_required
 @user_passes_test(lambda u: u.is_staff)
 def import_dialogues(request):
-    import shutil
-
     # Check whether the form is yet to be served.
     if not request.GET:
         return render(request, "trs/import.html")
@@ -788,6 +789,75 @@ def dialogue_stats(request):
     context['dg_statss'] = dg_statss
     return render(request, 'trs/dialogue-stats.html', context)
 
+
+@login_required
+@user_passes_test(lambda u: u.is_staff)
+def delete_list(request):
+    """Deletes all dialogues from a single file list from the DB and FS too."""
+
+    # If the user already selected the file list for deletion,
+    if request.method == 'POST':
+        form = FileListForm(request.POST)
+        if form.is_valid():
+            # Find which dialogues should be deleted.
+            flist = form.cleaned_data['file_list']
+            dgs_todelete = Dialogue.objects.filter(list_filename=flist)
+
+            # Try to delete the dialogue directories.
+            remaining_dirs = list()  # list of dialogue directories where an
+                                     # error occured when deleting them
+            for dg in dgs_todelete:
+                dg_path = os.path.join(settings.CONVERSATION_DIR, dg.cid)
+                try:
+                    shutil.rmtree(dg_path)
+                except:
+                    remaining_dirs.append(dg_path)
+
+            # Delete the dialogues from the database.
+            remaining_cids = list()
+            # Count some basic statistics of the objects to be deleted.
+            n_dgs = len(dgs_todelete)
+            dg_anns = dgs_todelete.values_list('dialogueannotation', flat=True)
+            n_anns = len(dg_anns)
+            try:
+                # Delete the dialogues.
+                dgs_todelete.delete()
+            except DatabaseError:
+                # If too many dialogues are selected for deletion, the database
+                # may be unable to handle such a long query. Delete the
+                # dialogues one by one then.
+                n_dgs = 0
+                n_anns = 0
+
+                for dg in dgs_todelete:
+                    # Count how many annotations this dialogue has.
+                    dg_anns = DialogueAnnotation.objects.filter(dialogue=dg)
+                    n_dg_anns = len(dg_anns)
+                    cid = dg.cid
+
+                    try:
+                        dg.delete()
+                    except:
+                        remaining_cids.append(cid)
+                    else:
+                        # Count this dialogue and its annotations as deleted.
+                        n_dgs += 1
+                        n_anns += n_dg_anns
+            except:
+                remaining_cids = (Dialogue.objects.filter(list_filename=flist)
+                                  .values_list('cid', flat=True))
+            remaining_cids.sort()
+
+            context = {'n_dgs': n_dgs,
+                       'n_anns': n_anns,
+                       'remaining_cids': remaining_cids,
+                       'remaining_dirs': remaining_dirs}
+            return render(request, 'trs/list-deleted.html', context)
+        else:
+            return render(request, 'trs/delete-list.html', {'form': form})
+    else:
+        form = FileListForm()
+        return render(request, 'trs/delete-list.html', {'form': form})
 
 def temp_test(request):
     # Set up whatever variables you are interested in dumping here.

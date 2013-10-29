@@ -23,6 +23,10 @@ pattern_args = ['',
                     'transcription.views.import_dialogues',
                     name="import_dialogues"),
 
+                url('^delete$',
+                    'transcription.views.delete_list',
+                    name="delete_dialogues"),
+
                 url('^stats$',
                     'transcription.views.dialogue_stats',
                     name="dialogue_stats"),

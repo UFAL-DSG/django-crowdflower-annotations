@@ -288,13 +288,15 @@ After you have exported the data, you probably want to copy them back to
 the dialogue directories, possibly on a remote server.
 
 Note that by exporting the data, you do *not* remove them either from the 
-app's database nor from the filesystem. If you want to remove them from the 
-database, choose the appropriate action from the Admin site where you 
-exported them (but see the next paragraph). If you want to remove them from 
-the filesystem, go ahead and remove them after you removed them from the 
-Django database (otherwise, the app might be looking for them in the 
-`transcribe` view, and not finding them). All the dialogue logs are stored 
-in the directory configured as ``CONVERSATION_DIR``.
+app's database nor from the filesystem. There is a dedicated view for doing 
+exactly this, accessible from the main menu through the `Delete dialogues` 
+option. After selecting the option, you will be asked for selecting the 
+file list from which the dialogues you wish to remove came from. When you 
+submit the form, the dialogues will be removed from the 
+``settings.CONVERSATION_DIR`` directory and from the app's database, 
+*including all recordings and annotations*. Therefore, double-check that 
+you have all your data copied to a safe place before you submit this form.  
+Check also the following paragraphs.
 
 **BEFORE YOU REMOVE THE DATA** from the database, you might want to measure 
 work done for all the annotators, unless a different awarding scheme is in 
@@ -302,7 +304,7 @@ force. Use the `Transcriptions` admin page and the `Measure work done`
 action to get a report about the amount of work done by each annotator.
 
 You may also want to export all dialogues with transcriptions currently 
-marked as gold. Do that by setting the `By gold status` filter in `Admin -> 
-Dialogues` to `true`, selecting all the dialogues after filtering and 
-choosing the `Export logs (annotations and audio)` action. The logs will be 
-exported to ``settings.EXPORT_DIR`` (``data/export`` by default).
+marked as gold. Do that by setting the `By gold status` filter in
+`Admin -> Dialogues` to `true`, selecting all the dialogues after filtering 
+and choosing the `Export logs (annotations and audio)` action. The logs 
+will be exported to ``settings.EXPORT_DIR`` (``data/export`` by default).

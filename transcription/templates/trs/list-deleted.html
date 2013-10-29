@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block head %}
+<style type="text/css">
+div.success_msg {
+	border: 2px solid green;
+}
+</style>
+{% endblock head %}
+
+{% block content %}
+<h1>Work log reuse report</h1>
+
+<p>
+A total of <strong>{{ n_dgs  }}</strong> dialogue{{ n_dgs|pluralize }},
+           <strong>{{ n_anns }}</strong> dialogue annotation{{ n_anns|pluralize }},
+and other related objects have been deleted from the database.
+{% if not remaining_cids and not remaining_dirs %}
+All their directories have been removed as well.
+{% endif %}
+</p>
+
+{% if remaining_cids %}
+<p>There were errors deleting the following
+<strong>{{ remaining_cids|length }}</strong> dialogues from the
+database:</p>
+</p>
+<table>
+	<tr><th>Dialogue <abbr title="conversation ID">CID</abbr></th></tr>
+	{% for cid in remaining_cids %}
+	<tr><td><tt>{{ cid }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% if remaining_dirs %}
+<p>There were errors removing dialogue directories for
+<strong>{{ remaining_dirs|length }}</strong> dialogues:
+</p>
+<table>
+	<tr><th>Dialogue directory</th></tr>
+	{% for dirname in remaining_dirs %}
+	<tr><td><tt>{{ dirname }}</tt></td></tr>
+	{% endfor %}
+</table>
+{% endif %}
+
+{% endblock content %}

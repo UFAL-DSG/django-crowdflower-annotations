@@ -8,6 +8,7 @@
 <li><a href="{% url "transcribe" %}">Start/continue transcribing</a></li>
 {% if user.is_superuser or user.is_staff %}
 <li><a href="{% url "import_dialogues" %}">Import dialogues</a></li>
+<li><a href="{% url "delete_dialogues" %}">Delete dialogues</a></li>
 <li><a href="{% url "dialogue_stats" %}">Transcription statistics</a></li>
 {% if USE_CF %}
 <li><a href="{% url "create_jobs" %}">Create new Crowdflower jobs</a></li>
