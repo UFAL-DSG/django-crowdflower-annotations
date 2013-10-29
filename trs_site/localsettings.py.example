@@ -42,7 +42,11 @@ EMAIL_USE_TLS = True
 # accessible.
 DOMAIN_URL = "http://example.com"
 
+# APP_PORT: If a port needs to be specified in the URL to reach your app,
+# specify the port as a string here.
 APP_PORT = '8000'
+
+# APP_PATH: The path part of the app URL (after the domain and port).
 APP_PATH = '/apps/transcription'
 
 # COOKIES_MAX_AGE: This determines how long we will be able to recognise
@@ -109,28 +113,43 @@ LOG_CURL = False
 CODE_LENGTH = 6  # length of the validation code
 CODE_LENGTH_EXT = 3  # length of the validation code extension
 
+# CF_KEY: API key to your Crowdflower account.
 CF_KEY = "abcdabcdabcdabcdabcdabcdabcdabcdabcdabcd"
 
 # CF_WAIT_SECS: How long to give Crowdflower before asking it about newly
 # uploaded jobs.
 CF_WAIT_SECS = 1
 
+# CF_MAX_WAITS: How many times in a row maximum we wish to wait for Crowdflower
+# to update its data before concluding something went irretrievably wrong.
 CF_MAX_WAITS = 41
 
+# PRICE_CONTS, PRICE_PER_MIN, PRICE_PER_TURN: Coefficients that determine the
+# price for a dialogue. Its duration is determined from the size of the audio
+# file, user turns and only those are used with the PRICE_PER_TURN coefficient.
 PRICE_CONST = 2 * 0.01
 PRICE_PER_MIN = 30 * 0.01
 PRICE_PER_TURN = 0.5 * 0.01
+
+# MIN_TURNS: Minimum number of user turns in a dialogue to not ignore it when
+# importing dialogues.
 MIN_TURNS = 2
 
+# MAX_ANNOTATIONS_PER_INPUT: When a transcriber asks for a random dialogue to
+# annotate, only dialogues that have less than this many annotations so far may
+# be shown to him.
 MAX_ANNOTATIONS_PER_INPUT = 1
+
+# SESSION_EXPIRED: For how long to reserve a dialogue for a single annotator
+# (who started to work on it).
 SESSION_EXPIRED = datetime.timedelta(hours=12)
 
 # maximum tolerated character error rate in transcriptions (after
 # normalisation)
 #
-# The value 0.07 implies that one in 14--15 characters being wrong shall be
-# tolerated.
-MAX_CHAR_ER = 0.07
+# The value 0.15 implies that one in 6--7 characters being wrong shall be
+# tolerated and seems to be a good choice.
+MAX_CHAR_ER = 0.15
 
 # What all information about a finalized job should be stored in the XML
 # session file?
@@ -163,10 +182,16 @@ LOGGED_JOB_DATA = [
 # questions should be asked in the transcription form.
 EXTRA_QUESTIONS = ('accent', 'quality', 'offensive')
 
+# USE_ACCORDION: whether to uncover individual turns in the transcription
+# interface gradually, after the audio finished playing.
 USE_ACCORDION = True
 
+# TASKS: if it contains 'asr', transcriptions are done; if it contains 'slu',
+# semantic annotations are done. It may contain one or both.
 TASKS = ('asr', 'slu')
 
+# XML_COMMON: Partial description of the XML logs format, common to all (both)
+# formats accepted.
 XML_COMMON = {
     'ANNOTATIONS_ABOVE': ".",
     'ANNOTATIONS_AFTER': "turn",  # This has to point to a direct child of
@@ -177,6 +202,8 @@ XML_COMMON = {
     'REC_FNAME_ATTR': "fname"
 }
 
+# XML_COMMON: Partial description of the XML logs format, distinguished by the
+# root element of the logs into different settings.
 XML_SCHEMES = {
     'dialog': {
         'USERTURN_PATH': ".//userturn",
@@ -226,6 +253,8 @@ XML_SCHEMES = {
     }
 }
 
+# TRANSCRIBE_EXTRA_CONTEXT: This is currently used only to specify path to
+# templates that comprise the instructions.
 TRANSCRIBE_EXTRA_CONTEXT = {
     'instruction_includes': ('trs/numerals.html',
                              'trs/ortography.html',
@@ -245,12 +274,16 @@ INTROS = ()
 # start in these strings are not shown to the transcriber at all.
 IGNORE_PROMPT_STARTS = ("Thank you for using", "Thank you goodbye")
 
+
+###########################################
+# sem_transcription-specific from here on #
+###########################################
 # TODO To uppercase.
-nullary_dat = ['repeat','restart','null','other','thankyou','bye']
+nullary_dat = ['repeat', 'restart', 'null', 'other', 'thankyou', 'bye']
 unary_dat_with_slot = ['pokus']
-unary_dat_with_value = ['inform','experimentalni']
+unary_dat_with_value = ['inform', 'experimentalni']
 binary_dat = ['inform']
-name_of_slot = ['from_stop','to_stop']
+name_of_slot = ['from_stop', 'to_stop']
 
 def dai2text(value):
     return "TEXT"

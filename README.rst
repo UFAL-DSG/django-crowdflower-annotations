@@ -72,7 +72,12 @@ How to set up the transcription environment on the server
    ::
 
      cd /webapps/transcription && ./manage.py syncdb
-     # You will be asked to enter your superuser details.
+
+.. _`creating superuser`:
+
+   You may be asked to enter a login, a password, and an email for 
+   a superuser account. It is a good idea to do so, unless you want to 
+   `Load users from a dump`_.
 
    Make sure the access permissions are set correctly for directories used 
    by Django.  This can mean you need to issue the following commands, 
@@ -82,7 +87,7 @@ How to set up the transcription environment on the server
 
      # PROJECT_PATH=/webapps/transcription
      # cd $PROJECT_PATH &&\
-       chown www-data db{,trss.db} data/{,conversations,import,lists} log/{curl,work}_logs
+       chown www-data db/{,trss.db} data/{,conversations,import,lists} log/{curl,work}_logs
   
 5. [Optional] Save the name and domain of your new site to the database.  
    The name of the site appears in password-reset emails, and defaults to 
@@ -108,8 +113,8 @@ How to set up the transcription environment on the server
    warning is a false alarm. If there were static files collected, they 
    would be overwritten, but there are none.
   
-7. Reload the web server, open the site URL, and log in with the superuser 
-   account you created.
+7. Reload the web server, open the site URL, and log in with the 
+   superuser account `you created <creating superuser_>`_.
 
 
 ===========================================
@@ -145,24 +150,9 @@ How to set up transcription via Crowdflower
    `Update Price` action in the `Dialogues` admin view.
    
 4. Order your units through the Crowdflower web interface. You want to set 
-   the price for each job the same as what the title specifies.
-
-   **Update**: Crowdflower requires that the jobs don't specify the price 
-   in their title. Therefore, you should change the title before ordering 
-   the job. A good option is writing
-
-    Dialogue transcription – price level K
-
-   instead of
-
-    Dialogue transcription – K0 cents.
-  
-5. If fully annotated transcription elements are desired also for gold 
-   units, fire gold hooks (an option in the main menu) when finished with 
-   the job, just in case the job_complete webhook from CrowdFlower did not 
-   fire automatically.
-
-.. TODO: update the instruction above.
+   the price for each job according to what the title specifies. By 
+   default, the title says `price level K` where `K` is one tenth of the 
+   calculated job price.
 
 
 =======================
@@ -216,13 +206,13 @@ How to get data out of the system
 There are two ways to export the data from the database Django uses 
 internally:
 
-  .. _(A):
+.. _(A):
 
-  A) Make a database dump.
+A) Make a database dump.
 
-  .. _(B):
+.. _(B):
 
-  B) Export the dialogue logs.
+B) Export the dialogue logs.
 
 
 ---------------------------
@@ -311,3 +301,32 @@ marked as gold. Do that by setting the `By gold status` filter in
 `Admin -> Dialogues` to `true`, selecting all the dialogues after filtering 
 and choosing the `Export logs (annotations and audio)` action. The logs 
 will be exported to ``settings.EXPORT_DIR`` (``data/export`` by default).
+
+
+=============
+Random howtos
+=============
+
+How to...
+
+----------------------
+Load users from a dump
+----------------------
+If you are starting an application with a new database where you had 
+a running application earlier with users you want to have in the new 
+application too, you can simply copy them from the original installation to 
+the new one.
+
+First, you need to have a dump of users of the original app. This can be 
+easily obtained by running ``scripts/dumpdata.sh``. This scripts writes 
+dumps of the database to ``data/dumps/TIMESTAMP_trss-dump.json`` and 
+``data/dumps/TIMESTAMP_trss_users-dump.json``. The latter is needed to 
+copy users, the earlier contains all information about dialogues, 
+transcriptions etc.
+
+The dump is loaded to the new application easily by running its 
+``manage.py`` script like so:
+
+  ::
+
+  $ ./manage.py loaddata path-to-the-data-dump
