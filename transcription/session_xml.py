@@ -10,10 +10,13 @@ import os.path
 import settings
 
 
-UserTurn_nt = namedtuple('UserTurn_nt', ['turn_number', 'wav_fname'])
+UserTurn_nt = namedtuple(
+    'UserTurn_nt',
+    ['turn_number', 'wav_fname', 'asr_hyp', 'slu_hyp'])
 SystemTurn_nt = namedtuple('SystemTurn_nt', ['turn_number', 'text'])
-UserTurnAbs_nt = namedtuple('UserTurnAbs_nt', ['turn_abs_number',
-                                               'turn_number', 'wav_fname'])
+UserTurnAbs_nt = namedtuple(
+    'UserTurnAbs_nt',
+    ['turn_abs_number', 'turn_number', 'wav_fname', 'asr_hyp', 'slu_hyp'])
 SystemTurnAbs_nt = namedtuple('SystemTurnAbs_nt', ['turn_abs_number',
                                                    'turn_number', 'text'])
 
@@ -297,6 +300,10 @@ class XMLSession(object):
 
         self.SLASH_TRANSCRIPTIONS_ELEM = (("/" + self.TRANSCRIPTIONS_ELEM)
                                           if self.TRANSCRIPTIONS_ELEM else "")
+        self.SLASH_ASRHYPS_ELEM = (
+            ("/" + self.ASRHYPS_ELEM) if self.ASRHYPS_ELEM else "")
+        self.SLASH_SLUHYPS_ELEM = (
+            ("/" + self.SLUHYPS_ELEM) if self.SLUHYPS_ELEM else "")
         if hasattr(self, 'DATE_FORMAT') and self.DATE_FORMAT is not None:
             def format_datetime(dt):
                 return dt.strftime(self.DATE_FORMAT)
@@ -332,13 +339,106 @@ class XMLSession(object):
 
         return True
 
+    def find_asr_1best_for_turn(self, turn_number):
+        """
+        Returns the ASR hypothesis for a user turn with the given turn number
+        which has the highest score.  If none is available, returns None.
+
+        Keyword arguments:
+            - turn_number -- value for the turn number attribute of the user
+                turn in question
+
+        """
+
+        # Find all enclosing ASR hypothesis elements (the ASR hypotheses are
+        # split over several such sometimes).
+        asrs_path = "{uturn}[@{turn_attr}='{turn}']{asrs}".format(
+            uturn=self.USERTURN_PATH,
+            turn_attr=self.TURNNUMBER_ATTR,
+            turn=str(turn_number),
+            asrs=self.SLASH_ASRHYPS_ELEM)
+        asrs_els = self.sess_xml.findall(asrs_path)
+        if not asrs_els:
+            return None
+
+        asr_subhyps = list()
+        for asrs_el in asrs_els:
+            asr_els = asrs_el.findall(self.ASRHYP_ELEM)
+            if not asr_els:
+                continue
+            # Be robust against invalid asrhyp elements.
+            try:
+                best_asr = max((el.get(self.PROB_ATTR), el) for el in asr_els)[1]
+                asr_subhyps.append(best_asr.text.strip())
+            except:
+                continue
+        return ' '.join(asr_subhyps)
+
+    def find_slu_1best_for_turn(self, turn_number):
+        """
+        Returns the SLU hypothesis for a user turn with the given turn number
+        which has the highest score.  If none is available, returns None.
+
+        Keyword arguments:
+            - turn_number -- value for the turn number attribute of the user
+                turn in question
+
+        """
+
+        # Find all enclosing SLU hypothesis elements (the SLU hypotheses are
+        # split over several such sometimes).
+        slus_path = "{uturn}[@{turn_attr}='{turn}']{slus}".format(
+            uturn=self.USERTURN_PATH,
+            turn_attr=self.TURNNUMBER_ATTR,
+            turn=str(turn_number),
+            slus=self.SLASH_SLUHYPS_ELEM)
+        slus_els = self.sess_xml.findall(slus_path)
+        if not slus_els:
+            return None
+
+        slu_subhyps = list()
+        for slus_el in slus_els:
+            slu_els = slus_el.findall(self.SLUHYP_ELEM)
+            if not slu_els:
+                continue
+            # Be robust against invalid sluhyp elements.
+            try:
+                best_slu = max((el.get(self.PROB_ATTR), el) for el in slu_els)[1]
+                slu_subhyps.append(best_slu.text.strip())
+            except:
+                continue
+
+        return '&'.join(slu_subhyps)
+        # Some more processing could be done here, but it would be a bit
+        # complicated and application-dependent:
+        #   - does the order of DAIs matter?
+        #   - are the hypotheses complete DAs or single DAIs?
+
+    def find_trss_for_turn(self, turn_number):
+        """
+        Returns a list of XML transcription elements for a user turn with the
+        given turn number.
+
+        Keyword arguments:
+            - turn_number -- value for the turn number attribute of the user
+                turn in question
+
+        """
+        trs_path = "{uturn}[@{turn_attr}='{turn}']{trss}/{trs}".format(
+            uturn=self.USERTURN_PATH,
+            turn_attr=self.TURNNUMBER_ATTR,
+            turn=str(turn_number),
+            trss=self.SLASH_TRANSCRIPTIONS_ELEM,
+            trs=self.TRANSCRIPTION_ELEM)
+        return self.sess_xml.findall(trs_path)
+
     def find_transcription(self, trs):
         """
         Finds the transcription element in the XML for a given transcription.
         If the element is not there, returns None.
 
         Keyword arguments:
-            - trs -- the transcription.models.Transcription object whose
+            - trs -- a transcription.models.Transcription object whose
                      XML representation is to be found
 
         """
@@ -418,6 +518,58 @@ class XMLSession(object):
             return self.add_transcription(trs)
         else:
             return trs_xml
+
+    def add_sem_annotation(self, sem_ann):
+
+        # Find the appropriate place for the annotation in the XML tree.
+        dg_ann = sem_ann.dialogue_annotation
+        user_turns = self.sess_xml.findall(self.USERTURN_PATH)
+        turn_xml = filter(
+            lambda turn_xml: \
+                int(turn_xml.get(self.TURNNUMBER_ATTR)) \
+                    == sem_ann.turn.turn_number,
+            user_turns)[0]
+        if self.ANNOTATIONS_ELEM is not None:
+            anns_xml = turn_xml.find(self.ANNOTATIONS_ELEM)
+            if anns_xml is None:
+                anns_left_sib = turn_xml.find(self.ANNOTATIONS_BEFORE)
+                if anns_left_sib is None:
+                    insert_idx = len(turn_xml)
+                else:
+                    insert_idx = turn_xml.index(anns_left_sib) + 1
+                anns_xml = etree.Element(self.ANNOTATIONS_ELEM)
+                turn_xml.insert(insert_idx, anns_xml)
+        else:
+            anns_xml = turn_xml
+
+        # Create the XML element for the transcription.
+        ann_xml = etree.Element(
+            self.ANNOTATION_ELEM,
+            annotation=str(dg_ann.pk),
+            is_gold="0",
+            breaks_gold="1" if sem_ann.breaks_gold else "0",
+            some_breaks_gold="1" if sem_ann.some_breaks_gold else "0",
+            program_version=dg_ann.program_version)
+        if dg_ann.user is not None:
+            username = dg_ann.user.username
+        else:
+            username = ''
+        ann_xml.set(self.AUTHOR_ATTR, username)
+        ann_xml.set(self.DATE_ATTR,
+                    self.format_datetime(dg_ann.date_saved))
+        ann_xml.text = sem_ann.da_str
+
+        # Insert the new XML element at its place, and return it.
+        if self.ANNOTATION_BEFORE:
+            ann_left_sib = anns_xml.find(self.ANNOTATION_BEFORE)
+        else:
+            ann_left_sib = None
+        if ann_left_sib is None:
+            insert_idx = len(anns_xml)
+        else:
+            insert_idx = anns_xml.index(ann_left_sib) + 1
+        anns_xml.insert(insert_idx, ann_xml)
+        return ann_xml
 
     def find_annotations(self):
         anns_above = self.sess_xml.find(self.ANNOTATIONS_ABOVE)
@@ -527,7 +679,7 @@ class XMLSession(object):
 
     def iter_turns(self):
 
-        # XXX This method was build in an ugly way, by putting together the
+        # XXX This method was built in an ugly way, by putting together the
         # bodies of iter_uturns and iter_systurns.
         turns = self.sess_xml.xpath(
             '|'.join((self.USERTURN_PATH, self.SYSTURN_PATH)))
@@ -544,7 +696,26 @@ class XMLSession(object):
                     pass
                 else:
                     if turn_number not in uturnnums_seen:
-                        yield UserTurnAbs_nt(turn_abs_num, turn_number, rec)
+                        # Try to find a transcription element.
+                        # FIXME The best one should be chosen somehow.
+                        # In the current implementation, we just choose the
+                        # longest one.
+                        trs_els = self.find_trss_for_turn(turn_number)
+                        if trs_els:
+                            asrhyp = max((len(el.text), el)
+                                         for el in trs_els)[1]
+                        # If no transcriptions are available for this turn,
+                        else:
+                            # Use the best ASR hypothesis.
+                            asrhyp = (self.find_asr_1best_for_turn(turn_number)
+                                      or '')
+
+                        # Find the best SLU hypothesis for this turn.
+                        sluhyp = (self.find_slu_1best_for_turn(turn_number)
+                                  or '')
+
+                        yield UserTurnAbs_nt(turn_abs_num, turn_number, rec,
+                                             asrhyp, sluhyp)
                         uturnnums_seen.add(turn_number)
             else:
                 turn_number = int(turn_xml.attrib[self.TURNNUMBER_ATTR])
@@ -572,18 +743,35 @@ class XMLSession(object):
                 pass
             else:
                 if turn_number not in turnnums_seen:
-                    yield UserTurn_nt(turn_number, rec)
+                    # Try to find a transcription element.
+                    # FIXME The best one should be chosen somehow.
+                    # In the current implementation, we just choose the longest
+                    # one.
+                    trs_els = self.find_trss_for_turn(turn_number)
+                    if trs_els:
+                        asrhyp = max((len(el.text), el) for el in trs_els)[1]
+                    # If no transcriptions are available for this turn,
+                    else:
+                        # Use the best ASR hypothesis.
+                        asrhyp = (self.find_asr_1best_for_turn(turn_number)
+                                  or '')
+
+                    # Find the best SLU hypothesis for this turn.
+                    sluhyp = self.find_slu_1best_for_turn(turn_number) or ''
+                    yield UserTurn_nt(turn_number, rec, asrhyp, sluhyp)
                     turnnums_seen.add(turn_number)
 
     @classmethod
     def _clean_systurn_text(cls, text):
-        if (text.startswith("Thank you for using")
-                or text.startswith("Thank you goodbye")):
-            return None
-        return text.replace(
-            "Thank you for calling the Cambridge Information system. "
-            "Your call will be recorded for research purposes.",
-            "").strip()
+        text = text.strip()
+        for prompt_start in settings.IGNORE_PROMPT_STARTS:
+            if text.startswith(prompt_start):
+                return None
+        for intro in settings.INTROS:
+            if text.startswith(intro):
+                text = text[len(intro):].strip()
+                break
+        return text
 
     def iter_systurns(self):
         for systurn_xml in self.sess_xml.iterfind(self.SYSTURN_PATH):

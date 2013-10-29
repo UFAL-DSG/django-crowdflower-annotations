@@ -12,7 +12,7 @@ input[type="checkbox"] {
 {% block content %}
 <h1>Dialogue import</h1>
 
-<form action="{{ APP_URL }}/import" method="GET">
+<form action="{{ APP_PATH }}/import" method="GET">
 	<table>
 		<tr>
 			<td><label for="id_list_fname">Filelist filename</label></td>
@@ -26,10 +26,12 @@ input[type="checkbox"] {
 			<td><input type="checkbox" name="with_trss" id="id_with_trss" value="on" checked></td>
 			<td><label for="id_with_trss">Import also any existing transcriptions from the logs?</label></td>
 		</tr>
+		{% comment %}
 		<tr>
 			<td><input type="checkbox" name="only_order" id="id_only_order" value="on"></td>
 			<td><label for="id_only_order">Add only the absolute turn numbers to the database? (FOR DEVELOPERS ONLY)</label></td>
 		</tr>
+		{% endcomment %}
 		<tr>
 			<td><input type="checkbox" name="ignore_exdirs" value="on" id="id_ignore_exdirs"></td>
 			<td><label for="id_ignore_exdirs">Ignore copy errors due to existing directories?</label></td>

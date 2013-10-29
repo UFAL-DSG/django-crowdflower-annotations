@@ -9,7 +9,7 @@ import settings
 
 def config_vars(request):
     return {'USE_CF': settings.USE_CF,
-            'APP_URL': settings.APP_URL,
+            'APP_PATH': settings.APP_PATH,
             'SUB_SITE': settings.SUB_SITE}
 
 

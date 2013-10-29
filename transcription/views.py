@@ -11,18 +11,16 @@ from itertools import chain
 import os
 import os.path
 import random
-import re
 import shutil
 from subprocess import check_output
 
-from django import forms
 from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth.models import User
 from django.db import DatabaseError
 from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
-from django.template import loader, RequestContext
+from django.template import RequestContext
 from django.views.decorators.csrf import csrf_exempt
 
 import crowdflower
@@ -31,17 +29,15 @@ from crowdflower import (collect_judgments, create_job, delete_job,
     record_worker)
 import dg_util
 import session_xml
-from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt,
-    SystemTurnAbs_nt)
+from session_xml import (FileNotFoundError, XMLSession, UserTurnAbs_nt)
 import settings
 from tr_normalisation import trss_match
-from transcription.models import (Transcription, DialogueAnnotation,
-    Dialogue, UserTurn, SystemTurn)
 from transcription.forms import DateRangeForm, FileListForm, TranscriptionForm
 if settings.USE_CF:
     from transcription.forms import WorkLogsForm, CreateJobForm, DeleteJobForm
-from util import get_log_path, group_by, catch_locked_database
-
+from transcription.models import (Transcription, DialogueAnnotation,
+    Dialogue, UserTurn, SystemTurn, SemanticAnnotation)
+from util import das_match, get_log_path, group_by, catch_locked_database
 
 # Initialisation.
 random.seed()
@@ -50,6 +46,7 @@ random.seed()
 dgstats_nt = namedtuple('DialogueStats', ['list_filename', 'n_annotated_in',
                                           'n_annotated_out', 'n_clean',
                                           'n_all'])
+
 
 # Auxiliary functions.
 def _hash(s):
@@ -102,20 +99,26 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
     if only_order:
         sys_turns = SystemTurn.objects.filter(dialogue=dg_data)
         user_turns = UserTurn.objects.filter(dialogue=dg_data)
+
         def _get_uturn(uturn_nt):
             uturn = user_turns.get(turn_number=uturn_nt.turn_number)
             uturn.turn_abs_number = uturn_nt.turn_abs_number
             return uturn
+
         def _get_systurn(systurn_nt):
             systurn = sys_turns.get(turn_number=systurn_nt.turn_number)
             systurn.turn_abs_number = systurn_nt.turn_abs_number
             return systurn
     else:
+
         def _get_uturn(uturn_nt):
             return UserTurn(dialogue=dg_data,
                             turn_number=turnnum,
                             turn_abs_number=uturn_nt.turn_abs_number,
-                            wav_fname=wav_path)
+                            wav_fname=wav_path,
+                            asr_hyp=uturn_nt.asr_hyp,
+                            slu_hyp=uturn_nt.slu_hyp)
+
         def _get_systurn(systurn_nt):
             return SystemTurn(dialogue=dg_data,
                               turn_number=systurn_nt.turn_number,
@@ -166,7 +169,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                 # Retrieve all properties of the dialogue annotation
                 # object.
                 notes = ('' if ann_el.text is None
-                            else ann_el.text.strip())
+                         else ann_el.text.strip())
                 program_version = ann_el.get('program_version')
                 ann_users = User.objects.filter(
                     username=ann_el.get('user'))
@@ -176,9 +179,9 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                     ann_user = dummy_user
 
                 ann_props = {'dialogue': dg_data,
-                                'notes': notes,
-                                'user': ann_user,
-                                'program_version': program_version}
+                             'notes': notes,
+                             'user': ann_user,
+                             'program_version': program_version}
 
                 if 'accent' in settings.EXTRA_QUESTIONS:
                     accent_str = ann_el.get('accent')
@@ -189,12 +192,15 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                     ann_props['offensive'] = offensive
                 if 'quality' in settings.EXTRA_QUESTIONS:
                     quality = (DialogueAnnotation.QUALITY_CLEAR
-                            if ann_el.get('quality') == 'clear'
-                            else DialogueAnnotation.QUALITY_NOISY)
+                               if ann_el.get('quality') == 'clear'
+                               else DialogueAnnotation.QUALITY_NOISY)
                     ann_props['quality'] = quality
 
+                date_saved = session.parse_datetime(ann_el.get('date_saved'))
+
                 # Check whether this object has been imported already.
-                if not DialogueAnnotation.objects.filter(**ann_props):
+                if not DialogueAnnotation.objects.filter(
+                        date_saved=date_saved, **ann_props):
                     # Save the dialogue annotation.
                     dg_ann = DialogueAnnotation(**ann_props)
                     dg_ann.save()
@@ -225,10 +231,14 @@ def _create_turn_dicts(dialogue):
     to the turn database objects' turn_number attribute.
 
     """
+
+    _using_slu = 'slu' in settings.TASKS
+
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
     max_turn_num = max(max(uturn.turn_abs_number for uturn in uturns),
                        max(sturn.turn_abs_number for sturn in systurns))
+
     # Transform data from DialogueTurn objects into dicts.
     turns = [dict() for _ in xrange(max_turn_num)]
     for systurn in systurns:
@@ -241,6 +251,14 @@ def _create_turn_dicts(dialogue):
         seclast_slash = uturn.wav_fname.rfind(
             os.sep, 0, uturn.wav_fname.rfind(os.sep))
         wav_fname_rest = uturn.wav_fname[seclast_slash:]
+        if _using_slu:
+            # Get the DAIs and their textual representation for the SLU
+            # hypothesis for this turn.
+            if uturn.slu_hyp:
+                dais = uturn.slu_hyp.split('&')
+                dais_txts = [(dai, settings.dai2text(dai)) for dai in dais]
+            else:
+                dais_txts = ()
         # Update the last system turn unless it already contains data about the
         # user's utterance.
         prev_turn_idx = uturn.turn_abs_number - 1
@@ -260,9 +278,12 @@ def _create_turn_dicts(dialogue):
                     # Merge this new user turn to the preceding system turn.
                     prev_turn_idx = turn_idx
                 break
-        turns[prev_turn_idx].update(rec=wav_fname_rest,
-                                    has_rec=True,
-                                    uturn_number=uturn.turn_number)
+        turn_dict = turns[prev_turn_idx]
+        turn_dict.update(rec=wav_fname_rest, has_rec=True,
+                         uturn_number=uturn.turn_number)
+        if _using_slu:
+            turn_dict['dais_txts'] = dais_txts
+
     # Number the turns.
     turns = filter(None, turns)
     for turn_number, turn in enumerate(turns, start=1):
@@ -304,6 +325,10 @@ def transcribe(request):
 
             # turn_dicts :: [<template turn number> -> <turn dict>]
             # This is a dense list, no member is None.
+            # NOTE that we only consider those user turns that reference
+            # a recording of what was said.  This implies that not even
+            # semantics can be transcribed for user turns without recordings
+            # (where the correct DAT is always 'null()').
             turn_dicts = _create_turn_dicts(dg_data)
 
             # paired_nums :: [<index to `turn_dicts'>] only for user turns that
@@ -375,37 +400,108 @@ def transcribe(request):
                     session.add_annotation(
                         dg_ann, **{settings.TRANSCRIBER_ID_ATTR: cookie_value})
                     # Create Transcription objects and save them into DB.
-                    # trss :: [UserTurn.turn_number -> (None or transcription)]
-                    trss = [None] * len(uturns_list)
+                    if 'asr' in settings.TASKS:
+                        # trss :: [UserTurn.turn_number ->
+                        #          (None or transcription)]
+                        trss = [None] * len(uturns_list)
+                    if 'slu' in settings.TASKS:
+                        # sem_anns :: [UserTurn.turn_number ->
+                        #              (None or semantic annotation)]
+                        sem_anns = [None] * len(uturns_list)
+                        checklist = filter(
+                            lambda name: name.startswith("check_"),
+                            request.POST)
+
                     for tpt_turn_number in paired_nums:
                         turn_dict = turn_dicts[tpt_turn_number - 1]
                         turn_number = turn_dict['uturn_number']
                         assert turn_dict['has_rec']
-                        trs = Transcription()
-                        trss[turn_number - 1] = trs
-                        trs.text = form.cleaned_data[
-                            'trs_{0}'.format(tpt_turn_number)]
-                        trs.turn = uturns_list[turn_number - 1]
-                        trs.dialogue_annotation = dg_ann
+
+                        if 'asr' in settings.TASKS:
+                            # Retrieve the ASR transcription.
+                            trs = Transcription()
+                            trss[turn_number - 1] = trs
+                            trs.text = form.cleaned_data[
+                                'trs_{0}'.format(tpt_turn_number)]
+                            trs.turn = uturns_list[turn_number - 1]
+                            trs.dialogue_annotation = dg_ann
+
+                        if 'slu' in settings.TASKS:
+                            # Retrieve the SLU annotation.
+                            sem_ann = Transcription()
+                            sem_anns[turn_number - 1] = sem_ann
+                            # Get a string representation of the DA.
+                            dai_strs = list()
+                            newdat_prefix = 'newdat_{turn}_'.format(
+                                turn=tpt_turn_number)
+                            newdat_names = filter(
+                                lambda name: name.startswith(newdat_prefix),
+                                request.POST)
+                            # XXX Use a function from Alex for this. (We might
+                            # want to have the DAIs within the DA ordered, for
+                            # example.)
+                            for dat_name in newdat_names:
+                                coords = dat_name[len('newdat_'):]
+                                checked_name = "check_{coo}".format(coo=coords)
+                                if (request.POST['newdat_{0}'.format(coords)]
+                                        and checked_name in checklist):
+                                    dat_str = request.POST[dat_name]
+                                    slot_str = request.POST.get(
+                                        'slot_{coo}'.format(coo=coords), '')
+                                    val_str = request.POST.get(
+                                        'val_{coo}'.format(coo=coords), '')
+                                    if val_str:
+                                        dai_tpt = '{dat}({name}={val})'
+                                    else:
+                                        dai_tpt = '{dat}({name})'
+                                    dai_strs.append(dai_tpt.format(
+                                        dat=dat_str,
+                                        name=slot_str,
+                                        val=val_str))
+                            sem_ann.da_str = '&'.join(dai_strs)
+                            sem_ann.dialogue_annotation = dg_ann
 
                     # Check the form against any gold items.  If all are OK,
                     # return one code; if not, return another.
-                    gold_trss = Transcription.objects.filter(
-                        dialogue_annotation__dialogue=dg_data,
-                        is_gold=True)
-                    gold_trss = group_by(gold_trss, ('turn', ))
                     mismatch = False
-                    for (turn, ), turn_gold_trss in gold_trss.iteritems():
-                        submismatch = True
-                        trs = trss[turn.turn_number - 1]
-                        for gold_trs in turn_gold_trss:
-                            if trss_match(trs, gold_trs,
-                                          max_char_er=settings.MAX_CHAR_ER):
-                                submismatch = False
-                                break
-                        if submismatch:
-                            mismatch = True
-                            trs.breaks_gold = True
+
+                    # - Check transcriptions (ASR).
+                    if 'asr' in settings.TASKS:
+                        asr_mismatch = False
+                        gold_trss = Transcription.objects.filter(
+                            dialogue_annotation__dialogue=dg_data,
+                            is_gold=True)
+                        gold_trss = group_by(gold_trss, ('turn', ))
+                        for (turn, ), turn_gold_trss in gold_trss.iteritems():
+                            submismatch = True
+                            trs = trss[turn.turn_number - 1]
+                            for gold_trs in turn_gold_trss:
+                                if trss_match(
+                                        trs, gold_trs,
+                                        max_char_er=settings.MAX_CHAR_ER):
+                                    submismatch = False
+                                    break
+                            if submismatch:
+                                mismatch = asr_mismatch = True
+                                trs.breaks_gold = True
+
+                    # - Check semantic annotations (SLU).
+                    if 'slu' in settings.TASKS:
+                        slu_mismatch = False
+                        gold_anns = SemanticAnnotation.objects.filter(
+                            dialogue_annotation__dialogue=dg_data,
+                            is_gold=True)
+                        gold_anns = group_by(gold_anns, ('turn', ))
+                        for (turn, ), turn_gold_anns in gold_anns.iteritems():
+                            submismatch = True
+                            ann = sem_anns[turn.turn_number - 1]
+                            for gold_trs in turn_gold_trss:
+                                if das_match(trs, gold_trs):
+                                    submismatch = False
+                                    break
+                            if submismatch:
+                                mismatch = slu_mismatch = True
+                                ann.breaks_gold = True
 
                     # Update transcriptions in the light of their comparison to
                     # gold transcriptions, and save them both into the
@@ -414,11 +510,18 @@ def transcribe(request):
                         turn_dict = turn_dicts[tpt_turn_number - 1]
                         turn_number = turn_dict['uturn_number']
                         assert turn_dict['has_rec']
-                        trs = trss[turn_number - 1]
-                        trs.some_breaks_gold = mismatch
-                        trs.save()
-                        # Reflect the transcription in the XML.
-                        session.add_transcription(trs)
+                        if 'asr' in settings.TASKS:
+                            trs = trss[turn_number - 1]
+                            trs.some_breaks_gold = asr_mismatch
+                            trs.save()
+                            # Reflect the transcription in the XML.
+                            session.add_transcription(trs)
+                        if 'slu' in settings.TASKS:
+                            sem_ann = sem_anns[turn_number - 1]
+                            sem_ann.some_breaks_gold = slu_mismatch
+                            sem_ann.save()
+                            # Reflect the transcription in the XML.
+                            session.add_sem_annotation(sem_ann)
 
             context = dict()
 
@@ -433,22 +536,29 @@ def transcribe(request):
                                   context_instance=RequestContext(request))
                 response.set_cookie(cookie_name, cookie_value,
                                     max_age=settings.COOKIES_MAX_AGE,
-                                    path=settings.APP_URL)
+                                    path=settings.APP_PATH)
                 return response
             # Else, if working locally, continue to serving a blank form.
             else:
                 success = True
+
         # If the form is not valid,
         else:
+            success = False
+
             # Touch the current DialogueAnnotation.
             DialogueAnnotation.objects.filter(
                 user=request.user, dialogue=dg_data).update(finished=False)
 
             # Populate the context with data from the previous dialogue (form).
             context = settings.TRANSCRIBE_EXTRA_CONTEXT
-            for key, value in request.POST.iteritems():
-                context[key] = value
+            context.update(request.POST)
+            context['success'] = str(success)
             context['form'] = form
+            context['DOMAIN_URL'] = settings.DOMAIN_URL
+            context['APP_PORT'] = settings.APP_PORT
+            context['APP_PATH'] = settings.APP_PATH
+
             response = render(request,
                               "trs/transcribe.html",
                               context,
@@ -491,7 +601,7 @@ def transcribe(request):
                 finished=False, date_saved__lte=sessions_earliest_start)
                 .delete())
 
-            # Count which dialogues have not the full required number of
+            # Count which dialogues do not have the full required number of
             # transcriptions.
             if settings.MAX_ANNOTATIONS_PER_INPUT is None:
                 cids_done = set()
@@ -506,11 +616,18 @@ def transcribe(request):
             # already included in the above query results,
             if (settings.MAX_ANNOTATIONS_PER_INPUT is None
                     or settings.MAX_ANNOTATIONS_PER_INPUT > 1):
-                # Exclude dialogues annotated by this user explicitly.
-                trss_done = Transcription.objects.filter(
-                    dialogue_annotation__user=request.user)
-                cids_done.update(trs.dialogue_annotation.dialogue.cid
-                                 for trs in trss_done)
+                if 'asr' in settings.TASKS:
+                    # Exclude dialogues annotated by this user explicitly.
+                    trss_done = Transcription.objects.filter(
+                        dialogue_annotation__user=request.user)
+                    cids_done.update(trs.dialogue_annotation.dialogue.cid
+                                     for trs in trss_done)
+                elif 'slu' in settings.TASKS:
+                    # Exclude dialogues annotated by this user explicitly.
+                    anns_done = SemanticAnnotation.objects.filter(
+                        dialogue_annotation__user=request.user)
+                    cids_done.update(sem_ann.dialogue_annotation.dialogue.cid
+                                     for sem_ann in anns_done)
             cids_todo = (set(dg.cid for dg in Dialogue.objects.all())
                          - cids_done)
 
@@ -544,12 +661,36 @@ def transcribe(request):
 
     # Prepare the data about turns into a form suitable for the template.
     turn_dicts = _create_turn_dicts(dg_data)
+
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
     context['turns'] = turn_dicts
     context['dbl_num_turns'] = 2 * len(turn_dicts)
     context['codes'] = dg_data.get_codes()
     context['form'] = TranscriptionForm(cid=cid, turn_dicts=turn_dicts)
+
+    # SLU-specific.
+    if 'slu' in settings.TASKS:
+        # TODO Rename to something more telling.
+        set1 = set.union(set(settings.nullary_dat),
+                         set(settings.unary_dat_with_slot))
+        set2 = set.union(set(settings.unary_dat_with_value),
+                         set(settings.binary_dat))
+        context['all_dat'] = set1 | set2
+        context['nul_dat'] = settings.nullary_dat
+        context['unar_with_slot'] = settings.unary_dat_with_slot
+        context['unar_with_value'] = settings.unary_dat_with_value
+        context['bin_dat'] = settings.binary_dat
+        context['slot'] = settings.name_of_slot
+
+    # Add selected config variables.
+    context['DOMAIN_URL'] = settings.DOMAIN_URL
+    context['APP_PORT'] = settings.APP_PORT
+    context['APP_PATH'] = settings.APP_PATH
+    context['DEBUG'] = settings.DEBUG
+    context['USE_ACCORDION'] = (settings.USE_ACCORDION
+                                and 'asr' in settings.TASKS)
+    context['TASKS'] = settings.TASKS
     response = render(request,
                       "trs/transcribe.html",
                       context,
@@ -560,7 +701,7 @@ def transcribe(request):
     if cookie_value is not None:
         response.set_cookie(cookie_name, cookie_value,
                             max_age=settings.COOKIES_MAX_AGE,
-                            path=settings.APP_URL)
+                            path=settings.APP_PATH)
 
     return response
 
@@ -751,8 +892,6 @@ def dialogue_stats(request):
         if form.is_valid():
             dt_from = form.cleaned_data['dt_from']
             dt_to = form.cleaned_data['dt_to']
-            # DEBUG
-            was_valid = True
     else:
         form = DateRangeForm()
     context['form'] = form
@@ -858,6 +997,7 @@ def delete_list(request):
     else:
         form = FileListForm()
         return render(request, 'trs/delete-list.html', {'form': form})
+
 
 def temp_test(request):
     # Set up whatever variables you are interested in dumping here.
@@ -1109,8 +1249,6 @@ if settings.USE_CF:
                 response_data = list()
                 n_successful = 0
 
-                job_deletion_failed = dict()  # :: {jobid -> ?deletion_failed}
-                msgs = dict()  # :: {jobid -> message}
                 for job_id in chain(old_job_ids, active_job_ids):
                     if not form.cleaned_data[job_id]:
                         continue
