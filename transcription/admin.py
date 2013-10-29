@@ -182,7 +182,7 @@ class DialogueAdmin(admin.ModelAdmin):
             update_price(dg)
             dg.save()
         modeladmin.message_user(
-            request, 'Price for dialogue shas been successfully updated.')
+            request, 'Price for the dialogues been successfully updated.')
 
     update_price_action.short_description = "Update dialogue price"
 
