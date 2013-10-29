@@ -174,7 +174,7 @@ if settings.USE_CF:
         # Constants.
         default_countries = ",".join(("AU", "CA", "GB", "IE", "IM", "NZ",
                                       "US"))
-        default_title = 'Dialogue transcription – {price}c'
+        default_title = 'Dialogue transcription – price level {price_tenth}'
         default_instructions = re.sub(' +', ' ', """\
             Please, write down what is said in the provided recordings. The
             recordings capture a dialogue between a human and a computer. The
@@ -185,7 +185,7 @@ if settings.USE_CF:
 
         # Fields.
         cents_per_unit = PricesField(
-            initial='5, 10, 15, 20, 25, 30, 35, 40',
+            initial='5, 10, 20, 30',
             widget=fixedWidthTextInput,
             help_text=('Specify desired price per dialogue in cents. This can '
                        'be a comma-separated list of integers. A job will be '
@@ -225,7 +225,8 @@ if settings.USE_CF:
         title = forms.CharField(
             initial=default_title, widget=fixedWidthTextInput,
             help_text=('Title for the job. "{price}" will be substituted '
-                       'with the HIT price in cents.'))
+                       'with the HIT price in cents, "{price_tenth}" by its '
+                       'tenth.'))
         instructions = forms.CharField(
             initial=default_instructions,
             widget=forms.Textarea(attrs={'rows': 3, 'cols': 64}),

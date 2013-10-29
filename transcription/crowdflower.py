@@ -609,7 +609,8 @@ def create_job(cents_per_unit,
     with open(job_cml_path) as job_file:
         job_params['cml'] = job_file.read()
     job_params['confidence_fields'] = ["code"]
-    job_params['title'] = title.format(price=job_price)
+    job_params['title'] = title.format(price=job_price,
+                                       price_tenth=int(job_price) / 10)
     job_params['judgments_per_unit'] = judgments_per_unit
     job_params['units_per_assignment'] = units_per_assignment
     job_params['pages_per_assignment'] = pages_per_assignment
