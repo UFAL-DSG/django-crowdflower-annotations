@@ -113,8 +113,10 @@ How to set up the transcription environment on the server
    warning is a false alarm. If there were static files collected, they 
    would be overwritten, but there are none.
   
-7. Reload the web server, open the site URL, and log in with the 
-   superuser account `you created <creating superuser_>`_.
+7. Reload the web server, open the site URL, and log in with the superuser 
+   account `you created`__.
+   
+   __ `creating superuser`_
 
 
 ===========================================
@@ -148,8 +150,17 @@ How to set up transcription via Crowdflower
    change your mind about these constants any time later, you can 
    reconfigure Django and have it recompute dialogue prices by using the 
    `Update Price` action in the `Dialogues` admin view.
+
+4. Prepare gold items. See the howto: `Add more gold`_.
+
+5. Upload dialogues you want to have annotated to Crowdflower. This is done 
+   through an action at the `Dialogues` admin page called `Upload to 
+   CrowdFlower (only those dialogues that have not been uploaded yet)`.  
+   This action uploads the dialogues (their CID and codes) to the 
+   Crowdflower job corresponding to their price bin and marks them as gold 
+   items if there are any gold transcriptions for them.
    
-4. Order your units through the Crowdflower web interface. You want to set 
+6. Order your units through the Crowdflower web interface. You want to set 
    the price for each job according to what the title specifies. By 
    default, the title says `price level K` where `K` is one tenth of the 
    calculated job price.
@@ -173,11 +184,12 @@ How to import dialogues
    you can then skip the next step.
    
    For using the ``fetch_dgdir.sh`` script, you need to:
-     1. create a directory with dialogue logs as its immediate children at
-        the remote filesystem;
-     2. (optional) pack the directory;
-     3. run the script at the target server; run the script without
-        arguments for usage message.
+
+   1. create a directory with dialogue logs as its immediate children at
+      the remote filesystem;
+   2. (optional) pack the directory;
+   3. run the script at the target server; run the script without
+      arguments for usage message.
   
 2. Create a text file listing paths towards the log directories, one per 
    line (preferably in ``localsettings.LISTS_DIR``, although whether you 
