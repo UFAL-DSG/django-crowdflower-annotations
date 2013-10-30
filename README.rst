@@ -154,6 +154,13 @@ How to set up transcription via Crowdflower
    default, the title says `price level K` where `K` is one tenth of the 
    calculated job price.
 
+   *Update*: Crowdflower now defaults to ordering your jobs on no channels, 
+   which is definitely not what you want. Therefore, when ordering the job,
+   don't forget to select the channels where you want your job to be worked 
+   on. Also, the workers' skills are now not set up the highest possible by 
+   the app (because of a Crowdflower API update), hence you might want to 
+   do so manually at the Crowdflower job website.
+
 
 =======================
 How to import dialogues
@@ -351,3 +358,33 @@ If you changed gold statuses of transcriptions or changed the
 ``localsettings.MAX_CHAR_ER`` value, you should now re-evaluate what 
 transcriptions break gold. This is done from the `Dialogue annotations` 
 admin page through the `Update gold breaking statuses` action.
+
+-------------
+Add more gold
+-------------
+The easiest way to add more gold is waiting for workers to transcribe 
+a smaller number of dialogues and then just *select* transcriptions that 
+are good enough and suitable as gold transcriptions. Start from the 
+`Dialogue annotations` admin page, and set the `By breaks gold: has no 
+gold` filter. Then, open annotations at random by clicking them, choose 
+transcriptions that look suitable to be used as gold (they should be long 
+and clear enough; avoid transcriptions that contain non-speech events by 
+and large), mark `Is gold` for them and save. Because some workers who want 
+to trick the app transcribe only the first turn and then copy it as 
+transcriptions to other turns, be sure to *not* mark just the first 
+transcription as gold for all dialogues.
+
+You can later check how many gold dialogues you have by selecting the 
+appropriate filter at the `Dialogues` admin page. You can tell Crowdflower 
+about your new gold items by using the `Update dialogue gold status on CF` 
+action from the `Dialogues` admin page.
+
+When bootstrapping transcriptions for a new domain or language, you start 
+with no gold. You may then gather the first few annotations with no gold or 
+you may transcribe a few dialogues yourself to create gold. Anyway, if you 
+start from the lowest price bins with the transcriptions, you can use you 
+gold transcriptions as gold for higher price bins. Do this by selecting the 
+lower price bin (one you have gold transcriptions for), and `By gold 
+status: true` filters in the `Dialogues` admin view, selecting the 
+dialogues shown, and choosing the `Upload to Crowdflower (to a higher price 
+class)` action.
