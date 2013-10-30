@@ -330,3 +330,24 @@ The dump is loaded to the new application easily by running its
   ::
 
   $ ./manage.py loaddata path-to-the-data-dump
+
+-----------------------------------
+Monitor a job, adjust gold settings
+-----------------------------------
+If you open the admin page for `Dialogue annotations`, you will see the 
+newest annotations submitted. After clicking an annotation name, you can 
+see all related transcriptions and replay the audio.
+
+If you are worried whether your gold items are not too hard, select 
+annotations from your workers (100 newest annotations will do) and choose 
+the `Show what transcriptions break gold` action. This displays a listing 
+of transcriptions that were compared to a gold one. Gold transcriptions are 
+in bold. You can go to a `User turn` corresponding to each transcription 
+shown on the listing and adjust the gold if needed. Alternatively, you can 
+adjust the ``localsettings.MAX_CHAR_ER`` setting. If you do so, you should 
+restart your web server for the change to take effect.
+
+If you changed gold statuses of transcriptions or changed the 
+``localsettings.MAX_CHAR_ER`` value, you should now re-evaluate what 
+transcriptions break gold. This is done from the `Dialogue annotations` 
+admin page through the `Update gold breaking statuses` action.
