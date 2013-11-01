@@ -327,7 +327,8 @@ def lowercase(text):
 def remove_punctuation(text, remove_nonspeech=False):
     """Removes punctuation characters from `text' except for parentheses around
     special symbols."""
-    text = re.sub(_dashusc_rx, '', text)
+    text = text.replace('_', '')
+    text = text.replace('-', ' ')
     text = re.sub(r'\(({s})\)'.format(s=_special_rx),
                   r'_\1-',
                   text)

@@ -65,7 +65,8 @@ A total of <strong>{{ cid_stats|length }}</strong> work log{{ cid_stats|length|p
 
 <h3>Not resolved</h3>
 {% if ambig_cookies %}
-<p><strong>{{ ambig_cookies|length }}</strong> cookies' worker ID ambiguity was ambig:</p>
+<p><strong>{{ ambig_cookies|length }}</strong> cookies' worker ID ambiguity 
+was not resolved:</p>
 <button class="hideControl">Hide</button>
 <table>
 	{% for cookie in ambig_cookies %}
