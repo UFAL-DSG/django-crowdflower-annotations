@@ -73,7 +73,7 @@ How to set up the transcription environment on the server
 
      cd /webapps/transcription && ./manage.py syncdb
 
-.. _`creating superuser`:
+   .. _`creating superuser`:
 
    You may be asked to enter a login, a password, and an email for 
    a superuser account. It is a good idea to do so, unless you want to 
@@ -113,8 +113,10 @@ How to set up the transcription environment on the server
    warning is a false alarm. If there were static files collected, they 
    would be overwritten, but there are none.
   
-7. Reload the web server, open the site URL, and log in with the 
-   superuser account `you created <creating superuser_>`_.
+7. Reload the web server, open the site URL, and log in with the superuser 
+   account `you created`__.
+   
+   __ `creating superuser`_
 
 
 ===========================================
@@ -148,11 +150,27 @@ How to set up transcription via Crowdflower
    change your mind about these constants any time later, you can 
    reconfigure Django and have it recompute dialogue prices by using the 
    `Update Price` action in the `Dialogues` admin view.
+
+4. Prepare gold items. See the howto: `Add more gold`_.
+
+5. Upload dialogues you want to have annotated to Crowdflower. This is done 
+   through an action at the `Dialogues` admin page called `Upload to 
+   CrowdFlower (only those dialogues that have not been uploaded yet)`.  
+   This action uploads the dialogues (their CID and codes) to the 
+   Crowdflower job corresponding to their price bin and marks them as gold 
+   items if there are any gold transcriptions for them.
    
-4. Order your units through the Crowdflower web interface. You want to set 
+6. Order your units through the Crowdflower web interface. You want to set 
    the price for each job according to what the title specifies. By 
    default, the title says `price level K` where `K` is one tenth of the 
    calculated job price.
+
+   *Update*: Crowdflower now defaults to ordering your jobs on no channels, 
+   which is definitely not what you want. Therefore, when ordering the job,
+   don't forget to select the channels where you want your job to be worked 
+   on. Also, the workers' skills are now not set up the highest possible by 
+   the app (because of a Crowdflower API update), hence you might want to 
+   do so manually at the Crowdflower job website.
 
 
 =======================
@@ -166,11 +184,12 @@ How to import dialogues
    you can then skip the next step.
    
    For using the ``fetch_dgdir.sh`` script, you need to:
-     1. create a directory with dialogue logs as its immediate children at
-        the remote filesystem;
-     2. (optional) pack the directory;
-     3. run the script at the target server; run the script without
-        arguments for usage message.
+
+   1. create a directory with dialogue logs as its immediate children at
+      the remote filesystem;
+   2. (optional) pack the directory;
+   3. run the script at the target server; run the script without
+      arguments for usage message.
   
 2. Create a text file listing paths towards the log directories, one per 
    line (preferably in ``localsettings.LISTS_DIR``, although whether you 
@@ -330,3 +349,54 @@ The dump is loaded to the new application easily by running its
   ::
 
   $ ./manage.py loaddata path-to-the-data-dump
+
+-----------------------------------
+Monitor a job, adjust gold settings
+-----------------------------------
+If you open the admin page for `Dialogue annotations`, you will see the 
+newest annotations submitted. After clicking an annotation name, you can 
+see all related transcriptions and replay the audio.
+
+If you are worried whether your gold items are not too hard, select 
+annotations from your workers (100 newest annotations will do) and choose 
+the `Show what transcriptions break gold` action. This displays a listing 
+of transcriptions that were compared to a gold one. Gold transcriptions are 
+in bold. You can go to a `User turn` corresponding to each transcription 
+shown on the listing and adjust the gold if needed. Alternatively, you can 
+adjust the ``localsettings.MAX_CHAR_ER`` setting. If you do so, you should 
+restart your web server for the change to take effect.
+
+If you changed gold statuses of transcriptions or changed the 
+``localsettings.MAX_CHAR_ER`` value, you should now re-evaluate what 
+transcriptions break gold. This is done from the `Dialogue annotations` 
+admin page through the `Update gold breaking statuses` action.
+
+-------------
+Add more gold
+-------------
+The easiest way to add more gold is waiting for workers to transcribe 
+a smaller number of dialogues and then just *select* transcriptions that 
+are good enough and suitable as gold transcriptions. Start from the 
+`Dialogue annotations` admin page, and set the `By breaks gold: has no 
+gold` filter. Then, open annotations at random by clicking them, choose 
+transcriptions that look suitable to be used as gold (they should be long 
+and clear enough; avoid transcriptions that contain non-speech events by 
+and large), mark `Is gold` for them and save. Because some workers who want 
+to trick the app transcribe only the first turn and then copy it as 
+transcriptions to other turns, be sure to *not* mark just the first 
+transcription as gold for all dialogues.
+
+You can later check how many gold dialogues you have by selecting the 
+appropriate filter at the `Dialogues` admin page. You can tell Crowdflower 
+about your new gold items by using the `Update dialogue gold status on CF` 
+action from the `Dialogues` admin page.
+
+When bootstrapping transcriptions for a new domain or language, you start 
+with no gold. You may then gather the first few annotations with no gold or 
+you may transcribe a few dialogues yourself to create gold. Anyway, if you 
+start from the lowest price bins with the transcriptions, you can use you 
+gold transcriptions as gold for higher price bins. Do this by selecting the 
+lower price bin (one you have gold transcriptions for), and `By gold 
+status: true` filters in the `Dialogues` admin view, selecting the 
+dialogues shown, and choosing the `Upload to Crowdflower (to a higher price 
+class)` action.
