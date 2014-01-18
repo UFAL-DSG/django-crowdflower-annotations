@@ -33,6 +33,7 @@ class TranscriptionForm(forms.Form):
 
     def __init__(self, *args, **kwargs):
         turn_dicts = kwargs.pop('turn_dicts', None)
+        trs_required = kwargs.pop('trs_required', True)
         if turn_dicts is None:
             turn_dicts = tuple()
         cid = kwargs.pop('cid', None)
@@ -54,7 +55,8 @@ class TranscriptionForm(forms.Form):
                 self.fields['trs_{0}'.format(tpt_turn_num)] = forms.CharField(
                     widget=forms.Textarea(
                         attrs={'style': 'width: 90%', 'rows': '3'}),
-                    label=tpt_turn_num)
+                    label=tpt_turn_num,
+                    required=trs_required)
 
         # Recover semantic annotations.
         if 'slu' in settings.TASKS:

@@ -157,7 +157,7 @@ span.user { color: red; font-weight: normal; }
     color: white;
 }
 
-#submit {
+#submit, #draft {
   width: 13em;
   height: 3em;
   font-weight: bold;
@@ -204,6 +204,12 @@ span.user { color: red; font-weight: normal; }
       PrevIndex.removeClass("current");
       NextIndex.addClass("current");
       //NextIndex.click();
+
+      // Special case: last turn.
+      if(NextIndex.attr("id") === "phase_answer")
+      {
+        document.getElementById('submit').disabled = false;
+      }
 
       NextIndex.removeClass("ui-state-disabled");
       if(!NextIndex.hasClass("ui-state-active"))
@@ -404,10 +410,17 @@ span.user { color: red; font-weight: normal; }
       });
       {% endif %}
 
+      $(".submitbutton").bind("click keyup", function(evt){
+        jQuery.data(document.getElementById('phases'),
+                    "lastSubmitButton",
+                    evt.target.id);
+      });
+
       $("#phases").submit(function(evt) {
         // Iff submitting the annotation (and not if saving a draft), run 
         // validation checks.
-        if(evt.target.id === "submit")
+        var which_button = jQuery.data(this, 'lastSubmitButton');
+        if(which_button === "submit")
         {
           var textareas_nonempty,
               accent_specified,
@@ -877,20 +890,19 @@ function add_dai(number) {
               <textarea id="id_notes" name="notes" cols="50" rows="3"></textarea>
             </td>
           </tr>
-          <tr>
-            <td colspan="3">
-              <div>
-                <input id="submit" type="submit" name="send"
-                       value="Save and submit"
-                       tabindex="{{ dbl_num_turns|add:5 }}">
-                <input id="draft" type="submit" name="draft"
-                       value="Save draft"
-                       tabindex="{{ dbl_num_turns|add:6 }}">
-              </div>
-            </td>
-          </tr>
         </table>
       </div>
+      <span>
+        <input id="submit" type="submit" name="send" class="submitbutton"
+               value="Save and submit"
+               disabled
+               tabindex="{{ dbl_num_turns|add:5 }}">
+{% if not user.is_anonymous %}
+        <input id="draft" type="submit" name="draft" class="submitbutton"
+               value="Save draft"
+               tabindex="{{ dbl_num_turns|add:6 }}">
+{% endif %}
+      </span>
     </form>
     </div>
   </div>  <!-- end div id="rg" -->

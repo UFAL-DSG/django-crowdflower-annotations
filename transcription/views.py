@@ -414,19 +414,24 @@ def transcribe(request):
                            if turn_dict['has_rec']]
         else:
             turn_dicts = None
-        form = TranscriptionForm(request.POST, cid=cid, turn_dicts=turn_dicts)
+        form = TranscriptionForm(request.POST, cid=cid, turn_dicts=turn_dicts,
+                                 trs_required=finished)
 
         if form.is_valid():
             dummy_user = None
 
             # Create the DialogueAnnotation object and save it into DB.
             dg_ann = None
+            ex_trss = None
             if not user_anon:
                 open_dg_ann = DialogueAnnotation.objects.filter(
                     user=request.user, dialogue=dg_data, finished=False)
                 if open_dg_ann.exists():
+                    assert len(open_dg_ann) == 1
                     dg_ann = open_dg_ann[0]
                     dg_ann.finished = finished
+                    ex_trss = (Transcription.objects
+                               .filter(dialogue_annotation=dg_ann))
 
             if dg_ann is None:
                 dg_ann = DialogueAnnotation()
@@ -493,12 +498,22 @@ def transcribe(request):
                         assert turn_dict['has_rec']
 
                         if 'asr' in settings.TASKS:
+                            # Find an existing or create a new Transcription.
+                            trs = None
+                            uturn = uturns_list[turn_number - 1]
+                            if ex_trss:
+                                ex_turn_trss = ex_trss.filter(turn=uturn)
+                                if ex_turn_trss:
+                                    assert len(ex_turn_trss) == 1
+                                    trs = ex_turn_trss[0]
+                            if trs is None:
+                                trs = Transcription()
+
                             # Retrieve the ASR transcription.
-                            trs = Transcription()
                             trss[turn_number - 1] = trs
                             trs.text = form.cleaned_data[
                                 'trs_{0}'.format(tpt_turn_number)]
-                            trs.turn = uturns_list[turn_number - 1]
+                            trs.turn = uturn
                             trs.dialogue_annotation = dg_ann
 
                         if 'slu' in settings.TASKS:
@@ -601,7 +616,7 @@ def transcribe(request):
             context = dict()
 
             # If working with Crowdflower,
-            if settings.USE_CF:
+            if finished and settings.USE_CF:
                 # Render a page showing the dialogue code.
                 context['code'] = dg_codes[0] + (dg_codes[2] if mismatch else
                                                  dg_codes[1])
@@ -660,7 +675,7 @@ def transcribe(request):
                 response['X-Frame-Options'] = 'ALLOWALL'
             return response
     # If an anonymous user is asking for a dialogue without a specific CID,
-    elif request.user.is_anonymous():
+    elif user_anon:
         # Don't show any dialogues to these anonymous users.
         if request.user.is_anonymous():
             return HttpResponseRedirect("finished")
@@ -670,7 +685,7 @@ def transcribe(request):
     # Try to find open annotations (sessions) if the user is logged in.
     open_annions = None
     cur_annion = None
-    if not request.user.is_anonymous():
+    if not user_anon:
         if cid is None:
             # Find a suitable dialogue to transcribe.
             # Try using the last started annotation of this user.
