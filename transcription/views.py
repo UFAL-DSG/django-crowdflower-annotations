@@ -221,7 +221,7 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
 
 
 # TODO Move elsewhere (dg_util? models?).
-def _create_turn_dicts(dialogue):
+def _create_turn_dicts(dialogue, dg_ann=None):
     """An auxiliary function for gathering important data about dialogue turns
     for use in the transcription form.
 
@@ -230,9 +230,21 @@ def _create_turn_dicts(dialogue):
     this numbering is only for purposes of the template. It does NOT correspond
     to the turn database objects' turn_number attribute.
 
+    Arguments:
+        dialogue ... the Dialogue object for whose turns to build the
+                     dictionary
+        dg_ann   ... a DialogueAnnotation object to use to fill in initial
+                     values (default: None)
+
     """
 
     _using_slu = 'slu' in settings.TASKS
+
+    if dg_ann is not None:
+        transcriptions = (Transcription.objects
+                          .filter(dialogue_annotation=dg_ann))
+    else:
+        transcriptions = None
 
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
@@ -251,6 +263,14 @@ def _create_turn_dicts(dialogue):
         seclast_slash = uturn.wav_fname.rfind(
             os.sep, 0, uturn.wav_fname.rfind(os.sep))
         wav_fname_rest = uturn.wav_fname[seclast_slash:]
+        # Find if an existing transcription is available for this turn.
+        initial_text = ''
+        if transcriptions:
+            turn_trss = transcriptions.filter(turn=uturn)
+            if turn_trss:
+                assert len(turn_trss) == 1
+                initial_text = turn_trss[0].text
+        # SLU
         if _using_slu:
             # Get the DAIs and their textual representation for the SLU
             # hypothesis for this turn.
@@ -279,8 +299,10 @@ def _create_turn_dicts(dialogue):
                     prev_turn_idx = turn_idx
                 break
         turn_dict = turns[prev_turn_idx]
-        turn_dict.update(rec=wav_fname_rest, has_rec=True,
-                         uturn_number=uturn.turn_number)
+        turn_dict.update(rec=wav_fname_rest,
+                         has_rec=True,
+                         uturn_number=uturn.turn_number,
+                         initial_text=initial_text)
         if _using_slu:
             turn_dict['dais_txts'] = dais_txts
 
@@ -293,6 +315,56 @@ def _create_turn_dicts(dialogue):
     return turns
 
 
+def _delete_old_anns():
+    sessions_earliest_start = datetime.now() - settings.SESSION_EXPIRED
+    old_anns = DialogueAnnotation.objects.filter(
+        finished=False,
+        date_saved__lte=sessions_earliest_start)
+    old_anns.delete()
+
+
+def _find_free_cids(user=None):
+    """
+    Finds dialogues that are still free to be annotated by `user`.
+    """
+    # Count which dialogues do not have the full required number of
+    # transcriptions.
+    if settings.MAX_ANNOTATIONS_PER_INPUT is None:
+        cids_done = set()
+    else:
+        _max_annions = settings.MAX_ANNOTATIONS_PER_INPUT  # shorthand
+        dg_ann_counts = (DialogueAnnotation.objects
+                         .annotate(Count('dialogue'))
+                         .filter(dialogue__count__gte=_max_annions))
+        cids_done = set(ann.dialogue.cid for ann in dg_ann_counts)
+
+    # If being annotated by this user does not imply the dialogue was already
+    # included in the above query results,
+    filter_out_by_user = (user is not None and
+                          (settings.MAX_ANNOTATIONS_PER_INPUT is None or
+                           settings.MAX_ANNOTATIONS_PER_INPUT > 1))
+    if filter_out_by_user:
+        if 'asr' in settings.TASKS:
+            # Exclude dialogues annotated by this user explicitly.
+            trss_done = Transcription.objects.filter(
+                dialogue_annotation__user=user)
+            cids_done.update(trs.dialogue_annotation.dialogue.cid
+                             for trs in trss_done)
+        elif 'slu' in settings.TASKS:
+            # Exclude dialogues annotated by this user explicitly.
+            anns_done = SemanticAnnotation.objects.filter(
+                dialogue_annotation__user=user)
+            cids_done.update(sem_ann.dialogue_annotation.dialogue.cid
+                             for sem_ann in anns_done)
+
+    cids_todo = set(Dialogue.objects.values_list('cid', flat=True)) - cids_done
+    return cids_todo
+
+
+def _find_open_anns(user):
+    return DialogueAnnotation.objects.filter(user=user, finished=False)
+
+
 @catch_locked_database
 def transcribe(request):
 
@@ -302,6 +374,9 @@ def transcribe(request):
 
     # If the form has been submitted,
     if request.method == "POST":
+        # Check if the transcriber is submitting or just saving a draft.
+        finished = 'send' in request.POST
+
         # Re-create the form object.
         cid = request.POST['cid']
         try:
@@ -351,7 +426,7 @@ def transcribe(request):
                     user=request.user, dialogue=dg_data, finished=False)
                 if open_dg_ann.exists():
                     dg_ann = open_dg_ann[0]
-                    dg_ann.finished = True
+                    dg_ann.finished = finished
 
             if dg_ann is None:
                 dg_ann = DialogueAnnotation()
@@ -569,78 +644,12 @@ def transcribe(request):
             return response
 
     # If a blank form is to be served:
-    open_annions = None
-
     # Find the dialogue to transcribe.
     dg_data = None
     cid = None if request.method == 'POST' else request.GET.get("cid", None)
-    # If the request did not specify the `cid' as a GET parameter,
-    if cid is None:
-        # Anonymous user cannot be helped.
-        if request.user.is_anonymous():
-            return HttpResponseRedirect("finished")
 
-        # For a user who is logged in, find a suitable dialogue to transcribe.
-        # Try using the last started annotation of this user.
-        open_annions = DialogueAnnotation.objects.filter(user=request.user,
-                                                         finished=False)
-        if open_annions.exists():
-            # This assertion is broken when someone started several annotations
-            # under his user account, i.e., some of them by explicitly asking
-            # for that CID.
-            # assert len(open_annions) == 1
-            dg_data = open_annions[0].dialogue
-            cid = dg_data.cid
-
-        # If there is no open annotation for this user, find a dialogue that is
-        # free to annotate.
-        else:
-            # Start by deleting old open transcriptions.
-            sessions_earliest_start = datetime.now() - settings.SESSION_EXPIRED
-            (DialogueAnnotation.objects.filter(
-                finished=False, date_saved__lte=sessions_earliest_start)
-                .delete())
-
-            # Count which dialogues do not have the full required number of
-            # transcriptions.
-            if settings.MAX_ANNOTATIONS_PER_INPUT is None:
-                cids_done = set()
-            else:
-                _max_annions = settings.MAX_ANNOTATIONS_PER_INPUT  # shorthand
-                dg_ann_counts = DialogueAnnotation.objects.annotate(
-                    Count('dialogue')).filter(
-                        dialogue__count__gte=_max_annions)
-                cids_done = set(ann.dialogue.cid for ann in dg_ann_counts)
-
-            # If being annotated by this user does not imply the dialogue was
-            # already included in the above query results,
-            if (settings.MAX_ANNOTATIONS_PER_INPUT is None
-                    or settings.MAX_ANNOTATIONS_PER_INPUT > 1):
-                if 'asr' in settings.TASKS:
-                    # Exclude dialogues annotated by this user explicitly.
-                    trss_done = Transcription.objects.filter(
-                        dialogue_annotation__user=request.user)
-                    cids_done.update(trs.dialogue_annotation.dialogue.cid
-                                     for trs in trss_done)
-                elif 'slu' in settings.TASKS:
-                    # Exclude dialogues annotated by this user explicitly.
-                    anns_done = SemanticAnnotation.objects.filter(
-                        dialogue_annotation__user=request.user)
-                    cids_done.update(sem_ann.dialogue_annotation.dialogue.cid
-                                     for sem_ann in anns_done)
-            cids_todo = (set(dg.cid for dg in Dialogue.objects.all())
-                         - cids_done)
-
-            # Serve him/her the next free dialogue if there is one, else tell
-            # him he is finished.
-            try:
-                cid = cids_todo.pop()
-            except KeyError:
-                return HttpResponseRedirect("finished")
-            dg_data = Dialogue.objects.get(cid=cid)
-
-    # If `cid' was specified as a GET parameter,
-    if dg_data is None:
+    # If a specific CID was asked for,
+    if cid is not None:
         # Find the corresponding Dialogue object in the DB.
         try:
             dg_data = Dialogue.objects.get(cid=cid)
@@ -650,17 +659,63 @@ def transcribe(request):
                 # NOTE Perhaps not needed after all...
                 response['X-Frame-Options'] = 'ALLOWALL'
             return response
+    # If an anonymous user is asking for a dialogue without a specific CID,
+    elif request.user.is_anonymous():
+        # Don't show any dialogues to these anonymous users.
+        if request.user.is_anonymous():
+            return HttpResponseRedirect("finished")
 
-    # Store a new DialogueAnnotation, unless the user is anonymous.
-    if open_annions is not None and open_annions.exists():
-        open_annions.update(finished=False)
-    elif not request.user.is_anonymous():
-        DialogueAnnotation(user=request.user,
-                           dialogue=dg_data,
-                           finished=False).save()
+    assert cid is None or dg_data is not None
+
+    # Try to find open annotations (sessions) if the user is logged in.
+    open_annions = None
+    cur_annion = None
+    if not request.user.is_anonymous():
+        if cid is None:
+            # Find a suitable dialogue to transcribe.
+            # Try using the last started annotation of this user.
+            open_annions = _find_open_anns(request.user)
+            if open_annions.exists():
+                cur_annion = open_annions[0]
+                dg_data = cur_annion.dialogue
+                cid = dg_data.cid
+
+            # If there is no open annotation for this user, find a dialogue
+            # that is free to annotate.
+            else:
+                # Start by deleting old open transcriptions.
+                _delete_old_anns()
+
+                # Find free dialogues for this user.
+                cids_todo = _find_free_cids(request.user)
+
+                # Serve him the next free dialogue if there is one, else tell
+                # him he is finished.
+                try:
+                    cid = cids_todo.pop()
+                except KeyError:
+                    return HttpResponseRedirect("finished")
+                dg_data = Dialogue.objects.get(cid=cid)
+
+        else:  # Known user, CID specified => dg_data has been initialized
+            # Find if there is a suitable open dialogue annotation.
+            open_annions = _find_open_anns(request.user)
+            this_dg_annions = open_annions.filter(dialogue=dg_data)
+            cur_annion = this_dg_annions[0] if this_dg_annions else None
+
+        # Create or refresh the current DialogueAnnotation.
+        if open_annions:
+            open_annions.update(finished=False)
+        else:
+            cur_annion = DialogueAnnotation(user=request.user,
+                                            dialogue=dg_data,
+                                            finished=False)
+            cur_annion.save()
+
+    assert not open_annions or cur_annion is not None
 
     # Prepare the data about turns into a form suitable for the template.
-    turn_dicts = _create_turn_dicts(dg_data)
+    turn_dicts = _create_turn_dicts(dg_data, cur_annion)
 
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
