@@ -243,8 +243,10 @@ def _create_turn_dicts(dialogue, dg_ann=None):
     if dg_ann is not None:
         transcriptions = (Transcription.objects
                           .filter(dialogue_annotation=dg_ann))
+        last_transcribed = max(trs.turn.turn_number for trs in transcriptions)
     else:
         transcriptions = None
+        last_transcribed = -1
 
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
@@ -258,6 +260,8 @@ def _create_turn_dicts(dialogue, dg_ann=None):
         if systurn.text:
             turns[systurn.turn_abs_number - 1].update(prompt=systurn.text,
                                                       has_rec=False)
+    trss_uptoprev = bool(transcriptions)
+    trss_uptothis = bool(transcriptions)
     for uturn in uturns:
         # Find the relevant part of the WAV file path.
         seclast_slash = uturn.wav_fname.rfind(
@@ -270,6 +274,8 @@ def _create_turn_dicts(dialogue, dg_ann=None):
             if turn_trss:
                 assert len(turn_trss) == 1
                 initial_text = turn_trss[0].text
+            if uturn.turn_number > last_transcribed:
+                trss_uptothis = False
         # SLU
         if _using_slu:
             # Get the DAIs and their textual representation for the SLU
@@ -302,9 +308,11 @@ def _create_turn_dicts(dialogue, dg_ann=None):
         turn_dict.update(rec=wav_fname_rest,
                          has_rec=True,
                          uturn_number=uturn.turn_number,
-                         initial_text=initial_text)
+                         initial_text=initial_text,
+                         unfold=trss_uptoprev)
         if _using_slu:
             turn_dict['dais_txts'] = dais_txts
+        trss_uptoprev = trss_uptothis
 
     # Number the turns.
     turns = filter(None, turns)
@@ -735,6 +743,8 @@ def transcribe(request):
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
     context['turns'] = turn_dicts
+    context['ready_to_submit'] = all(turn['initial_text']
+                                     for turn in turn_dicts)
     context['dbl_num_turns'] = 2 * len(turn_dicts)
     context['codes'] = dg_data.get_codes()
     context['form'] = TranscriptionForm(cid=cid, turn_dicts=turn_dicts)

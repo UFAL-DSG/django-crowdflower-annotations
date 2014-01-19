@@ -198,6 +198,12 @@ span.user { color: red; font-weight: normal; }
   }
 
   {% if USE_ACCORDION %}
+  function unfoldTurn(element) {
+      element.removeClass("ui-state-disabled");
+      if(!element.hasClass("ui-state-active"))
+          element.click();
+  }
+
   function NextPhase() {
       var PrevIndex = $('div .current');
       var NextIndex = PrevIndex.next().next();
@@ -211,9 +217,7 @@ span.user { color: red; font-weight: normal; }
         document.getElementById('submit').disabled = false;
       }
 
-      NextIndex.removeClass("ui-state-disabled");
-      if(!NextIndex.hasClass("ui-state-active"))
-          NextIndex.click();
+      unfoldTurn(NextIndex);
   }
   {% endif %}
 
@@ -389,7 +393,18 @@ span.user { color: red; font-weight: normal; }
       });
 
       {% if USE_ACCORDION %}
-      $("#turn_1").removeClass("ui-state-disabled");
+        // Unfold the beggining of the dialogue.
+        $("#turn_1").removeClass("ui-state-disabled");
+        {% for turn in turns %}
+          {% if turn.unfold %}
+        var turn_to_unfold = $("#turn_{{ turn.turn_number }}");
+        unfoldTurn(turn_to_unfold);
+          {% endif %}
+        {% endfor %}
+        {% if ready_to_submit %}
+        document.getElementById('submit').disabled = false;
+        unfoldTurn(turn_to_unfold.next().next());
+        {% endif %}
       {% endif %}
 
       {% if "accent" in EXTRA_QUESTIONS %}
