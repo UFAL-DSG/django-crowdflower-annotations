@@ -6,6 +6,9 @@
 
 <ul>
 <li><a href="{% url "transcribe" %}">Start/continue transcribing</a></li>
+{% if not user.is_anonymous %}
+<li><a href="{% url "open_annions" %}">List open transcriptions</a></li>
+{% endif %}
 {% if user.is_superuser or user.is_staff %}
 <li><a href="{% url "import_dialogues" %}">Import dialogues</a></li>
 <li><a href="{% url "delete_dialogues" %}">Delete dialogues</a></li>

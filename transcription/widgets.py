@@ -1,13 +1,12 @@
 from __future__ import unicode_literals
 
 from django import forms
-from django.core.urlresolvers import reverse, NoReverseMatch
 from django.forms.widgets import HiddenInput, TextInput, Widget
-from django.utils.html import escape
 from django.utils.safestring import mark_safe
 from django.template.loader import render_to_string
 
 from settings import APP_PATH, CONVERSATION_DIR, MEDIA_URL
+from transcription.util import get_object_link
 
 
 class ROInput(TextInput):
@@ -17,31 +16,6 @@ class ROInput(TextInput):
         attrs[u'readonly'] = u'true'
         with_equals = super(TextInput, self).render(name, value, attrs)
         return mark_safe(with_equals.replace(u'readonly="true"', u'readonly'))
-
-
-def get_object_link(model, attrs):
-    try:
-        db_obj = model.objects.get(**attrs)
-    except model.DoesNotExist:
-        return (None,
-                mark_safe(u'<span class="warning">Object not found</span>'))
-    except model.MultipleObjectsReturned:
-        return None, mark_safe(u'<span class="warning">Ambiguous</span>')
-    # clsname = db_obj._meta.object_name.lower()
-    clsname = model.__name__.lower()
-    url_str = ('admin:transcription_{cls}_change'.format(cls=clsname))
-    try:
-        # Construct the URL from the base URL string plus the object ID.
-        url = reverse(url_str, args=(db_obj.pk, ))
-    except NoReverseMatch:
-        # In case this type of objects is not managed by the admin system
-        # (the most probable reason), render just the object as a Unicode
-        # string, with the player appended if appropriate.
-        return None, escape(unicode(db_obj))
-    # If an admin page for the object is available, render a link to
-    # that page.
-    return (db_obj,
-            mark_safe(u'<a href="{url}">Show the object</a>'.format(url=url)))
 
 
 class PlayWidget(Widget):

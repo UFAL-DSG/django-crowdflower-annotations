@@ -10,8 +10,56 @@ import os.path
 from django.core.mail import mail_admins
 from django.shortcuts import render
 from django.db import DatabaseError
+from django.core.urlresolvers import reverse, NoReverseMatch
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 
 import settings
+
+
+def get_object_url(obj):
+    """
+    Tries to construct a URL pointing to the admin page for this object.
+
+    Raises NoReversMatch if unsuccessful.
+
+    """
+    clsname = obj._meta.object_name.lower()
+    url_str = ('admin:transcription_{cls}_change'.format(cls=clsname))
+    # Construct the URL from the base URL string plus the object ID.
+    return reverse(url_str, args=(obj.pk, ))
+
+
+def get_object_and_url(model, attrs):
+    try:
+        db_obj = model.objects.get(**attrs)
+    except model.DoesNotExist:
+        return (None,
+                mark_safe(u'<span class="warning">Object not found</span>'))
+    except model.MultipleObjectsReturned:
+        return None, mark_safe(u'<span class="warning">Ambiguous</span>')
+    # clsname = db_obj._meta.object_name.lower()
+    clsname = model.__name__.lower()
+    url_str = ('admin:transcription_{cls}_change'.format(cls=clsname))
+    try:
+        # Construct the URL from the base URL string plus the object ID.
+        url = reverse(url_str, args=(db_obj.pk, ))
+    except NoReverseMatch:
+        # In case this type of objects is not managed by the admin system
+        # (the most probable reason), render just the object as a Unicode
+        # string, with the player appended if appropriate.
+        return None, escape(unicode(db_obj))
+    # If an admin page for the object is available, return the URL of that
+    # page.
+    return (db_obj, url)
+
+
+def get_object_link(model, attrs):
+    db_obj, url = get_object_and_url(model, attrs)
+    # If an admin page for the object is available, render a link to
+    # that page.
+    return (db_obj,
+            mark_safe(u'<a href="{url}">Show the object</a>'.format(url=url)))
 
 
 def get_log_path(dirname):

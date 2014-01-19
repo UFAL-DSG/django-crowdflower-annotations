@@ -7,6 +7,10 @@ pattern_args = ['',
                     'transcription.views.transcribe',
                     name='transcribe'),
 
+                url('^open_annotations$',
+                    'transcription.views.open_annions',
+                    name='open_annions'),
+
                 url('^static/(?P<path>.*)$',
                     'django.views.static.serve'),
 

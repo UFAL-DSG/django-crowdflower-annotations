@@ -21,6 +21,7 @@ from django.db.models import Count
 from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.template import RequestContext
+from django.core.urlresolvers import reverse
 from django.views.decorators.csrf import csrf_exempt
 
 import crowdflower
@@ -46,6 +47,7 @@ random.seed()
 dgstats_nt = namedtuple('DialogueStats', ['list_filename', 'n_annotated_in',
                                           'n_annotated_out', 'n_clean',
                                           'n_all'])
+open_annion_nt = namedtuple('OpenAnnotation', ['ann_str', 'link'])
 
 
 # Auxiliary functions.
@@ -240,13 +242,14 @@ def _create_turn_dicts(dialogue, dg_ann=None):
 
     _using_slu = 'slu' in settings.TASKS
 
+    transcriptions = None
+    last_transcribed = -1
     if dg_ann is not None:
         transcriptions = (Transcription.objects
                           .filter(dialogue_annotation=dg_ann))
-        last_transcribed = max(trs.turn.turn_number for trs in transcriptions)
-    else:
-        transcriptions = None
-        last_transcribed = -1
+        if transcriptions:
+            last_transcribed = max(trs.turn.turn_number
+                                   for trs in transcriptions)
 
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
@@ -371,6 +374,28 @@ def _find_free_cids(user=None):
 
 def _find_open_anns(user):
     return DialogueAnnotation.objects.filter(user=user, finished=False)
+
+
+def _get_annotation_link(dg_ann):
+    cid = dg_ann.dialogue.cid
+    base_url = reverse('transcribe')
+    return '{base}?cid={cid}'.format(base=base_url, cid=cid)
+
+
+@login_required
+@catch_locked_database
+def open_annions(request):
+    _delete_old_anns()
+    open_annions = _find_open_anns(request.user)
+    anns_sorted = sorted(open_annions, key=lambda ann: ann.date_saved)
+    anns_dicts = [open_annion_nt(ann_str=unicode(ann),
+                                 link=_get_annotation_link(ann))
+                  for ann in anns_sorted]
+    response = render(request,
+                      'trs/open_annions.html',
+                      {'open_annions': anns_dicts},
+                      context_instance=RequestContext(request))
+    return response
 
 
 @catch_locked_database

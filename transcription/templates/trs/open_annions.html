@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% load url from future %}
+
+{% block head %}
+{% endblock %}
+
+{% block content %}
+<h1>Open annotations</h1>
+
+<ul>
+  {% if open_annions %}
+    {% for ann_str, link in open_annions %}
+    <li><a href="{{ link }}">{{ ann_str }}</a></li>
+    {% endfor %}
+  {% else %}
+    <p>It seems you don't have any open annotations.
+       You can just
+       <a href="{% url "transcribe" %}">continue with the next one</a>.</p>
+  {% endif %}
+</ul>
+
+{% endblock %}
