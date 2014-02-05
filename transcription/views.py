@@ -253,7 +253,7 @@ def _create_turn_dicts(dialogue, dg_ann=None):
 
     uturns = UserTurn.objects.filter(dialogue=dialogue)
     systurns = SystemTurn.objects.filter(dialogue=dialogue)
-    max_turn_num = max(max(uturn.turn_abs_number for uturn in uturns),
+    max_turn_num = max(max(uturn.turn_abs_number for uturn in uturns) if uturns else 0,
                        max(sturn.turn_abs_number for sturn in systurns) if systurns else 0)
 
     # Transform data from DialogueTurn objects into dicts.
