@@ -8,10 +8,10 @@ if __name__ == "__main__":
     sys.path.insert(0, os.path.join(os.path.dirname(
         os.path.abspath(__file__)), 'trs_site'))
 
-    sys.path.extend(['/webapps/cf_transcription/libs/python',
-                     '/webapps/cf_transcription/libs/django-1.4.1',
-                     '/webapps/cf_transcription/libs/python',
-                     '/webapps/cf_transcription/libs/django-1.4.1',
+    sys.path.extend(['/webapps/transcription_cs/libs/python',
+                     '/webapps/transcription_cs/libs/django-1.4.1',
+                     '/webapps/transcription_cs/libs/python',
+                     '/webapps/transcription_cs/libs/django-1.4.1',
                      '/usr/lib/python2.7/',
                      '/usr/lib/python2.7/plat-linux2',
                      '/usr/lib/python2.7/lib-tk',
