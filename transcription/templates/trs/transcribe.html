@@ -458,7 +458,7 @@ span.user { color: red; font-weight: normal; }
           accent_specified = validate_accent();
           if(accent_specified !== true)
           {
-            msg = ["You say the speaker had a non-native English accent.\n",
+            msg = ["You say the speaker had a non-native accent.\n",
                     "Please, specify what accent you think he/she had."]
                   .join('');
             alert(msg);
@@ -861,7 +861,7 @@ function add_dai(number) {
               <input id="id_accent_native" name="accent" type="radio" 
                 value="native" checked
                 tabindex="{{ dbl_num_turns|add:2 }}">
-                  native English</input>
+                  native accent</input>
             </td>
             <td>
               <input id="id_accent_other" name="accent" type="radio" 
