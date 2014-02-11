@@ -10,8 +10,6 @@ if __name__ == "__main__":
 
     sys.path.extend(['/webapps/transcription_cs/libs/python',
                      '/webapps/transcription_cs/libs/django-1.4.1',
-                     '/webapps/transcription_cs/libs/python',
-                     '/webapps/transcription_cs/libs/django-1.4.1',
                      '/usr/lib/python2.7/',
                      '/usr/lib/python2.7/plat-linux2',
                      '/usr/lib/python2.7/lib-tk',
