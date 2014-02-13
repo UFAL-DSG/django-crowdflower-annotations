@@ -768,8 +768,7 @@ def transcribe(request):
     context = settings.TRANSCRIBE_EXTRA_CONTEXT
     context['success'] = str(success)
     context['turns'] = turn_dicts
-    context['ready_to_submit'] = all(turn['initial_text']
-                                     for turn in turn_dicts)
+    context['ready_to_submit'] = all((turn['initial_text'] if 'initial_text' in turn else None) for turn in turn_dicts )
     context['dbl_num_turns'] = 2 * len(turn_dicts)
     context['codes'] = dg_data.get_codes()
     context['form'] = TranscriptionForm(cid=cid, turn_dicts=turn_dicts)
