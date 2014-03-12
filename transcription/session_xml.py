@@ -276,8 +276,11 @@ class XMLSession(object):
 
     def __enter__(self):
         with open(self.sess_path, self.mode) as sess_file:
-            self.sess_xml = etree.parse(sess_file, self.xml_parser)
-
+            try:
+                self.sess_xml = etree.parse(sess_file, self.xml_parser)
+            except:
+                raise ValueError(('The session XML file {fname} cannot be parsed.').format(fname=self.sess_path))
+        
         # Check the version of the session XML scheme and set all the XML
         # orientation variables.
         # TODO Implement a more comprehensive scheme for determining the XML
