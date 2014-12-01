@@ -280,7 +280,7 @@ class XMLSession(object):
                 self.sess_xml = etree.parse(sess_file, self.xml_parser)
             except:
                 raise ValueError(('The session XML file {fname} cannot be parsed.').format(fname=self.sess_path))
-        
+
         # Check the version of the session XML scheme and set all the XML
         # orientation variables.
         # TODO Implement a more comprehensive scheme for determining the XML
@@ -665,6 +665,8 @@ class XMLSession(object):
             user=username)
         for name, val in more_attrs.iteritems():
             ann_el.set(name, val)
+        if 'info_provided' in settings.EXTRA_QUESTIONS:
+            ann_el.set('info_provided', str(dg_ann.info_provided))
         if 'offensive' in settings.EXTRA_QUESTIONS:
             ann_el.set('offensive', str(dg_ann.offensive))
         if 'accent' in settings.EXTRA_QUESTIONS:

@@ -22,6 +22,8 @@ class CustomFieldsForm(forms.Form):
 
 
 class TranscriptionForm(forms.Form):
+    if 'info_provided' in settings.EXTRA_QUESTIONS:
+        info_provided = forms.BooleanField(required=False)
     if 'quality' in settings.EXTRA_QUESTIONS:
         quality = forms.CharField()
     if 'accent' in settings.EXTRA_QUESTIONS:

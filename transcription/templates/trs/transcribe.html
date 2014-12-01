@@ -838,6 +838,21 @@ function add_dai(number) {
       </h3>
       <div>
         <table>
+          {% if "info_provided" in EXTRA_QUESTIONS %}
+          <tr>
+            <td>Did the system provide all the information requested by the user?</td>
+            <td>
+              <input id="id_info_provided_yes" name="info_provided" type="radio" 
+                value="yes">
+                  yes</input>
+            </td>
+            <td>
+              <input id="id_info_provided_no" name="info_provided" type="radio" 
+              value="no" checked
+                tabindex="{{ dbl_num_turns|add:1 }}">no</input>
+            </td>
+          </tr>
+          {% endif %}
           {% if "quality" in EXTRA_QUESTIONS %}
           <tr>
             <td>What was the quality of the recording?</td>
@@ -849,7 +864,7 @@ function add_dai(number) {
             <td>
               <input id="id_quality_clear" name="quality" type="radio" 
                 value="clear" checked
-                tabindex="{{ dbl_num_turns|add:1 }}">
+                tabindex="{{ dbl_num_turns|add:2 }}">
                   clear</input>
             </td>
           </tr>
@@ -860,7 +875,7 @@ function add_dai(number) {
             <td>
               <input id="id_accent_native" name="accent" type="radio" 
                 value="native" checked
-                tabindex="{{ dbl_num_turns|add:2 }}">
+                tabindex="{{ dbl_num_turns|add:3 }}">
                   native accent</input>
             </td>
             <td>
@@ -875,7 +890,7 @@ function add_dai(number) {
             <td>
               <input type="text" id="id_accent_name" name="accent_name" 
                 size="30"
-                tabindex="{{ dbl_num_turns|add:3 }}">
+                tabindex="{{ dbl_num_turns|add:4 }}">
             </td>
           </tr>
           {% endif %}
@@ -890,7 +905,7 @@ function add_dai(number) {
             <td>
               <input id="id_offensive_no" name="offensive" type="radio" 
               value="no" checked
-                tabindex="{{ dbl_num_turns|add:4 }}">no</input>
+                tabindex="{{ dbl_num_turns|add:5 }}">no</input>
             </td>
           </tr>
           {% endif %}
@@ -911,11 +926,11 @@ function add_dai(number) {
         <input id="submit" type="submit" name="send" class="submitbutton"
                value="Save and submit"
                disabled
-               tabindex="{{ dbl_num_turns|add:5 }}">
+               tabindex="{{ dbl_num_turns|add:6 }}">
 {% if not user.is_anonymous %}
         <input id="draft" type="submit" name="draft" class="submitbutton"
                value="Save draft"
-               tabindex="{{ dbl_num_turns|add:6 }}">
+               tabindex="{{ dbl_num_turns|add:7 }}">
 {% endif %}
       </span>
     </form>

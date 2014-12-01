@@ -488,6 +488,8 @@ class DialogueAnnotationAdmin(admin.ModelAdmin):
     if 'slu' in settings.TASKS:
         list_filter.append(SemannCountListFilter)
     list_filter.extend(['user__username', 'finished'])
+    if 'info_provided' in settings.EXTRA_QUESTIONS:
+        list_filter.append('info_provided')
     if 'offensive' in settings.EXTRA_QUESTIONS:
         list_filter.append('offensive')
     if 'accent' in settings.EXTRA_QUESTIONS:

@@ -60,6 +60,11 @@ class DialogueAnnotation(models.Model):
         qual_tpt = ' q: {q};'
     else:
         qual_tpt = ''
+    if 'info_provided' in EXTRA_QUESTIONS:
+        info_provided = models.BooleanField(default=False)
+        info_tpt = ' info: {info};'
+    else:
+        info_tpt = ''
     if 'accent' in EXTRA_QUESTIONS:
         accent = models.CharField(max_length=100, blank=True, default="")
         acc_tpt = ' acc: {acc};'
@@ -71,9 +76,11 @@ class DialogueAnnotation(models.Model):
     else:
         off_tpt = ''
     # uni_tpt: template for self.__unicode__
-    uni_tpt = ('(u: {{u}}; saved: {{ds}};{q_tpt}{acc_tpt}{off_tpt} dg: {{dg}})'
-               .format(q_tpt=qual_tpt, acc_tpt=acc_tpt, off_tpt=off_tpt))
-    del qual_tpt, acc_tpt, off_tpt
+    uni_tpt = ('(u: {{u}}; saved: {{ds}};{info_tpt}{q_tpt}{acc_tpt}{off_tpt} '
+               'dg: {{dg}})'
+               .format(info_tpt=info_tpt, q_tpt=qual_tpt, acc_tpt=acc_tpt,
+                       off_tpt=off_tpt))
+    del info_tpt, qual_tpt, acc_tpt, off_tpt
 
     # Common fields.
     dialogue = models.ForeignKey(Dialogue)
@@ -92,6 +99,8 @@ class DialogueAnnotation(models.Model):
         tpt_kwargs = {'u': username,
                       'ds': self.date_saved,
                       'dg': self.dialogue.cid}
+        if 'info_provided' in EXTRA_QUESTIONS:
+            tpt_kwargs['info'] = self.offensive
         if 'quality' in EXTRA_QUESTIONS:
             tpt_kwargs['q'] = self.get_quality_display()
         if 'accent' in EXTRA_QUESTIONS:

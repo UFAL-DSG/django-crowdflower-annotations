@@ -189,6 +189,9 @@ def _read_dialogue_turns(dg_data, dirname, with_trss=False, only_order=False):
                     accent_str = ann_el.get('accent')
                     accent = ("" if accent_str == 'native' else accent_str)
                     ann_props['accent'] = accent
+                if 'info_provided' in settings.EXTRA_QUESTIONS:
+                    info_provided = (ann_el.get("info_provided") == "True")
+                    ann_props['info_provided'] = info_provided
                 if 'offensive' in settings.EXTRA_QUESTIONS:
                     offensive = (ann_el.get("offensive") == "True")
                     ann_props['offensive'] = offensive
@@ -480,8 +483,10 @@ def transcribe(request):
             if 'accent' in settings.EXTRA_QUESTIONS:
                 dg_ann.accent = ("" if request.POST['accent'] == 'native'
                                  else form.cleaned_data['accent_name'])
+            if 'info_provided' in settings.EXTRA_QUESTIONS:
+                dg_ann.info_provided = (request.POST['info_provided'] == 'yes')
             if 'offensive' in settings.EXTRA_QUESTIONS:
-                dg_ann.offensive = bool(request.POST['offensive'] == 'yes')
+                dg_ann.offensive = (request.POST['offensive'] == 'yes')
             dg_ann.notes = form.cleaned_data['notes']
             if user_anon:
                 # A dummy user.

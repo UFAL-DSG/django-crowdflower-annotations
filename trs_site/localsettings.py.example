@@ -180,7 +180,7 @@ LOGGED_JOB_DATA = [
 
 # EXTRA_QUESTIONS: subset of these example strings. Determines what additional
 # questions should be asked in the transcription form.
-EXTRA_QUESTIONS = ('accent', 'quality', 'offensive')
+EXTRA_QUESTIONS = ('accent', 'quality', 'offensive', 'info_provided')
 
 # USE_ACCORDION: whether to uncover individual turns in the transcription
 # interface gradually, after the audio finished playing.
