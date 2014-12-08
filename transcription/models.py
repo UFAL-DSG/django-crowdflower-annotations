@@ -100,7 +100,7 @@ class DialogueAnnotation(models.Model):
                       'ds': self.date_saved,
                       'dg': self.dialogue.cid}
         if 'info_provided' in EXTRA_QUESTIONS:
-            tpt_kwargs['info'] = self.offensive
+            tpt_kwargs['info'] = self.info_provided
         if 'quality' in EXTRA_QUESTIONS:
             tpt_kwargs['q'] = self.get_quality_display()
         if 'accent' in EXTRA_QUESTIONS:
